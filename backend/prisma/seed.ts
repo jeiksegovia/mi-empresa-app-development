@@ -41,6 +41,7 @@ async function main() {
     await prisma.nucleoFamiliar.deleteMany();
     await prisma.empleado.deleteMany();
     await prisma.usuario.deleteMany();
+    await prisma.empresa.deleteMany();
   }
 
   // 1. Create Users
@@ -92,6 +93,20 @@ async function main() {
   });
 
   console.log(`✅ Created ${4} users`);
+
+  // Create default Empresa
+  console.log('🏢 Creating default empresa...');
+  await prisma.empresa.create({
+    data: {
+      nombre: 'Mi Empresa S.A.S.',
+      nit: '900123456-1',
+      direccion: 'Calle 100 # 15-20, Bogotá',
+      telefono: '6014567890',
+      email: 'info@miempresa.com',
+      activa: true,
+    },
+  });
+  console.log('✅ Created default empresa');
 
   // 2. Create Employees
   console.log('👷 Creating employees...');
@@ -593,6 +608,7 @@ async function main() {
   console.log('✨ Database seed completed successfully!');
   console.log('\n📊 Summary:');
   console.log(`   Users: 4 (admin, empleado, auditor, operador)`);
+  console.log(`   Empresa: 1 (default)`);
   console.log(`   Employees: 3`);
   console.log(`   Clients: 3`);
   console.log(`   Instruments: 3`);

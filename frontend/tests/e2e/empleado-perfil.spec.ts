@@ -17,7 +17,7 @@ async function login(page: any) {
   await page.goto('/login')
   await page.waitForLoadState('networkidle')
   await page.locator('#email').fill('admin@miempresa.com')
-  await page.locator('input[placeholder="Ingresa tu contraseña"]').fill('password123')
+  await page.locator('#password input').fill('password123')
   await page.click('button[type="submit"]')
   await page.waitForURL('/', { timeout: 15000 })
 }

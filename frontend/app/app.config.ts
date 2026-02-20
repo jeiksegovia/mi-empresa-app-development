@@ -14,6 +14,7 @@ export default defineAppConfig({
       { label: 'Certificados', icon: 'pi pi-file', to: '/certificados' },
       { label: 'Nomina', icon: 'pi pi-wallet', to: '/nomina', disabled: true },
       { label: 'Reportes', icon: 'pi pi-chart-bar', to: '/reportes', disabled: true },
+      { label: 'Empresa', icon: 'pi pi-building', to: '/empresa' },
       { label: 'Configuracion', icon: 'pi pi-cog', to: '/configuracion', disabled: true },
     ],
   },

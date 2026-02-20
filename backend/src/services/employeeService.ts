@@ -141,6 +141,43 @@ export interface CreateEmployeeInput {
     telefono?: string
     numeroDocumento?: string
   }[]
+  experienciasLaborales?: {
+    empresa: string
+    telefonoEmpresa?: string
+    cargo: string
+    sector?: string
+    periodoInicio: string
+    periodoFin?: string
+    funcionesLogros?: string
+  }[]
+  educacionIdiomas?: {
+    institucion: string
+    nivelEscritura: string
+    nivelHabla: string
+    capacidadTraducir: boolean
+  }[]
+  vehiculos?: {
+    tipoVehiculo: string
+    placas: string
+    tipoLicencia: string
+    numeroLicencia: string
+  }[]
+  certificadoAlturas?: {
+    fechaExpedicion: string
+    fechaVencimiento: string
+  }
+  certificadoRiesgoElectrico?: {
+    fechaExpedicion: string
+    fechaVencimiento: string
+  }
+  datosMigracion?: {
+    numeroPasaporte?: string
+    pasaporteExpedicion?: string
+    pasaporteVencimiento?: string
+    numeroVisa?: string
+    visaExpedicion?: string
+    visaVencimiento?: string
+  }
 }
 
 // Update input - top-level fields only
@@ -233,7 +270,7 @@ export async function getEmployee(id: number): Promise<EmployeeDetail | null> {
 export async function createEmployee(input: CreateEmployeeInput): Promise<EmployeeDetail> {
   const prisma = getPrisma()
 
-  const { cargos, contactosEmergencia, nucleoFamiliar, ...baseFields } = input
+  const { cargos, contactosEmergencia, nucleoFamiliar, experienciasLaborales, educacionIdiomas, vehiculos, certificadoAlturas, certificadoRiesgoElectrico, datosMigracion, ...baseFields } = input
 
   const emp = await prisma.empleado.create({
     data: {
@@ -273,6 +310,79 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
                 parentesco: nf.parentesco,
                 telefono: nf.telefono,
               })),
+            },
+          }
+        : {}),
+      ...(experienciasLaborales && experienciasLaborales.length > 0
+        ? {
+            experienciasLaborales: {
+              create: experienciasLaborales.map((e) => ({
+                empresa: e.empresa,
+                telefonoEmpresa: e.telefonoEmpresa,
+                cargo: e.cargo,
+                sector: e.sector,
+                periodoInicio: new Date(e.periodoInicio),
+                periodoFin: e.periodoFin ? new Date(e.periodoFin) : undefined,
+                funcionesLogros: e.funcionesLogros,
+              })),
+            },
+          }
+        : {}),
+      ...(educacionIdiomas && educacionIdiomas.length > 0
+        ? {
+            educacionIdiomas: {
+              create: educacionIdiomas.map((ed) => ({
+                institucion: ed.institucion,
+                nivelEscritura: ed.nivelEscritura,
+                nivelHabla: ed.nivelHabla,
+                capacidadTraducir: ed.capacidadTraducir,
+              })),
+            },
+          }
+        : {}),
+      ...(vehiculos && vehiculos.length > 0
+        ? {
+            vehiculos: {
+              create: vehiculos.map((v) => ({
+                tipoVehiculo: v.tipoVehiculo,
+                placas: v.placas,
+                tipoLicencia: v.tipoLicencia,
+                numeroLicencia: v.numeroLicencia,
+              })),
+            },
+          }
+        : {}),
+      ...(certificadoAlturas
+        ? {
+            certificadoAlturas: {
+              create: {
+                fechaExpedicion: new Date(certificadoAlturas.fechaExpedicion),
+                fechaVencimiento: new Date(certificadoAlturas.fechaVencimiento),
+              },
+            },
+          }
+        : {}),
+      ...(certificadoRiesgoElectrico
+        ? {
+            certificadoRiesgoElectrico: {
+              create: {
+                fechaExpedicion: new Date(certificadoRiesgoElectrico.fechaExpedicion),
+                fechaVencimiento: new Date(certificadoRiesgoElectrico.fechaVencimiento),
+              },
+            },
+          }
+        : {}),
+      ...(datosMigracion && (datosMigracion.numeroPasaporte || datosMigracion.pasaporteExpedicion)
+        ? {
+            datosMigracion: {
+              create: {
+                numeroPasaporte: datosMigracion.numeroPasaporte || '',
+                pasaporteExpedicion: datosMigracion.pasaporteExpedicion ? new Date(datosMigracion.pasaporteExpedicion) : new Date(),
+                pasaporteVencimiento: datosMigracion.pasaporteVencimiento ? new Date(datosMigracion.pasaporteVencimiento) : new Date(),
+                numeroVisa: datosMigracion.numeroVisa,
+                visaExpedicion: datosMigracion.visaExpedicion ? new Date(datosMigracion.visaExpedicion) : undefined,
+                visaVencimiento: datosMigracion.visaVencimiento ? new Date(datosMigracion.visaVencimiento) : undefined,
+              },
             },
           }
         : {}),

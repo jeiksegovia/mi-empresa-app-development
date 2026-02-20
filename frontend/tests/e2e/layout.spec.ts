@@ -13,7 +13,7 @@ async function login(page: any) {
   await emailInput.fill('admin@miempresa.com')
 
   // PrimeVue Password wraps input; target inner input by placeholder
-  const passwordInput = page.locator('input[placeholder="Ingresa tu contraseña"]')
+  const passwordInput = page.locator('#password input')
   await passwordInput.waitFor({ state: 'visible' })
   await passwordInput.click()
   await passwordInput.fill('password123')

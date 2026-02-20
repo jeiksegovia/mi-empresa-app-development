@@ -236,6 +236,53 @@ async function submit() {
       }))
     }
 
+    // Step 4 — Educación & Vehículos
+    const validEducaciones = educaciones.value.filter(e => e.institucion.trim() && e.nivelEscritura.trim() && e.nivelHabla.trim())
+    if (validEducaciones.length) {
+      payload.educacionIdiomas = validEducaciones.map(e => ({
+        institucion: e.institucion.trim(),
+        nivelEscritura: e.nivelEscritura.trim(),
+        nivelHabla: e.nivelHabla.trim(),
+        capacidadTraducir: e.capacidadTraducir,
+      }))
+    }
+
+    const validVehiculos = vehiculos.value.filter(v => v.tipoVehiculo.trim() && v.placas.trim() && v.tipoLicencia.trim() && v.numeroLicencia.trim())
+    if (validVehiculos.length) {
+      payload.vehiculos = validVehiculos.map(v => ({
+        tipoVehiculo: v.tipoVehiculo.trim(),
+        placas: v.placas.trim(),
+        tipoLicencia: v.tipoLicencia.trim(),
+        numeroLicencia: v.numeroLicencia.trim(),
+      }))
+    }
+
+    // Step 5 — Certificados & Migración
+    if (certAlturas.enabled && certAlturas.fechaExpedicion && certAlturas.fechaVencimiento) {
+      payload.certificadoAlturas = {
+        fechaExpedicion: certAlturas.fechaExpedicion,
+        fechaVencimiento: certAlturas.fechaVencimiento,
+      }
+    }
+
+    if (certRiesgo.enabled && certRiesgo.fechaExpedicion && certRiesgo.fechaVencimiento) {
+      payload.certificadoRiesgoElectrico = {
+        fechaExpedicion: certRiesgo.fechaExpedicion,
+        fechaVencimiento: certRiesgo.fechaVencimiento,
+      }
+    }
+
+    if (migracion.enabled) {
+      payload.datosMigracion = {
+        numeroPasaporte: migracion.numeroPasaporte || undefined,
+        pasaporteExpedicion: migracion.pasaporteExpedicion || undefined,
+        pasaporteVencimiento: migracion.pasaporteVencimiento || undefined,
+        numeroVisa: migracion.numeroVisa || undefined,
+        visaExpedicion: migracion.visaExpedicion || undefined,
+        visaVencimiento: migracion.visaVencimiento || undefined,
+      }
+    }
+
     const res = await apiFetch<{ success: boolean; data: { id: number } }>('/employees', {
       method: 'POST',
       body: payload,

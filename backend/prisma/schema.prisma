@@ -554,6 +554,24 @@ model Prefactura {
 }
 
 // ========================================
+// EMPRESA MODULE
+// ========================================
+
+model Empresa {
+  id        Int      @id @default(autoincrement())
+  nombre    String   @db.VarChar(200)
+  nit       String   @unique @db.VarChar(50)
+  direccion String?  @db.VarChar(255)
+  telefono  String?  @db.VarChar(20)
+  email     String?  @db.VarChar(255)
+  activa    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("empresas")
+}
+
+// ========================================
 // ENUMS
 // ========================================
 

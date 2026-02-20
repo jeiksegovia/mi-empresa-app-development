@@ -20,7 +20,7 @@ test.describe('Frontend Authentication', () => {
       await page.goto('/login');
       await page.waitForLoadState('networkidle');
       await page.locator('#email').fill('admin@miempresa.com');
-      await page.locator('input[placeholder="Ingresa tu contraseña"]').fill('password123');
+      await page.locator('#password input').fill('password123');
       await page.click('button[type="submit"]');
       await expect(page).toHaveURL('/', { timeout: 10000 });
       // Verify we're on dashboard: header shows user name (scope to header to avoid ambiguity)
@@ -31,7 +31,7 @@ test.describe('Frontend Authentication', () => {
       await page.goto('/login');
       await page.waitForLoadState('networkidle');
       await page.locator('#email').fill('admin@miempresa.com');
-      await page.locator('input[placeholder="Ingresa tu contraseña"]').fill('wrongpassword');
+      await page.locator('#password input').fill('wrongpassword');
       await page.click('button[type="submit"]');
       await expect(page).toHaveURL('/login');
       await expect(page.locator('.p-message-error, [role="alert"]')).toBeVisible({ timeout: 5000 });
@@ -48,7 +48,7 @@ test.describe('Frontend Authentication', () => {
       await page.goto('/login');
       await page.waitForLoadState('networkidle');
       await page.locator('#email').fill('admin@miempresa.com');
-      await page.locator('input[placeholder="Ingresa tu contraseña"]').fill('password123');
+      await page.locator('#password input').fill('password123');
       await page.click('button[type="submit"]');
       await expect(page).toHaveURL('/', { timeout: 10000 });
     });
@@ -59,7 +59,7 @@ test.describe('Frontend Authentication', () => {
       await page.goto('/login');
       await page.waitForLoadState('networkidle');
       await page.locator('#email').fill('admin@miempresa.com');
-      await page.locator('input[placeholder="Ingresa tu contraseña"]').fill('password123');
+      await page.locator('#password input').fill('password123');
       await page.click('button[type="submit"]');
       await expect(page).toHaveURL('/', { timeout: 10000 });
 

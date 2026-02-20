@@ -60,11 +60,48 @@ const createEmployeeSchema = z.object({
       }),
     )
     .optional(),
+  experienciasLaborales: z.array(z.object({
+    empresa: z.string().min(1),
+    telefonoEmpresa: z.string().optional(),
+    cargo: z.string().min(1),
+    sector: z.string().optional(),
+    periodoInicio: z.string(),
+    periodoFin: z.string().optional(),
+    funcionesLogros: z.string().optional(),
+  })).optional(),
+  educacionIdiomas: z.array(z.object({
+    institucion: z.string().min(1),
+    nivelEscritura: z.string().min(1),
+    nivelHabla: z.string().min(1),
+    capacidadTraducir: z.boolean(),
+  })).optional(),
+  vehiculos: z.array(z.object({
+    tipoVehiculo: z.string().min(1),
+    placas: z.string().min(1),
+    tipoLicencia: z.string().min(1),
+    numeroLicencia: z.string().min(1),
+  })).optional(),
+  certificadoAlturas: z.object({
+    fechaExpedicion: z.string(),
+    fechaVencimiento: z.string(),
+  }).optional(),
+  certificadoRiesgoElectrico: z.object({
+    fechaExpedicion: z.string(),
+    fechaVencimiento: z.string(),
+  }).optional(),
+  datosMigracion: z.object({
+    numeroPasaporte: z.string().optional(),
+    pasaporteExpedicion: z.string().optional(),
+    pasaporteVencimiento: z.string().optional(),
+    numeroVisa: z.string().optional(),
+    visaExpedicion: z.string().optional(),
+    visaVencimiento: z.string().optional(),
+  }).optional(),
 })
 
 const updateEmployeeSchema = createEmployeeSchema
   .partial()
-  .omit({ cargos: true, contactosEmergencia: true, nucleoFamiliar: true })
+  .omit({ cargos: true, contactosEmergencia: true, nucleoFamiliar: true, experienciasLaborales: true, educacionIdiomas: true, vehiculos: true, certificadoAlturas: true, certificadoRiesgoElectrico: true, datosMigracion: true })
 
 // GET /employees - list with pagination/search/filter
 router.get('/', async (req: Request, res: Response): Promise<void> => {
