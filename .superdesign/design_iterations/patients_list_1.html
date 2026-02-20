@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pacientes - Mi Empresa App</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: -280px;
+      width: 280px;
+      height: 100vh;
+      background: var(--surface-card);
+      border-right: 1px solid var(--border);
+      transition: left 0.3s ease-out;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .sidebar.open {
+      left: 0;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+      z-index: 99;
+    }
+
+    .sidebar-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius);
+      transition: all 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--foreground);
+    }
+
+    .sidebar-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .sidebar-item.active {
+      background: var(--p-primary-500);
+      color: white;
+    }
+
+    .main-content {
+      min-height: 100vh;
+      background: var(--background);
+    }
+
+    .stat-card {
+      transition: all 0.2s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Data Table Styles */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .data-table thead {
+      background: var(--surface-hover);
+    }
+
+    .data-table th {
+      padding: var(--spacing-md) var(--spacing-lg);
+      text-align: left;
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .data-table td {
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-bottom: 1px solid var(--border);
+      font-size: var(--font-size-sm);
+    }
+
+    .data-table tbody tr {
+      transition: background 0.2s;
+      cursor: pointer;
+    }
+
+    .data-table tbody tr:hover {
+      background: var(--surface-hover);
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar" id="sidebar">
+    <div style="padding: var(--spacing-xl);">
+      <!-- Logo + Company Name -->
+      <div class="flex items-center gap-3 mb-8">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: var(--p-primary-500);">
+          <i data-lucide="building-2" class="icon-lg" style="color: white;"></i>
+        </div>
+        <div>
+          <h2 class="font-semibold text-base">Mi Empresa</h2>
+          <p class="text-xs text-muted">jeik-sa</p>
+        </div>
+      </div>
+
+      <!-- Navigation Items -->
+      <nav>
+        <a href="dashboard_1.html" class="sidebar-item">
+          <i data-lucide="home" class="icon"></i>
+          <span>Inicio</span>
+        </a>
+        <a href="employees_list_1.html" class="sidebar-item">
+          <i data-lucide="users" class="icon"></i>
+          <span>Empleados</span>
+        </a>
+        <a href="patients_list_1.html" class="sidebar-item active">
+          <i data-lucide="user" class="icon"></i>
+          <span>Pacientes</span>
+        </a>
+        <a href="instruments_list_1.html" class="sidebar-item">
+          <i data-lucide="clipboard-list" class="icon"></i>
+          <span>Instrumentos</span>
+        </a>
+        <a href="certificates-v2_1.html" class="sidebar-item">
+          <i data-lucide="file-check" class="icon"></i>
+          <span>Certificados</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="wallet" class="icon"></i>
+          <span>Nómina</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="bar-chart" class="icon"></i>
+          <span>Reportes</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="settings" class="icon"></i>
+          <span>Configuración</span>
+        </a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Header Bar -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <!-- Left Section -->
+        <div class="flex items-center gap-4">
+          <button id="menuToggle" class="btn btn-ghost btn-icon">
+            <i data-lucide="menu" class="icon"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Pacientes</h1>
+        </div>
+
+        <!-- Right Section -->
+        <div class="flex items-center gap-3">
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+          </button>
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+          <span class="text-sm font-medium hidden md:inline">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <div class="container" style="padding: var(--spacing-xl); max-width: 1400px; margin: 0 auto;">
+
+      <!-- Page Title Section -->
+      <div class="flex items-start justify-between mb-8">
+        <div>
+          <h2 class="text-3xl font-bold mb-2">Pacientes</h2>
+          <p class="text-muted">Gestión de pacientes y evaluaciones</p>
+        </div>
+        <button class="btn btn-primary" onclick="alert('Crear nuevo paciente')">
+          <i data-lucide="plus" class="icon"></i>
+          <span>Nuevo Paciente</span>
+        </button>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-lg mb-8">
+        <!-- Stat 1 -->
+        <div class="card stat-card">
+          <div class="flex items-start justify-between mb-4">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg" style="background: rgba(139, 92, 246, 0.1);">
+              <i data-lucide="users" class="icon-lg" style="color: var(--p-primary-500);"></i>
+            </div>
+          </div>
+          <div class="text-3xl font-bold mb-1">45</div>
+          <div class="text-sm text-muted">Total Pacientes</div>
+        </div>
+
+        <!-- Stat 2 -->
+        <div class="card stat-card">
+          <div class="flex items-start justify-between mb-4">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg" style="background: rgba(34, 197, 94, 0.1);">
+              <i data-lucide="check-circle" class="icon-lg" style="color: #22c55e;"></i>
+            </div>
+          </div>
+          <div class="text-3xl font-bold mb-1">38</div>
+          <div class="text-sm text-muted">Evaluaciones Completas</div>
+        </div>
+
+        <!-- Stat 3 -->
+        <div class="card stat-card">
+          <div class="flex items-start justify-between mb-4">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg" style="background: rgba(251, 146, 60, 0.1);">
+              <i data-lucide="alert-circle" class="icon-lg" style="color: #fb923c;"></i>
+            </div>
+          </div>
+          <div class="text-3xl font-bold mb-1">7</div>
+          <div class="text-sm text-muted">Evaluaciones Pendientes</div>
+        </div>
+
+        <!-- Stat 4 -->
+        <div class="card stat-card">
+          <div class="flex items-start justify-between mb-4">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg" style="background: rgba(59, 130, 246, 0.1);">
+              <i data-lucide="clipboard-list" class="icon-lg" style="color: #3b82f6;"></i>
+            </div>
+          </div>
+          <div class="text-3xl font-bold mb-1">156</div>
+          <div class="text-sm text-muted">Fichas Completadas</div>
+        </div>
+      </div>
+
+      <!-- Search and Filters -->
+      <div class="card mb-6" style="padding: var(--spacing-lg);">
+        <div class="flex items-center gap-4 flex-wrap">
+          <div class="flex-1" style="min-width: 250px;">
+            <div class="relative">
+              <i data-lucide="search" class="icon absolute left-3 top-1/2 transform -translate-y-1/2 text-muted"></i>
+              <input type="text" class="form-input" placeholder="Buscar paciente..." style="padding-left: 2.5rem;">
+            </div>
+          </div>
+          <select class="form-input" style="width: 200px;">
+            <option value="">Todos los estados</option>
+            <option value="activo">Activo</option>
+            <option value="inactivo">Inactivo</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Patients Table -->
+      <div class="card" style="overflow-x: auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Paciente</th>
+              <th>Identificación</th>
+              <th>Edad</th>
+              <th>Evaluaciones</th>
+              <th>Estado</th>
+              <th style="text-align: center;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Row 1 -->
+            <tr onclick="window.location.href='patient_profile_1.html'" style="cursor: pointer;">
+              <td>
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background: var(--p-primary-500); color: white; font-weight: 600;">
+                    PG
+                  </div>
+                  <div>
+                    <div class="font-medium">Pedro García Martínez</div>
+                    <div class="text-xs text-muted">Ingreso: 15/01/2024</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="font-mono text-sm">1234567890</span>
+              </td>
+              <td>72 años</td>
+              <td>
+                <div class="flex items-center gap-2">
+                  <span class="badge badge-success">4/4 ✓</span>
+                </div>
+              </td>
+              <td>
+                <span class="badge badge-success">✓ Activo</span>
+              </td>
+              <td>
+                <div class="flex items-center justify-center gap-2">
+                  <button class="btn btn-ghost btn-icon btn-sm" title="Ver perfil" onclick="event.stopPropagation(); window.location.href='patient_profile_1.html'">
+                    <i data-lucide="eye" class="icon-sm"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 2 -->
+            <tr onclick="window.location.href='patient_profile_1.html'" style="cursor: pointer;">
+              <td>
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background: var(--p-primary-500); color: white; font-weight: 600;">
+                    MR
+                  </div>
+                  <div>
+                    <div class="font-medium">María Rodríguez López</div>
+                    <div class="text-xs text-muted">Ingreso: 03/02/2024</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="font-mono text-sm">9876543210</span>
+              </td>
+              <td>68 años</td>
+              <td>
+                <div class="flex items-center gap-2">
+                  <span class="badge badge-warning">3/4 ⚠️</span>
+                </div>
+              </td>
+              <td>
+                <span class="badge badge-success">✓ Activo</span>
+              </td>
+              <td>
+                <div class="flex items-center justify-center gap-2">
+                  <button class="btn btn-ghost btn-icon btn-sm" title="Ver perfil" onclick="event.stopPropagation(); window.location.href='patient_profile_1.html'">
+                    <i data-lucide="eye" class="icon-sm"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 3 -->
+            <tr onclick="window.location.href='patient_profile_1.html'" style="cursor: pointer;">
+              <td>
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background: var(--p-primary-500); color: white; font-weight: 600;">
+                    JL
+                  </div>
+                  <div>
+                    <div class="font-medium">Juan López Pérez</div>
+                    <div class="text-xs text-muted">Ingreso: 20/01/2024</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="font-mono text-sm">5555444433</span>
+              </td>
+              <td>75 años</td>
+              <td>
+                <div class="flex items-center gap-2">
+                  <span class="badge badge-success">4/4 ✓</span>
+                </div>
+              </td>
+              <td>
+                <span class="badge badge-success">✓ Activo</span>
+              </td>
+              <td>
+                <div class="flex items-center justify-center gap-2">
+                  <button class="btn btn-ghost btn-icon btn-sm" title="Ver perfil" onclick="event.stopPropagation(); window.location.href='patient_profile_1.html'">
+                    <i data-lucide="eye" class="icon-sm"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 4 -->
+            <tr onclick="window.location.href='patient_profile_1.html'" style="cursor: pointer;">
+              <td>
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background: var(--p-primary-500); color: white; font-weight: 600;">
+                    AM
+                  </div>
+                  <div>
+                    <div class="font-medium">Ana Martínez Sánchez</div>
+                    <div class="text-xs text-muted">Ingreso: 10/03/2024</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="font-mono text-sm">7777888899</span>
+              </td>
+              <td>70 años</td>
+              <td>
+                <div class="flex items-center gap-2">
+                  <span class="badge badge-warning">2/4 ⚠️</span>
+                </div>
+              </td>
+              <td>
+                <span class="badge badge-success">✓ Activo</span>
+              </td>
+              <td>
+                <div class="flex items-center justify-center gap-2">
+                  <button class="btn btn-ghost btn-icon btn-sm" title="Ver perfil" onclick="event.stopPropagation(); window.location.href='patient_profile_1.html'">
+                    <i data-lucide="eye" class="icon-sm"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 5 -->
+            <tr onclick="window.location.href='patient_profile_1.html'" style="cursor: pointer;">
+              <td>
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background: var(--p-primary-500); color: white; font-weight: 600;">
+                    LP
+                  </div>
+                  <div>
+                    <div class="font-medium">Luis Pérez Gómez</div>
+                    <div class="text-xs text-muted">Ingreso: 05/02/2024</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="font-mono text-sm">3333222211</span>
+              </td>
+              <td>78 años</td>
+              <td>
+                <div class="flex items-center gap-2">
+                  <span class="badge badge-success">4/4 ✓</span>
+                </div>
+              </td>
+              <td>
+                <span class="badge badge-success">✓ Activo</span>
+              </td>
+              <td>
+                <div class="flex items-center justify-center gap-2">
+                  <button class="btn btn-ghost btn-icon btn-sm" title="Ver perfil" onclick="event.stopPropagation(); window.location.href='patient_profile_1.html'">
+                    <i data-lucide="eye" class="icon-sm"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Table Footer -->
+        <div class="flex items-center justify-between px-6 py-4" style="border-top: 1px solid var(--border); background: var(--surface-hover);">
+          <div class="text-sm text-muted">
+            Mostrando <span class="font-semibold text-foreground">5</span> de <span class="font-semibold text-foreground">45</span> pacientes
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Sidebar toggle
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    menuToggle.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+      sidebarOverlay.classList.toggle('show');
+    });
+
+    sidebarOverlay.addEventListener('click', function() {
+      sidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('show');
+    });
+  </script>
+</body>
+</html>

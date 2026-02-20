@@ -1,0 +1,45 @@
+{
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "0",
+    "ANTHROPIC_BASE_URL": "http://localhost:4141",
+    "ANTHROPIC_AUTH_TOKEN": "dummy",
+    "ANTHROPIC_MODEL": "claude-sonnet-4.5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4.6",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4.5",
+    "ANTHROPIC_SMALL_FAST_MODEL": "gpt-5-mini",
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "128000",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "90",
+    "DISABLE_TELEMETRY": "1",
+    "DISABLE_ERROR_REPORTING": "1",
+    "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "BASH_DEFAULT_TIMEOUT_MS": "900000",
+    "BASH_MAX_TIMEOUT_MS": "900000",
+    "ANTHROPIC_TIMEOUT": "300000",
+    "CLAUDE_CODE_ATTRIBUTION_HEADER": "0"
+  },
+  "permissions": {
+    "allow": [
+      "Edit", "Read", "Glob", "Grep", "Bash",
+      "Edit(./.superdesign/**)", "Read(./.superdesign/**)",
+      "Edit(./batches/**)", "Read(./batches/**)",
+      "Edit(./development/**)","Read(./development/**)",
+      "Edit(./research/**)","Read(./research/**)",
+      "Edit(./scripts/**)", "Read(./scripts/**)",
+      "Edit(./backend/**)", "Read(./backend/**)",
+      "Edit(./frontend/**)", "Read(./frontend/**)",
+      "Edit(./context/**)", "Read(./context/**)",
+      "mcp__browsermcp__browser_snapshot",
+      "mcp__browsermcp__browser_screenshot",
+      "mcp__browsermcp__browser_click",
+      "mcp__browsermcp__browser_press_key",
+      "mcp__browsermcp__browser_type",
+      "mcp__browsermcp__browser_navigate",
+      "mcp__browsermcp__browser_wait",
+      "WebFetch(domain:code.claude.com)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": ["playwright", "google-search"],
+  "alwaysThinkingEnabled": true
+}

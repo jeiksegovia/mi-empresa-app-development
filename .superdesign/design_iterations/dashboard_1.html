@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inicio - Mi Empresa App</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    /* Sidebar styles */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: -280px;
+      width: 280px;
+      height: 100vh;
+      background: var(--surface-card);
+      border-right: 1px solid var(--border);
+      transition: left 0.3s ease-out;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .sidebar.open {
+      left: 0;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+      z-index: 99;
+    }
+
+    .sidebar-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius);
+      transition: all 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--foreground);
+    }
+
+    .sidebar-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .sidebar-item.active {
+      background: var(--p-primary-500);
+      color: white;
+    }
+
+    .stat-card {
+      transition: all 0.25s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .alert-item {
+      display: flex;
+      align-items: start;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md);
+      border-radius: var(--radius);
+      transition: background 0.2s;
+    }
+
+    .alert-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .badge-warning {
+      background: rgba(251, 146, 60, 0.2);
+      color: #fb923c;
+      border: 1px solid rgba(251, 146, 60, 0.3);
+    }
+
+    .badge-success {
+      background: rgba(34, 197, 94, 0.2);
+      color: #22c55e;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .badge-info {
+      background: rgba(139, 92, 246, 0.2);
+      color: var(--p-primary-400);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div style="padding: var(--spacing-xl);">
+
+      <!-- Logo -->
+      <div class="flex items-center gap-3 mb-8">
+        <div class="flex items-center justify-center w-10 h-10 rounded-lg" style="background: var(--p-primary-500);">
+          <i data-lucide="building-2" class="icon-lg" style="color: white;"></i>
+        </div>
+        <div>
+          <h2 class="font-semibold text-base">Mi Empresa</h2>
+          <p class="text-xs text-muted">jeik-sa</p>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <nav>
+        <a href="dashboard_1.html" class="sidebar-item active">
+          <i data-lucide="home" class="icon"></i>
+          <span>Inicio</span>
+        </a>
+        <a href="employees_list_1.html" class="sidebar-item">
+          <i data-lucide="users" class="icon"></i>
+          <span>Empleados</span>
+        </a>
+        <a href="patients_list_1.html" class="sidebar-item">
+          <i data-lucide="user" class="icon"></i>
+          <span>Pacientes</span>
+        </a>
+        <a href="instruments_list_1.html" class="sidebar-item">
+          <i data-lucide="clipboard-list" class="icon"></i>
+          <span>Instrumentos</span>
+        </a>
+        <a href="certificates-v2_1.html" class="sidebar-item">
+          <i data-lucide="file-check" class="icon"></i>
+          <span>Certificados</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="wallet" class="icon"></i>
+          <span>Nómina</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="bar-chart" class="icon"></i>
+          <span>Reportes</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="settings" class="icon"></i>
+          <span>Configuración</span>
+        </a>
+      </nav>
+
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <div style="min-height: 100vh; background: var(--background);">
+
+    <!-- Top Header -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <button id="menuToggle" class="btn btn-ghost btn-icon">
+            <i data-lucide="menu" class="icon"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Mi Empresa App</h1>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+          </button>
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+          <span class="text-sm font-medium">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main style="padding: var(--spacing-2xl) var(--spacing-xl);">
+
+      <!-- Page Title -->
+      <div class="mb-8">
+        <h2 class="text-3xl font-bold mb-2">Bienvenido a Mi Empresa App</h2>
+        <p class="text-muted">Gestiona tu empresa desde estos 4 módulos principales</p>
+      </div>
+
+      <!-- 4 Main Modules Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+
+        <!-- Module 1: Certificación Empresarial -->
+        <div class="card stat-card" style="cursor: pointer;" onclick="window.location.href='certificates_1.html'">
+          <div class="flex items-start gap-4">
+            <div class="flex items-center justify-center w-16 h-16 rounded-lg flex-shrink-0" style="background: rgba(139, 92, 246, 0.1);">
+              <i data-lucide="file-check" class="icon-xl" style="color: var(--p-primary-500);"></i>
+            </div>
+            <div class="flex-1">
+              <h3 class="text-xl font-semibold mb-2">Certificación Empresarial</h3>
+              <p class="text-sm text-muted mb-4">
+                Gestiona documentos regulatorios: RUT, Cámara de Comercio, permisos sanitarios. Recibe alertas 30 días antes del vencimiento para evitar sanciones.
+              </p>
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium" style="color: var(--p-primary-500);">Ir al módulo</span>
+                <i data-lucide="arrow-right" class="icon-sm" style="color: var(--p-primary-500);"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Module 2: Gestión de Personal -->
+        <div class="card stat-card" style="cursor: pointer;" onclick="window.location.href='employees_list_1.html'">
+          <div class="flex items-start gap-4">
+            <div class="flex items-center justify-center w-16 h-16 rounded-lg flex-shrink-0" style="background: rgba(34, 197, 94, 0.1);">
+              <i data-lucide="users" class="icon-xl" style="color: #22c55e;"></i>
+            </div>
+            <div class="flex-1">
+              <h3 class="text-xl font-semibold mb-2">Gestión de Personal</h3>
+              <p class="text-sm text-muted mb-4">
+                Administra empleados, contratos y certificaciones. Incluye plantillas legales pre-cargadas como sugerencias. Cada empresa valida y ajusta según sus necesidades.
+              </p>
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium" style="color: #22c55e;">Ir al módulo</span>
+                <i data-lucide="arrow-right" class="icon-sm" style="color: #22c55e;"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Module 3: Gestión de Clientes -->
+        <div class="card stat-card" style="cursor: pointer;" onclick="window.location.href='patients_list_1.html'">
+          <div class="flex items-start gap-4">
+            <div class="flex items-center justify-center w-16 h-16 rounded-lg flex-shrink-0" style="background: rgba(59, 130, 246, 0.1);">
+              <i data-lucide="user-check" class="icon-xl" style="color: #3b82f6;"></i>
+            </div>
+            <div class="flex-1">
+              <h3 class="text-xl font-semibold mb-2">Gestión de Clientes</h3>
+              <p class="text-sm text-muted mb-4">
+                Centraliza toda la información de tus clientes: historiales, notas, documentación y seguimiento organizado desde cualquier dispositivo.
+              </p>
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium" style="color: #3b82f6;">Ir al módulo</span>
+                <i data-lucide="arrow-right" class="icon-sm" style="color: #3b82f6;"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Module 4: Nómina y Finanzas -->
+        <div class="card stat-card" style="cursor: pointer;" onclick="window.location.href='#'">
+          <div class="flex items-start gap-4">
+            <div class="flex items-center justify-center w-16 h-16 rounded-lg flex-shrink-0" style="background: rgba(251, 146, 60, 0.1);">
+              <i data-lucide="calculator" class="icon-xl" style="color: #fb923c;"></i>
+            </div>
+            <div class="flex-1">
+              <h3 class="text-xl font-semibold mb-2">Nómina y Finanzas</h3>
+              <p class="text-sm text-muted mb-4">
+                Cálculo automático de salarios, deducciones y comprobantes de pago. No reemplaza sistemas contables. Obligaciones tributarias deben gestionarse con contador público.
+              </p>
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium" style="color: #fb923c;">Ir al módulo</span>
+                <i data-lucide="arrow-right" class="icon-sm" style="color: #fb923c;"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Quick Stats Section -->
+      <div class="mt-8">
+        <h3 class="text-lg font-semibold mb-4">📊 Resumen Rápido</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-md">
+
+          <div class="card text-center">
+            <div class="text-2xl font-bold mb-1" style="color: var(--p-primary-500);">45</div>
+            <div class="text-xs text-muted">Total Empleados</div>
+          </div>
+
+          <div class="card text-center">
+            <div class="text-2xl font-bold mb-1" style="color: #3b82f6;">128</div>
+            <div class="text-xs text-muted">Clientes Activos</div>
+          </div>
+
+          <div class="card text-center">
+            <div class="text-2xl font-bold mb-1" style="color: #22c55e;">85</div>
+            <div class="text-xs text-muted">Certificados Vigentes</div>
+          </div>
+
+          <div class="card text-center">
+            <div class="text-2xl font-bold mb-1" style="color: #fb923c;">5</div>
+            <div class="text-xs text-muted">Alertas Pendientes</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Recent Activity -->
+      <div class="card mt-8">
+        <h3 class="text-lg font-semibold mb-6">🕐 Actividad Reciente</h3>
+
+        <div class="space-y-4">
+
+          <div class="alert-item">
+            <div class="flex items-center justify-center w-10 h-10 rounded-lg flex-shrink-0" style="background: rgba(139, 92, 246, 0.1);">
+              <i data-lucide="user-plus" class="icon" style="color: var(--p-primary-400);"></i>
+            </div>
+            <div class="flex-1">
+              <p class="font-medium mb-1">Nuevo empleado registrado</p>
+              <p class="text-sm text-muted">Ana María Torres - Hace 2 horas</p>
+            </div>
+          </div>
+
+          <div class="alert-item">
+            <div class="flex items-center justify-center w-10 h-10 rounded-lg flex-shrink-0" style="background: rgba(251, 146, 60, 0.1);">
+              <i data-lucide="alert-triangle" class="icon" style="color: #fb923c;"></i>
+            </div>
+            <div class="flex-1">
+              <p class="font-medium mb-1">Certificado próximo a vencer</p>
+              <p class="text-sm text-muted">Juan Pérez - Trabajo en Alturas - Vence en 5 días</p>
+            </div>
+          </div>
+
+          <div class="alert-item">
+            <div class="flex items-center justify-center w-10 h-10 rounded-lg flex-shrink-0" style="background: rgba(34, 197, 94, 0.1);">
+              <i data-lucide="file-check" class="icon" style="color: #22c55e;"></i>
+            </div>
+            <div class="flex-1">
+              <p class="font-medium mb-1">Contrato renovado exitosamente</p>
+              <p class="text-sm text-muted">María López - Contrato a término fijo - Hace 1 día</p>
+            </div>
+          </div>
+
+          <div class="alert-item">
+            <div class="flex items-center justify-center w-10 h-10 rounded-lg flex-shrink-0" style="background: rgba(59, 130, 246, 0.1);">
+              <i data-lucide="user-check" class="icon" style="color: #3b82f6;"></i>
+            </div>
+            <div class="flex-1">
+              <p class="font-medium mb-1">Nueva nota agregada a cliente</p>
+              <p class="text-sm text-muted">Cliente: Roberto Gómez - Hace 3 horas</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Sidebar toggle
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    menuToggle.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+      sidebarOverlay.classList.toggle('show');
+    });
+
+    sidebarOverlay.addEventListener('click', function() {
+      sidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('show');
+    });
+  </script>
+
+</body>
+</html>

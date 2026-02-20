@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nuevo Empleado - Paso 2 - Mi Empresa App</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    .stepper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--spacing-3xl);
+      position: relative;
+    }
+
+    .stepper::before {
+      content: '';
+      position: absolute;
+      top: 20px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--border);
+      z-index: 0;
+    }
+
+    .step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--spacing-sm);
+      flex: 1;
+      position: relative;
+      z-index: 1;
+    }
+
+    .step-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--surface-card);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      transition: all 0.3s;
+    }
+
+    .step.active .step-circle {
+      background: var(--p-primary-500);
+      border-color: var(--p-primary-500);
+      color: white;
+      box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.2);
+    }
+
+    .step.completed .step-circle {
+      background: var(--p-primary-500);
+      border-color: var(--p-primary-500);
+      color: white;
+    }
+
+    .step-label {
+      font-size: var(--font-size-xs);
+      text-align: center;
+      max-width: 100px;
+    }
+
+    .step.active .step-label {
+      color: var(--foreground);
+      font-weight: 600;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--spacing-lg);
+    }
+
+    @media (max-width: 768px) {
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+    }
+
+    .form-label {
+      font-size: var(--font-size-sm);
+      font-weight: 500;
+    }
+
+    .required::after {
+      content: ' *';
+      color: #ef4444;
+    }
+
+    .section-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--spacing-xl);
+      margin-bottom: var(--spacing-lg);
+      background: var(--surface-section);
+      position: relative;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      margin-bottom: var(--spacing-xl);
+      padding-bottom: var(--spacing-md);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .entry-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--spacing-lg);
+      margin-bottom: var(--spacing-lg);
+      background: var(--surface-card);
+      position: relative;
+    }
+
+    .delete-btn {
+      position: absolute;
+      top: var(--spacing-md);
+      right: var(--spacing-md);
+    }
+
+    .add-btn {
+      width: 100%;
+      border: 2px dashed var(--border);
+      background: transparent;
+      color: var(--p-primary-500);
+      transition: all 0.2s;
+    }
+
+    .add-btn:hover {
+      border-color: var(--p-primary-500);
+      background: rgba(139, 92, 246, 0.05);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Main Content -->
+  <div style="min-height: 100vh; background: var(--background);">
+
+    <!-- Top Header -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <a href="employees_list_1.html" class="btn btn-ghost btn-icon">
+            <i data-lucide="arrow-left" class="icon"></i>
+          </a>
+          <h1 class="text-xl font-semibold">Empleados > Nuevo empleado</h1>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+          </button>
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+          <span class="text-sm font-medium">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main class="container" style="max-width: 900px; padding-top: var(--spacing-3xl); padding-bottom: var(--spacing-3xl);">
+
+      <!-- Page Title -->
+      <div class="mb-8">
+        <h2 class="text-3xl font-bold mb-2">Nuevo empleado/a</h2>
+        <p class="text-muted">Registra la información de las personas que integran tu equipo de trabajo</p>
+      </div>
+
+      <!-- Stepper -->
+      <div class="stepper">
+        <div class="step completed">
+          <div class="step-circle">✓</div>
+          <div class="step-label text-muted">Datos personales</div>
+        </div>
+        <div class="step active">
+          <div class="step-circle">2</div>
+          <div class="step-label text-muted">Experiencia y educación</div>
+        </div>
+        <div class="step">
+          <div class="step-circle">3</div>
+          <div class="step-label text-muted">Contrato</div>
+        </div>
+        <div class="step">
+          <div class="step-circle">4</div>
+          <div class="step-label text-muted">Nómina</div>
+        </div>
+        <div class="step">
+          <div class="step-circle">5</div>
+          <div class="step-label text-muted">Documentos</div>
+        </div>
+      </div>
+
+      <!-- Form Card -->
+      <div class="card">
+
+        <div class="flex items-center justify-between mb-6">
+          <h3 class="text-lg font-semibold">Experiencia y Educación</h3>
+          <span class="text-sm text-muted">Paso 2 de 5</span>
+        </div>
+
+        <form id="experienceForm">
+
+          <!-- External Work Experience Section -->
+          <div class="section-card">
+            <div class="section-header">
+              <i data-lucide="briefcase" class="icon-lg" style="color: var(--p-primary-400);"></i>
+              <div>
+                <h4 class="font-semibold">Experiencia Laboral Externa</h4>
+                <p class="text-xs text-muted">Trabajos anteriores en otras empresas</p>
+              </div>
+            </div>
+
+            <div id="externalExperienceContainer">
+              <!-- Entry 1 -->
+              <div class="entry-card" data-entry="experience-1">
+                <button type="button" class="btn btn-ghost btn-icon btn-sm delete-btn delete-entry" data-target="experience-1">
+                  <i data-lucide="trash-2" class="icon-sm" style="color: #ef4444;"></i>
+                </button>
+
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label class="form-label required">Empresa</label>
+                    <input type="text" class="form-input" placeholder="Nombre de la empresa" required>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label required">Teléfono de la empresa</label>
+                    <input type="tel" class="form-input" placeholder="+57 321 1234567" required>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label required">Cargo</label>
+                    <input type="text" class="form-input" placeholder="Ej: Desarrollador Senior" required>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label required">Sector</label>
+                    <select class="form-input" required>
+                      <option value="">Seleccionar sector</option>
+                      <option value="tecnologia">Tecnología</option>
+                      <option value="telecomunicaciones">Telecomunicaciones</option>
+                      <option value="mercado-masivo">Mercado masivo</option>
+                      <option value="comercial">Comercial/Ventas</option>
+                      <option value="restaurante">Restaurante</option>
+                      <option value="servicio-cliente">Servicio al cliente</option>
+                      <option value="salud">Salud</option>
+                      <option value="educacion">Educación</option>
+                      <option value="otro">Otro</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label required">Fecha de inicio</label>
+                    <input type="date" class="form-input" required>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label required">Fecha de fin</label>
+                    <input type="date" class="form-input" required>
+                  </div>
+                </div>
+
+                <div class="form-group mt-4">
+                  <label class="form-label">Funciones y logros</label>
+                  <textarea class="form-input" rows="3" placeholder="Describe las funciones principales y logros obtenidos..."></textarea>
+                </div>
+              </div>
+            </div>
+
+            <button type="button" class="btn add-btn" id="addExperience">
+              <i data-lucide="plus" class="icon"></i>
+              <span>Agregar otra experiencia</span>
+            </button>
+          </div>
+
+          <!-- Internal Experience Section -->
+          <div class="section-card" style="background: rgba(139, 92, 246, 0.05);">
+            <div class="section-header">
+              <i data-lucide="building-2" class="icon-lg" style="color: var(--p-primary-400);"></i>
+              <div>
+                <h4 class="font-semibold">Experiencia Laboral Interna <span class="badge badge-info ml-2">Opcional</span></h4>
+                <p class="text-xs text-muted">Se completará automáticamente al crear contratos para este empleado</p>
+              </div>
+            </div>
+            <p class="text-sm text-muted text-center py-4">
+              <i data-lucide="info" class="icon-sm inline-block"></i>
+              La experiencia dentro de la empresa se registrará en el módulo de contratos
+            </p>
+          </div>
+
+          <!-- Education Section -->
+          <div class="section-card">
+            <div class="section-header">
+              <i data-lucide="graduation-cap" class="icon-lg" style="color: var(--p-primary-400);"></i>
+              <div>
+                <h4 class="font-semibold">Educación Académica</h4>
+                <p class="text-xs text-muted">Estudios, títulos y certificaciones</p>
+              </div>
+            </div>
+
+            <div id="educationContainer">
+              <!-- Entry 1 -->
+              <div class="entry-card" data-entry="education-1">
+                <button type="button" class="btn btn-ghost btn-icon btn-sm delete-btn delete-entry" data-target="education-1">
+                  <i data-lucide="trash-2" class="icon-sm" style="color: #ef4444;"></i>
+                </button>
+
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label class="form-label required">Institución</label>
+                    <input type="text" class="form-input" placeholder="Nombre de la institución" required>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label required">Nivel académico</label>
+                    <select class="form-input" required>
+                      <option value="">Seleccionar</option>
+                      <option value="secundaria">Secundaria</option>
+                      <option value="tecnico">Técnico</option>
+                      <option value="tecnologo">Tecnólogo</option>
+                      <option value="universitario">Universitario</option>
+                      <option value="posgrado">Posgrado</option>
+                      <option value="maestria">Maestría</option>
+                      <option value="doctorado">Doctorado</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Título obtenido</label>
+                    <input type="text" class="form-input" placeholder="Ej: Ingeniero de Sistemas">
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Estado</label>
+                    <select class="form-input">
+                      <option value="completo">Completo</option>
+                      <option value="en-curso">En curso</option>
+                      <option value="incompleto">Incompleto</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Fecha de inicio</label>
+                    <input type="date" class="form-input">
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Fecha de fin</label>
+                    <input type="date" class="form-input">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button type="button" class="btn add-btn" id="addEducation">
+              <i data-lucide="plus" class="icon"></i>
+              <span>Agregar otro estudio</span>
+            </button>
+          </div>
+
+          <!-- Languages Section -->
+          <div class="section-card">
+            <div class="section-header">
+              <i data-lucide="globe" class="icon-lg" style="color: var(--p-primary-400);"></i>
+              <div>
+                <h4 class="font-semibold">Idiomas</h4>
+                <p class="text-xs text-muted">Idiomas que domina el empleado</p>
+              </div>
+            </div>
+
+            <div id="languagesContainer">
+              <!-- Entry 1 -->
+              <div class="entry-card" data-entry="language-1">
+                <button type="button" class="btn btn-ghost btn-icon btn-sm delete-btn delete-entry" data-target="language-1">
+                  <i data-lucide="trash-2" class="icon-sm" style="color: #ef4444;"></i>
+                </button>
+
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label class="form-label required">Idioma</label>
+                    <select class="form-input" required>
+                      <option value="">Seleccionar</option>
+                      <option value="espanol">Español</option>
+                      <option value="ingles">Inglés</option>
+                      <option value="frances">Francés</option>
+                      <option value="portugues">Portugués</option>
+                      <option value="aleman">Alemán</option>
+                      <option value="italiano">Italiano</option>
+                      <option value="chino">Chino</option>
+                      <option value="otro">Otro</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label required">Nivel escritura</label>
+                    <select class="form-input" required>
+                      <option value="">Seleccionar</option>
+                      <option value="nativo">Nativo</option>
+                      <option value="avanzado">Avanzado (C1-C2)</option>
+                      <option value="intermedio">Intermedio (B1-B2)</option>
+                      <option value="basico">Básico (A1-A2)</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label required">Nivel habla</label>
+                    <select class="form-input" required>
+                      <option value="">Seleccionar</option>
+                      <option value="nativo">Nativo</option>
+                      <option value="avanzado">Avanzado (C1-C2)</option>
+                      <option value="intermedio">Intermedio (B1-B2)</option>
+                      <option value="basico">Básico (A1-A2)</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Institución</label>
+                    <input type="text" class="form-input" placeholder="Donde aprendió el idioma">
+                  </div>
+                </div>
+
+                <div class="form-group mt-4">
+                  <label class="form-label">¿Puede realizar traducciones profesionales?</label>
+                  <div class="flex gap-4">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                      <input type="radio" name="translate-1" value="si" style="accent-color: var(--p-primary-500);">
+                      <span class="text-sm">Sí</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                      <input type="radio" name="translate-1" value="no" style="accent-color: var(--p-primary-500);">
+                      <span class="text-sm">No</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button type="button" class="btn add-btn" id="addLanguage">
+              <i data-lucide="plus" class="icon"></i>
+              <span>Agregar otro idioma</span>
+            </button>
+          </div>
+
+          <!-- Info Text -->
+          <div class="mt-6 p-3 rounded" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.2);">
+            <p class="text-sm" style="color: var(--p-primary-300);">
+              <i data-lucide="info" class="icon-sm inline-block" style="vertical-align: text-bottom;"></i>
+              Los campos marcados con * son obligatorios. Puedes omitir secciones opcionales y completarlas más tarde.
+            </p>
+          </div>
+
+          <!-- Form Actions -->
+          <div class="flex items-center justify-between mt-8">
+            <a href="employee_new_step_1.html" class="btn btn-outline">
+              <i data-lucide="arrow-left" class="icon"></i>
+              <span>Anterior</span>
+            </a>
+            <a href="employee_new_step_1_2_3.html" class="btn btn-primary">
+              <span>Siguiente</span>
+              <i data-lucide="arrow-right" class="icon"></i>
+            </a>
+          </div>
+
+        </form>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    let experienceCounter = 1;
+    let educationCounter = 1;
+    let languageCounter = 1;
+
+    // Add External Experience
+    document.getElementById('addExperience').addEventListener('click', function() {
+      experienceCounter++;
+      const container = document.getElementById('externalExperienceContainer');
+      const newEntry = createExperienceEntry(experienceCounter);
+      container.insertAdjacentHTML('beforeend', newEntry);
+      lucide.createIcons();
+      attachDeleteHandlers();
+    });
+
+    // Add Education
+    document.getElementById('addEducation').addEventListener('click', function() {
+      educationCounter++;
+      const container = document.getElementById('educationContainer');
+      const newEntry = createEducationEntry(educationCounter);
+      container.insertAdjacentHTML('beforeend', newEntry);
+      lucide.createIcons();
+      attachDeleteHandlers();
+    });
+
+    // Add Language
+    document.getElementById('addLanguage').addEventListener('click', function() {
+      languageCounter++;
+      const container = document.getElementById('languagesContainer');
+      const newEntry = createLanguageEntry(languageCounter);
+      container.insertAdjacentHTML('beforeend', newEntry);
+      lucide.createIcons();
+      attachDeleteHandlers();
+    });
+
+    // Delete entry handlers
+    function attachDeleteHandlers() {
+      document.querySelectorAll('.delete-entry').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const target = this.dataset.target;
+          const entry = document.querySelector(`[data-entry="${target}"]`);
+          if (entry) {
+            entry.remove();
+          }
+        });
+      });
+    }
+
+    // Initial attachment
+    attachDeleteHandlers();
+
+    // Template functions
+    function createExperienceEntry(counter) {
+      return `
+        <div class="entry-card" data-entry="experience-${counter}">
+          <button type="button" class="btn btn-ghost btn-icon btn-sm delete-btn delete-entry" data-target="experience-${counter}">
+            <i data-lucide="trash-2" class="icon-sm" style="color: #ef4444;"></i>
+          </button>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label required">Empresa</label>
+              <input type="text" class="form-input" placeholder="Nombre de la empresa" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label required">Teléfono de la empresa</label>
+              <input type="tel" class="form-input" placeholder="+57 321 1234567" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label required">Cargo</label>
+              <input type="text" class="form-input" placeholder="Ej: Desarrollador Senior" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label required">Sector</label>
+              <select class="form-input" required>
+                <option value="">Seleccionar sector</option>
+                <option value="tecnologia">Tecnología</option>
+                <option value="telecomunicaciones">Telecomunicaciones</option>
+                <option value="mercado-masivo">Mercado masivo</option>
+                <option value="comercial">Comercial/Ventas</option>
+                <option value="restaurante">Restaurante</option>
+                <option value="servicio-cliente">Servicio al cliente</option>
+                <option value="salud">Salud</option>
+                <option value="educacion">Educación</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label required">Fecha de inicio</label>
+              <input type="date" class="form-input" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label required">Fecha de fin</label>
+              <input type="date" class="form-input" required>
+            </div>
+          </div>
+          <div class="form-group mt-4">
+            <label class="form-label">Funciones y logros</label>
+            <textarea class="form-input" rows="3" placeholder="Describe las funciones principales y logros obtenidos..."></textarea>
+          </div>
+        </div>
+      `;
+    }
+
+    function createEducationEntry(counter) {
+      return `
+        <div class="entry-card" data-entry="education-${counter}">
+          <button type="button" class="btn btn-ghost btn-icon btn-sm delete-btn delete-entry" data-target="education-${counter}">
+            <i data-lucide="trash-2" class="icon-sm" style="color: #ef4444;"></i>
+          </button>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label required">Institución</label>
+              <input type="text" class="form-input" placeholder="Nombre de la institución" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label required">Nivel académico</label>
+              <select class="form-input" required>
+                <option value="">Seleccionar</option>
+                <option value="secundaria">Secundaria</option>
+                <option value="tecnico">Técnico</option>
+                <option value="tecnologo">Tecnólogo</option>
+                <option value="universitario">Universitario</option>
+                <option value="posgrado">Posgrado</option>
+                <option value="maestria">Maestría</option>
+                <option value="doctorado">Doctorado</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Título obtenido</label>
+              <input type="text" class="form-input" placeholder="Ej: Ingeniero de Sistemas">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Estado</label>
+              <select class="form-input">
+                <option value="completo">Completo</option>
+                <option value="en-curso">En curso</option>
+                <option value="incompleto">Incompleto</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Fecha de inicio</label>
+              <input type="date" class="form-input">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Fecha de fin</label>
+              <input type="date" class="form-input">
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function createLanguageEntry(counter) {
+      return `
+        <div class="entry-card" data-entry="language-${counter}">
+          <button type="button" class="btn btn-ghost btn-icon btn-sm delete-btn delete-entry" data-target="language-${counter}">
+            <i data-lucide="trash-2" class="icon-sm" style="color: #ef4444;"></i>
+          </button>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label required">Idioma</label>
+              <select class="form-input" required>
+                <option value="">Seleccionar</option>
+                <option value="espanol">Español</option>
+                <option value="ingles">Inglés</option>
+                <option value="frances">Francés</option>
+                <option value="portugues">Portugués</option>
+                <option value="aleman">Alemán</option>
+                <option value="italiano">Italiano</option>
+                <option value="chino">Chino</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label required">Nivel escritura</label>
+              <select class="form-input" required>
+                <option value="">Seleccionar</option>
+                <option value="nativo">Nativo</option>
+                <option value="avanzado">Avanzado (C1-C2)</option>
+                <option value="intermedio">Intermedio (B1-B2)</option>
+                <option value="basico">Básico (A1-A2)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label required">Nivel habla</label>
+              <select class="form-input" required>
+                <option value="">Seleccionar</option>
+                <option value="nativo">Nativo</option>
+                <option value="avanzado">Avanzado (C1-C2)</option>
+                <option value="intermedio">Intermedio (B1-B2)</option>
+                <option value="basico">Básico (A1-A2)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Institución</label>
+              <input type="text" class="form-input" placeholder="Donde aprendió el idioma">
+            </div>
+          </div>
+          <div class="form-group mt-4">
+            <label class="form-label">¿Puede realizar traducciones profesionales?</label>
+            <div class="flex gap-4">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="translate-${counter}" value="si" style="accent-color: var(--p-primary-500);">
+                <span class="text-sm">Sí</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="translate-${counter}" value="no" style="accent-color: var(--p-primary-500);">
+                <span class="text-sm">No</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Form submission removed - using direct link navigation
+  </script>
+
+</body>
+</html>

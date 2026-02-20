@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detalle del Certificado - Mi Empresa</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    /* Sidebar styles */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: -280px;
+      width: 280px;
+      height: 100vh;
+      background: var(--surface-card);
+      border-right: 1px solid var(--border);
+      transition: left 0.3s ease-out;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .sidebar.open {
+      left: 0;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+      z-index: 99;
+    }
+
+    .sidebar-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius);
+      transition: all 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--foreground);
+    }
+
+    .sidebar-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .sidebar-item.active {
+      background: var(--p-primary-500);
+      color: white;
+    }
+
+    /* Custom styles */
+    .info-grid {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: var(--spacing-md);
+      padding: var(--spacing-lg);
+    }
+
+    .info-label {
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .info-value {
+      color: var(--text-primary);
+    }
+
+    .section-divider {
+      border-top: 2px solid var(--surface-hover);
+      margin: var(--spacing-2xl) 0;
+      position: relative;
+    }
+
+    .section-divider::before {
+      content: 'HISTORIAL DE VERSIONES';
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface-ground);
+      padding: 0 var(--spacing-lg);
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+
+    .timeline {
+      position: relative;
+      padding-left: var(--spacing-2xl);
+    }
+
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--surface-hover);
+    }
+
+    .timeline-item {
+      position: relative;
+      padding-bottom: var(--spacing-xl);
+    }
+
+    .timeline-item:last-child {
+      padding-bottom: 0;
+    }
+
+    .timeline-dot {
+      position: absolute;
+      left: -27px;
+      top: 4px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--p-primary-500);
+      border: 3px solid var(--surface-ground);
+      z-index: 1;
+    }
+
+    .timeline-dot.current {
+      background: var(--p-green-500);
+      box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+    }
+
+    .version-card {
+      background: var(--surface-card);
+      border: 1px solid var(--surface-hover);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-lg);
+      transition: all 0.2s ease;
+    }
+
+    .version-card:hover {
+      border-color: var(--p-primary-500);
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.1);
+    }
+
+    .alert-box {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--spacing-md);
+      padding: var(--spacing-lg);
+      border-radius: var(--radius-lg);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .alert-box.warning {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid var(--p-orange-500);
+    }
+
+    .alert-box.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--p-red-500);
+    }
+
+    .document-preview {
+      background: var(--surface-hover);
+      border: 2px dashed var(--surface-hover);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-3xl);
+      text-align: center;
+      margin-top: var(--spacing-lg);
+    }
+
+    .file-icon-large {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto var(--spacing-lg);
+      opacity: 0.5;
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar" id="sidebar">
+    <div style="padding: var(--spacing-xl);">
+      <!-- Logo + Company Name -->
+      <div class="flex items-center gap-3 mb-8">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: var(--p-primary-500);">
+          <i data-lucide="building-2" class="icon-lg" style="color: white;"></i>
+        </div>
+        <div>
+          <h2 class="font-semibold text-base">Mi Empresa</h2>
+          <p class="text-xs text-muted">jeik-sa</p>
+        </div>
+      </div>
+
+      <!-- Navigation Items -->
+      <nav>
+        <a href="dashboard_1.html" class="sidebar-item">
+          <i data-lucide="home" class="icon"></i>
+          <span>Inicio</span>
+        </a>
+        <a href="employees_list_1.html" class="sidebar-item">
+          <i data-lucide="users" class="icon"></i>
+          <span>Empleados</span>
+        </a>
+        <a href="patients_list_1.html" class="sidebar-item">
+          <i data-lucide="user" class="icon"></i>
+          <span>Pacientes</span>
+        </a>
+                <a href="instruments_list_1.html" class="sidebar-item">
+          <i data-lucide="clipboard-list" class="icon"></i>
+          <span>Instrumentos</span>
+        </a>
+<a href="certificates-v2_1.html" class="sidebar-item active">
+          <i data-lucide="file-check" class="icon"></i>
+          <span>Certificados</span>
+        </a>
+        <a href="payroll_1.html" class="sidebar-item">
+          <i data-lucide="wallet" class="icon"></i>
+          <span>Nómina</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="bar-chart" class="icon"></i>
+          <span>Reportes</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="settings" class="icon"></i>
+          <span>Configuración</span>
+        </a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Header -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <!-- Left Section -->
+        <div class="flex items-center gap-4">
+          <!-- Menu Toggle Button -->
+          <button id="menuToggle" class="btn btn-ghost btn-icon">
+            <i data-lucide="menu" class="icon"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Detalle del Certificado</h1>
+        </div>
+
+        <!-- Right Section -->
+        <div class="flex items-center gap-3">
+          <!-- Notifications Bell -->
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+          </button>
+
+          <!-- User Profile Icon -->
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+
+          <!-- Username -->
+          <span class="text-sm font-medium hidden md:inline">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <div class="container" style="padding: var(--spacing-xl); max-width: 1400px; margin: 0 auto;">
+      <!-- Certificate Header -->
+      <div class="card" style="margin-bottom: var(--spacing-lg);">
+        <div class="flex items-start justify-between" style="padding: var(--spacing-lg);">
+          <div class="flex-1">
+            <div class="flex items-center gap-md mb-2">
+              <h2 class="text-xl font-semibold">Cámara de Comercio</h2>
+              <span class="badge" style="background: var(--p-red-500); color: white;">
+                <i data-lucide="alert-circle" class="icon-sm" style="margin-right: 4px;"></i>
+                VENCIDO
+              </span>
+            </div>
+            <p class="text-sm text-muted">Versión actual: v4 • Última actualización: 15 Nov 2025</p>
+          </div>
+          <div class="flex items-center gap-sm">
+            <button class="btn btn-primary">
+              <i data-lucide="download" class="icon-sm"></i>
+              <span>Descargar</span>
+            </button>
+            <button class="btn btn-outline">
+              <i data-lucide="upload" class="icon-sm"></i>
+              <span>Actualizar Versión</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alert Box (shown if expired or expiring soon) -->
+      <div class="alert-box error">
+        <i data-lucide="alert-triangle" class="icon" style="color: var(--p-red-500); flex-shrink: 0;"></i>
+        <div>
+          <h3 class="font-semibold" style="color: var(--p-red-500); margin-bottom: 4px;">
+            Certificado Vencido
+          </h3>
+          <p class="text-sm text-muted">
+            Este certificado venció hace <strong>45 días</strong> (15 Oct 2025). Por favor, cargue una nueva versión actualizada para mantener el cumplimiento regulatorio.
+          </p>
+        </div>
+      </div>
+
+      <!-- Certificate Information -->
+      <div class="card" style="margin-bottom: var(--spacing-lg);">
+        <div style="padding: var(--spacing-lg); border-bottom: 1px solid var(--surface-hover);">
+          <h3 class="text-lg font-semibold">Información del Certificado</h3>
+        </div>
+
+        <div class="info-grid">
+          <span class="info-label">Nombre:</span>
+          <span class="info-value">Cámara de Comercio</span>
+
+          <span class="info-label">Estado:</span>
+          <span class="info-value">
+            <span class="badge" style="background: var(--p-red-500); color: white;">
+              <i data-lucide="x-circle" class="icon-sm" style="margin-right: 4px;"></i>
+              VENCIDO
+            </span>
+          </span>
+
+          <span class="info-label">Fecha de Expedición:</span>
+          <span class="info-value">15 Oct 2024</span>
+
+          <span class="info-label">Fecha de Vencimiento:</span>
+          <span class="info-value" style="color: var(--p-red-500); font-weight: 600;">
+            15 Oct 2025 <span class="text-sm text-muted">(Vencido hace 45 días)</span>
+          </span>
+
+          <span class="info-label">Versión Actual:</span>
+          <span class="info-value">v4</span>
+
+          <span class="info-label">Archivo:</span>
+          <span class="info-value">
+            <div class="flex items-center gap-sm">
+              <i data-lucide="file-text" class="icon-sm"></i>
+              <span>camara_comercio_2025.pdf</span>
+            </div>
+          </span>
+
+          <span class="info-label">Tamaño:</span>
+          <span class="info-value">2.4 MB</span>
+
+          <span class="info-label">Cargado por:</span>
+          <span class="info-value">Admin User</span>
+
+          <span class="info-label">Fecha de carga:</span>
+          <span class="info-value">15 Nov 2025, 10:30 AM</span>
+
+          <span class="info-label">Observaciones:</span>
+          <span class="info-value">Certificado de matrícula mercantil renovado para el año 2025. Incluye actualizaciones de representante legal y domicilio principal.</span>
+        </div>
+
+        <!-- Document Preview -->
+        <div style="padding: var(--spacing-lg); border-top: 1px solid var(--surface-hover);">
+          <h4 class="font-semibold mb-3">Vista Previa del Documento</h4>
+          <div class="document-preview">
+            <i data-lucide="file-text" class="file-icon-large"></i>
+            <p class="text-muted">camara_comercio_2025.pdf</p>
+            <button class="btn btn-primary" style="margin-top: var(--spacing-md);">
+              <i data-lucide="eye" class="icon-sm"></i>
+              <span>Ver Documento Completo</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section Divider -->
+      <div class="section-divider"></div>
+
+      <!-- History Section -->
+      <div class="card" style="margin-bottom: var(--spacing-2xl);">
+        <div style="padding: var(--spacing-lg); border-bottom: 1px solid var(--surface-hover);">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-lg font-semibold">Historial de Versiones</h3>
+              <p class="text-sm text-muted">Registro cronológico de todas las versiones del certificado</p>
+            </div>
+            <span class="badge" style="background: var(--surface-hover); color: var(--text-primary);">
+              4 versiones
+            </span>
+          </div>
+        </div>
+
+        <div style="padding: var(--spacing-xl);">
+          <div class="timeline">
+            <!-- Version 4 (Current) -->
+            <div class="timeline-item">
+              <div class="timeline-dot current"></div>
+              <div class="version-card">
+                <div class="flex items-start justify-between mb-3">
+                  <div>
+                    <div class="flex items-center gap-sm mb-2">
+                      <h4 class="font-semibold">Versión 4</h4>
+                      <span class="badge" style="background: var(--p-green-500); color: white; font-size: 0.75rem;">
+                        ACTUAL
+                      </span>
+                      <span class="badge" style="background: var(--p-red-500); color: white; font-size: 0.75rem;">
+                        <i data-lucide="x-circle" class="icon-sm" style="margin-right: 2px; width: 12px; height: 12px;"></i>
+                        VENCIDO
+                      </span>
+                    </div>
+                    <p class="text-sm text-muted">Cargado el 15 Nov 2025, 10:30 AM por Admin User</p>
+                  </div>
+                  <button class="btn btn-ghost btn-icon btn-sm" title="Descargar versión">
+                    <i data-lucide="download" class="icon-sm"></i>
+                  </button>
+                </div>
+                <div class="info-grid" style="gap: var(--spacing-sm); padding: 0;">
+                  <span class="info-label text-sm">Expedición:</span>
+                  <span class="info-value text-sm">15 Oct 2024</span>
+
+                  <span class="info-label text-sm">Vencimiento:</span>
+                  <span class="info-value text-sm" style="color: var(--p-red-500);">15 Oct 2025</span>
+
+                  <span class="info-label text-sm">Archivo:</span>
+                  <span class="info-value text-sm">
+                    <div class="flex items-center gap-xs">
+                      <i data-lucide="file-text" class="icon-sm"></i>
+                      <span>camara_comercio_2025.pdf</span>
+                      <span class="text-muted">(2.4 MB)</span>
+                    </div>
+                  </span>
+                </div>
+                <div style="margin-top: var(--spacing-md); padding-top: var(--spacing-md); border-top: 1px solid var(--surface-hover);">
+                  <p class="text-sm text-muted"><strong>Observaciones:</strong> Certificado de matrícula mercantil renovado para el año 2025.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Version 3 -->
+            <div class="timeline-item">
+              <div class="timeline-dot"></div>
+              <div class="version-card">
+                <div class="flex items-start justify-between mb-3">
+                  <div>
+                    <div class="flex items-center gap-sm mb-2">
+                      <h4 class="font-semibold">Versión 3</h4>
+                      <span class="badge" style="background: var(--surface-hover); color: var(--text-muted); font-size: 0.75rem;">
+                        REEMPLAZADA
+                      </span>
+                    </div>
+                    <p class="text-sm text-muted">Cargado el 20 Oct 2024, 3:15 PM por Admin User</p>
+                  </div>
+                  <button class="btn btn-ghost btn-icon btn-sm" title="Descargar versión">
+                    <i data-lucide="download" class="icon-sm"></i>
+                  </button>
+                </div>
+                <div class="info-grid" style="gap: var(--spacing-sm); padding: 0;">
+                  <span class="info-label text-sm">Expedición:</span>
+                  <span class="info-value text-sm">15 Oct 2023</span>
+
+                  <span class="info-label text-sm">Vencimiento:</span>
+                  <span class="info-value text-sm">15 Oct 2024</span>
+
+                  <span class="info-label text-sm">Archivo:</span>
+                  <span class="info-value text-sm">
+                    <div class="flex items-center gap-xs">
+                      <i data-lucide="file-text" class="icon-sm"></i>
+                      <span>camara_comercio_2024.pdf</span>
+                      <span class="text-muted">(1.8 MB)</span>
+                    </div>
+                  </span>
+                </div>
+                <div style="margin-top: var(--spacing-md); padding-top: var(--spacing-md); border-top: 1px solid var(--surface-hover);">
+                  <p class="text-sm text-muted"><strong>Observaciones:</strong> Renovación anual con actualización de datos corporativos.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Version 2 -->
+            <div class="timeline-item">
+              <div class="timeline-dot"></div>
+              <div class="version-card">
+                <div class="flex items-start justify-between mb-3">
+                  <div>
+                    <div class="flex items-center gap-sm mb-2">
+                      <h4 class="font-semibold">Versión 2</h4>
+                      <span class="badge" style="background: var(--surface-hover); color: var(--text-muted); font-size: 0.75rem;">
+                        REEMPLAZADA
+                      </span>
+                    </div>
+                    <p class="text-sm text-muted">Cargado el 18 Oct 2023, 9:45 AM por María García</p>
+                  </div>
+                  <button class="btn btn-ghost btn-icon btn-sm" title="Descargar versión">
+                    <i data-lucide="download" class="icon-sm"></i>
+                  </button>
+                </div>
+                <div class="info-grid" style="gap: var(--spacing-sm); padding: 0;">
+                  <span class="info-label text-sm">Expedición:</span>
+                  <span class="info-value text-sm">15 Oct 2022</span>
+
+                  <span class="info-label text-sm">Vencimiento:</span>
+                  <span class="info-value text-sm">15 Oct 2023</span>
+
+                  <span class="info-label text-sm">Archivo:</span>
+                  <span class="info-value text-sm">
+                    <div class="flex items-center gap-xs">
+                      <i data-lucide="file-text" class="icon-sm"></i>
+                      <span>camara_comercio_2023.pdf</span>
+                      <span class="text-muted">(2.1 MB)</span>
+                    </div>
+                  </span>
+                </div>
+                <div style="margin-top: var(--spacing-md); padding-top: var(--spacing-md); border-top: 1px solid var(--surface-hover);">
+                  <p class="text-sm text-muted"><strong>Observaciones:</strong> Certificado renovado sin cambios en la estructura societaria.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Version 1 (Original) -->
+            <div class="timeline-item">
+              <div class="timeline-dot"></div>
+              <div class="version-card">
+                <div class="flex items-start justify-between mb-3">
+                  <div>
+                    <div class="flex items-center gap-sm mb-2">
+                      <h4 class="font-semibold">Versión 1</h4>
+                      <span class="badge" style="background: var(--p-primary-500); color: white; font-size: 0.75rem;">
+                        ORIGINAL
+                      </span>
+                    </div>
+                    <p class="text-sm text-muted">Cargado el 22 Oct 2022, 2:00 PM por Juan Pérez</p>
+                  </div>
+                  <button class="btn btn-ghost btn-icon btn-sm" title="Descargar versión">
+                    <i data-lucide="download" class="icon-sm"></i>
+                  </button>
+                </div>
+                <div class="info-grid" style="gap: var(--spacing-sm); padding: 0;">
+                  <span class="info-label text-sm">Expedición:</span>
+                  <span class="info-value text-sm">15 Oct 2021</span>
+
+                  <span class="info-label text-sm">Vencimiento:</span>
+                  <span class="info-value text-sm">15 Oct 2022</span>
+
+                  <span class="info-label text-sm">Archivo:</span>
+                  <span class="info-value text-sm">
+                    <div class="flex items-center gap-xs">
+                      <i data-lucide="file-text" class="icon-sm"></i>
+                      <span>camara_comercio_2022.pdf</span>
+                      <span class="text-muted">(1.5 MB)</span>
+                    </div>
+                  </span>
+                </div>
+                <div style="margin-top: var(--spacing-md); padding-top: var(--spacing-md); border-top: 1px solid var(--surface-hover);">
+                  <p class="text-sm text-muted"><strong>Observaciones:</strong> Primera versión cargada en el sistema al momento de constitución de la empresa.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Sidebar toggle functionality
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    menuToggle.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+      sidebarOverlay.classList.toggle('show');
+    });
+
+    sidebarOverlay.addEventListener('click', function() {
+      sidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('show');
+    });
+  </script>
+</body>
+</html>

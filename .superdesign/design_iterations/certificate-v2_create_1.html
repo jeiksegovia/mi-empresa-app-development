@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crear Certificado - Mi Empresa</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    /* Sidebar styles */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: -280px;
+      width: 280px;
+      height: 100vh;
+      background: var(--surface-card);
+      border-right: 1px solid var(--border);
+      transition: left 0.3s ease-out;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .sidebar.open {
+      left: 0;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+      z-index: 99;
+    }
+
+    .sidebar-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius);
+      transition: all 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--foreground);
+    }
+
+    .sidebar-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .sidebar-item.active {
+      background: var(--p-primary-500);
+      color: white;
+    }
+
+    /* Custom styles for file upload */
+    .file-upload-area {
+      border: 2px dashed var(--surface-hover);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-2xl);
+      text-align: center;
+      background: var(--surface-hover);
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .file-upload-area:hover {
+      border-color: var(--p-primary-500);
+      background: var(--surface-card);
+    }
+
+    .file-upload-area.dragover {
+      border-color: var(--p-primary-500);
+      background: rgba(139, 92, 246, 0.1);
+    }
+
+    .file-selected {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md);
+      background: var(--surface-card);
+      border: 1px solid var(--surface-hover);
+      border-radius: var(--radius-lg);
+      margin-top: var(--spacing-md);
+    }
+
+    .form-group {
+      margin-bottom: var(--spacing-xl);
+    }
+
+    .form-label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: var(--spacing-sm);
+      color: var(--text-primary);
+    }
+
+    .form-label.required::after {
+      content: '*';
+      color: var(--p-red-500);
+      margin-left: 4px;
+    }
+
+    .form-help-text {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin-top: var(--spacing-xs);
+    }
+
+    .date-input-wrapper {
+      position: relative;
+    }
+
+    .date-input-wrapper .icon {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar" id="sidebar">
+    <div style="padding: var(--spacing-xl);">
+      <!-- Logo + Company Name -->
+      <div class="flex items-center gap-3 mb-8">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: var(--p-primary-500);">
+          <i data-lucide="building-2" class="icon-lg" style="color: white;"></i>
+        </div>
+        <div>
+          <h2 class="font-semibold text-base">Mi Empresa</h2>
+          <p class="text-xs text-muted">jeik-sa</p>
+        </div>
+      </div>
+
+      <!-- Navigation Items -->
+      <nav>
+        <a href="dashboard_1.html" class="sidebar-item">
+          <i data-lucide="home" class="icon"></i>
+          <span>Inicio</span>
+        </a>
+        <a href="employees_list_1.html" class="sidebar-item">
+          <i data-lucide="users" class="icon"></i>
+          <span>Empleados</span>
+        </a>
+        <a href="patients_list_1.html" class="sidebar-item">
+          <i data-lucide="user" class="icon"></i>
+          <span>Pacientes</span>
+        </a>
+                <a href="instruments_list_1.html" class="sidebar-item">
+          <i data-lucide="clipboard-list" class="icon"></i>
+          <span>Instrumentos</span>
+        </a>
+<a href="certificates-v2_1.html" class="sidebar-item active">
+          <i data-lucide="file-check" class="icon"></i>
+          <span>Certificados</span>
+        </a>
+        <a href="payroll_1.html" class="sidebar-item">
+          <i data-lucide="wallet" class="icon"></i>
+          <span>Nómina</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="bar-chart" class="icon"></i>
+          <span>Reportes</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="settings" class="icon"></i>
+          <span>Configuración</span>
+        </a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Header -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <!-- Left Section -->
+        <div class="flex items-center gap-4">
+          <!-- Menu Toggle Button -->
+          <button id="menuToggle" class="btn btn-ghost btn-icon">
+            <i data-lucide="menu" class="icon"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Crear Nuevo Certificado</h1>
+        </div>
+
+        <!-- Right Section -->
+        <div class="flex items-center gap-3">
+          <!-- Notifications Bell -->
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+          </button>
+
+          <!-- User Profile Icon -->
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+
+          <!-- Username -->
+          <span class="text-sm font-medium hidden md:inline">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <div class="container" style="padding: var(--spacing-xl); max-width: 1400px; margin: 0 auto;">
+      <!-- Form Card -->
+      <div class="card" style="padding: var(--spacing-2xl);">
+        <div class="mb-6">
+          <h2 class="text-xl font-semibold mb-2">Información del Certificado</h2>
+          <p class="text-sm text-muted">Complete los campos requeridos para agregar un nuevo certificado al sistema.</p>
+        </div>
+
+        <form id="certificateForm">
+          <!-- Certificate Name -->
+          <div class="form-group">
+            <label class="form-label required">Nombre del Certificado</label>
+            <input
+              type="text"
+              class="form-input"
+              id="certificateName"
+              placeholder="Ej: Cámara de Comercio, RUT, Certificado de Plagas"
+              required
+            >
+            <p class="form-help-text">Ingrese el nombre descriptivo del certificado o documento</p>
+          </div>
+
+          <!-- File Upload -->
+          <div class="form-group">
+            <label class="form-label required">Cargar Documento</label>
+            <div class="file-upload-area" id="fileUploadArea">
+              <i data-lucide="upload" style="width: 48px; height: 48px; margin: 0 auto var(--spacing-md); color: var(--text-muted);"></i>
+              <p class="font-semibold mb-2">Haga clic o arrastre el archivo aquí</p>
+              <p class="text-sm text-muted">Formatos soportados: PDF, JPG, PNG (Máx. 10 MB)</p>
+              <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" style="display: none;">
+            </div>
+            <div id="fileSelected" class="file-selected" style="display: none;">
+              <i data-lucide="file-text" class="icon" style="color: var(--p-primary-500);"></i>
+              <div class="flex-1">
+                <p class="font-semibold" id="fileName"></p>
+                <p class="text-sm text-muted" id="fileSize"></p>
+              </div>
+              <button type="button" class="btn btn-ghost btn-icon btn-sm" id="removeFile">
+                <i data-lucide="x" class="icon-sm"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Date Fields Row -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-lg" style="margin-bottom: var(--spacing-xl);">
+            <!-- Issue Date -->
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label required">Fecha de Expedición</label>
+              <div class="date-input-wrapper">
+                <input
+                  type="date"
+                  class="form-input"
+                  id="issueDate"
+                  required
+                >
+                <i data-lucide="calendar" class="icon-sm"></i>
+              </div>
+              <p class="form-help-text">Fecha en que fue emitido el certificado</p>
+            </div>
+
+            <!-- Expiration Date -->
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label required">Fecha de Vencimiento</label>
+              <div class="date-input-wrapper">
+                <input
+                  type="date"
+                  class="form-input"
+                  id="expirationDate"
+                  required
+                >
+                <i data-lucide="calendar" class="icon-sm"></i>
+              </div>
+              <p class="form-help-text">Fecha en que vence el certificado</p>
+            </div>
+          </div>
+
+          <!-- Observations (Optional) -->
+          <div class="form-group">
+            <label class="form-label">Observaciones</label>
+            <textarea
+              class="form-input"
+              id="observations"
+              rows="4"
+              placeholder="Agregue notas adicionales sobre el certificado (opcional)"
+              style="resize: vertical; min-height: 100px;"
+            ></textarea>
+            <p class="form-help-text">Campo opcional para información adicional</p>
+          </div>
+
+          <!-- Info Box -->
+          <div style="padding: var(--spacing-lg); background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: var(--radius-lg); margin-bottom: var(--spacing-xl);">
+            <div class="flex items-start gap-md">
+              <i data-lucide="info" class="icon" style="color: var(--p-primary-500); flex-shrink: 0; margin-top: 2px;"></i>
+              <div>
+                <h4 class="font-semibold mb-2" style="color: var(--p-primary-500);">Recordatorio Automático</h4>
+                <p class="text-sm text-muted">El sistema le enviará una alerta automática 30 días antes de la fecha de vencimiento. Puede configurar este período en la configuración del módulo.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex items-center justify-end gap-md" style="padding-top: var(--spacing-lg); border-top: 1px solid var(--surface-hover);">
+            <a href="certificates-v2_1.html" class="btn btn-outline">
+              <i data-lucide="x" class="icon-sm"></i>
+              <span>Cancelar</span>
+            </a>
+            <button type="submit" class="btn btn-primary">
+              <i data-lucide="save" class="icon-sm"></i>
+              <span>Guardar Certificado</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tips Card -->
+      <div class="card" style="margin-top: var(--spacing-lg); padding: var(--spacing-xl);">
+        <h3 class="text-lg font-semibold mb-4">Consejos para gestionar certificados</h3>
+        <ul style="list-style: none; padding: 0;">
+          <li class="flex items-start gap-md mb-3">
+            <i data-lucide="check-circle" class="icon-sm" style="color: var(--p-green-500); flex-shrink: 0; margin-top: 2px;"></i>
+            <span class="text-sm">Asegúrese de que las fechas de expedición y vencimiento sean correctas</span>
+          </li>
+          <li class="flex items-start gap-md mb-3">
+            <i data-lucide="check-circle" class="icon-sm" style="color: var(--p-green-500); flex-shrink: 0; margin-top: 2px;"></i>
+            <span class="text-sm">Use nombres descriptivos para identificar fácilmente cada certificado</span>
+          </li>
+          <li class="flex items-start gap-md mb-3">
+            <i data-lucide="check-circle" class="icon-sm" style="color: var(--p-green-500); flex-shrink: 0; margin-top: 2px;"></i>
+            <span class="text-sm">El sistema mantendrá un historial completo de todas las versiones</span>
+          </li>
+          <li class="flex items-start gap-md">
+            <i data-lucide="check-circle" class="icon-sm" style="color: var(--p-green-500); flex-shrink: 0; margin-top: 2px;"></i>
+            <span class="text-sm">Recibirá notificaciones automáticas antes del vencimiento</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Sidebar toggle functionality
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    menuToggle.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+      sidebarOverlay.classList.toggle('show');
+    });
+
+    sidebarOverlay.addEventListener('click', function() {
+      sidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('show');
+    });
+
+    // File upload functionality
+    const fileUploadArea = document.getElementById('fileUploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const fileSelected = document.getElementById('fileSelected');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const removeFile = document.getElementById('removeFile');
+
+    // Click to upload
+    fileUploadArea.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    // File input change
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        displayFile(file);
+      }
+    });
+
+    // Drag and drop
+    fileUploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      fileUploadArea.classList.add('dragover');
+    });
+
+    fileUploadArea.addEventListener('dragleave', () => {
+      fileUploadArea.classList.remove('dragover');
+    });
+
+    fileUploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      fileUploadArea.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        displayFile(file);
+      }
+    });
+
+    // Display selected file
+    function displayFile(file) {
+      fileName.textContent = file.name;
+      fileSize.textContent = formatFileSize(file.size);
+      fileUploadArea.style.display = 'none';
+      fileSelected.style.display = 'flex';
+      lucide.createIcons();
+    }
+
+    // Remove file
+    removeFile.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fileInput.value = '';
+      fileUploadArea.style.display = 'block';
+      fileSelected.style.display = 'none';
+    });
+
+    // Format file size
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    // Form submission
+    const certificateForm = document.getElementById('certificateForm');
+    certificateForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      // Get form values
+      const formData = {
+        name: document.getElementById('certificateName').value,
+        file: fileInput.files[0],
+        issueDate: document.getElementById('issueDate').value,
+        expirationDate: document.getElementById('expirationDate').value,
+        observations: document.getElementById('observations').value
+      };
+
+      // Validate dates
+      if (new Date(formData.expirationDate) < new Date(formData.issueDate)) {
+        alert('La fecha de vencimiento no puede ser anterior a la fecha de expedición');
+        return;
+      }
+
+      // Validate file
+      if (!formData.file) {
+        alert('Por favor, cargue un documento');
+        return;
+      }
+
+      // Here you would normally send the data to your backend
+      console.log('Form data:', formData);
+
+      // Show success message and redirect
+      alert('Certificado creado exitosamente');
+      window.location.href = 'certificates-v2_1.html';
+    });
+
+    // Set today as min date for issue date
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('issueDate').setAttribute('max', today);
+  </script>
+</body>
+</html>

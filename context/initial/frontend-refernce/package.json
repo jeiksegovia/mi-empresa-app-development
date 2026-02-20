@@ -1,0 +1,45 @@
+{
+  "name": "mi-empresa-app-fronted",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "@pinia/nuxt": "^0.5.1",
+    "@primeuix/themes": "^1.2.1",
+    "@primevue/forms": "^4.3.6",
+    "@vuelidate/core": "^2.0.3",
+    "@vuelidate/validators": "^2.0.4",
+    "@vueuse/core": "^10.9.0",
+    "pinia": "^2.1.7",
+    "primeflex": "^4.0.0",
+    "primeicons": "^7.0.0",
+    "primevue": "^4.3.6",
+    "vue-i18n": "^9.10.0"
+  },
+  "devDependencies": {
+    "@nuxt/eslint-config": "^0.2.0",
+    "@nuxtjs/tailwindcss": "^6.11.4",
+    "@primevue/nuxt-module": "^4.3.6",
+    "@types/node": "^20.11.19",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-vue": "^9.19.2",
+    "nuxt": "^3.8.2",
+    "prettier": "^3.2.5",
+    "tailwindcss": "^3.3.5",
+    "tailwindcss-primeui": "^0.6.1",
+    "typescript": "^5.8.3",
+    "vue": "^3.3.8",
+    "vue-router": "^4.2.5",
+    "vue-tsc": "^3.0.3"
+  }
+}

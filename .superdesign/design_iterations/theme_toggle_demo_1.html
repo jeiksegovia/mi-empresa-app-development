@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Theme Toggle Demo - Mi Empresa</title>
+
+  <!-- Default Design System with Light/Dark Theme Support -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: -280px;
+      width: 280px;
+      height: 100vh;
+      background: var(--surface-card);
+      border-right: 1px solid var(--border);
+      transition: left 0.3s ease-out;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .sidebar.open {
+      left: 0;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+      z-index: 99;
+    }
+
+    .sidebar-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius);
+      transition: all 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--foreground);
+    }
+
+    .sidebar-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .sidebar-item.active {
+      background: var(--p-primary-500);
+      color: white;
+    }
+
+    .main-content {
+      min-height: 100vh;
+      background: var(--background);
+      transition: background-color 0.3s ease;
+    }
+
+    .demo-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--spacing-xl);
+      margin-bottom: var(--spacing-lg);
+      transition: all 0.3s ease;
+    }
+
+    .theme-toggle-btn {
+      position: fixed;
+      bottom: var(--spacing-xl);
+      right: var(--spacing-xl);
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--p-primary-500);
+      color: white;
+      border: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+
+    .theme-toggle-btn:hover {
+      background: var(--p-primary-600);
+      transform: scale(1.1);
+    }
+
+    .theme-toggle-btn:active {
+      transform: scale(0.95);
+    }
+
+    .color-swatch {
+      width: 60px;
+      height: 60px;
+      border-radius: var(--radius);
+      border: 2px solid var(--border);
+      transition: all 0.3s ease;
+    }
+
+    .code-block {
+      background: var(--surface-hover);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--spacing-lg);
+      font-family: 'Courier New', monospace;
+      font-size: var(--font-size-sm);
+      color: var(--foreground);
+      overflow-x: auto;
+      transition: all 0.3s ease;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: var(--spacing-lg);
+      margin-top: var(--spacing-xl);
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar" id="sidebar">
+    <div style="padding: var(--spacing-xl);">
+      <!-- Logo + Company Name -->
+      <div class="flex items-center gap-3 mb-8">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold" style="background: var(--p-primary-500);">
+          ME
+        </div>
+        <span class="font-semibold text-lg">Mi Empresa</span>
+      </div>
+
+      <!-- Navigation Items -->
+      <nav class="flex flex-col gap-1">
+        <a href="#" class="sidebar-item active">
+          <i data-lucide="palette" class="icon"></i>
+          <span>Theme Demo</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="layout-dashboard" class="icon"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="users" class="icon"></i>
+          <span>Usuarios</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="settings" class="icon"></i>
+          <span>Configuración</span>
+        </a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Header -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <button id="menuToggle" class="btn btn-ghost btn-icon">
+            <i data-lucide="menu" class="icon"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Theme Toggle Demo</h1>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+          </button>
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+          <span class="text-sm font-medium hidden md:inline">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <div class="container" style="padding: var(--spacing-xl); max-width: 1200px; margin: 0 auto;">
+
+      <!-- Hero Section -->
+      <div class="demo-card" style="background: linear-gradient(135deg, var(--p-primary-600), var(--p-primary-500)); color: white; padding: var(--spacing-3xl);">
+        <div class="flex items-center gap-3 mb-4">
+          <i data-lucide="palette" style="width: 48px; height: 48px;"></i>
+          <div>
+            <h1 class="text-4xl font-bold mb-2">Light & Dark Theme Support</h1>
+            <p class="text-lg" style="opacity: 0.9;">Switch themes instantly with a single line of code</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Current Theme Display -->
+      <div class="demo-card">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-2xl font-bold mb-2">Current Theme</h2>
+            <p class="text-muted">
+              <span id="currentTheme">Dark Mode</span> •
+              Click the floating button to toggle
+            </p>
+          </div>
+          <i data-lucide="sun" id="themeIcon" style="width: 48px; height: 48px; color: var(--p-primary-500);"></i>
+        </div>
+
+        <div class="code-block">
+          &lt;html class="<span id="htmlClass">dark</span>"&gt;
+        </div>
+      </div>
+
+      <!-- How It Works -->
+      <div class="demo-card">
+        <h2 class="text-2xl font-bold mb-4">How It Works</h2>
+        <p class="text-muted mb-4">
+          The theme system uses CSS custom properties (CSS variables) that automatically change based on the presence of the <code style="background: var(--surface-hover); padding: 2px 6px; border-radius: 4px;">dark</code> class on the <code style="background: var(--surface-hover); padding: 2px 6px; border-radius: 4px;">&lt;html&gt;</code> element.
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h3 class="text-lg font-semibold mb-3">Light Mode (Default)</h3>
+            <div class="code-block">
+&lt;html&gt;
+  &lt;!-- or --&gt;
+&lt;html class=""&gt;
+            </div>
+            <p class="text-sm text-muted mt-2">Variables use light color values</p>
+          </div>
+
+          <div>
+            <h3 class="text-lg font-semibold mb-3">Dark Mode</h3>
+            <div class="code-block">
+&lt;html class="dark"&gt;
+            </div>
+            <p class="text-sm text-muted mt-2">Variables use dark color values</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Color Palette -->
+      <div class="demo-card">
+        <h2 class="text-2xl font-bold mb-4">PrimeVue Violet Palette</h2>
+        <p class="text-muted mb-6">The same color scale works beautifully in both themes</p>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: var(--spacing-md);">
+          <div>
+            <div class="color-swatch" style="background: var(--p-primary-50);"></div>
+            <div class="text-xs text-center mt-2">50</div>
+          </div>
+          <div>
+            <div class="color-swatch" style="background: var(--p-primary-100);"></div>
+            <div class="text-xs text-center mt-2">100</div>
+          </div>
+          <div>
+            <div class="color-swatch" style="background: var(--p-primary-200);"></div>
+            <div class="text-xs text-center mt-2">200</div>
+          </div>
+          <div>
+            <div class="color-swatch" style="background: var(--p-primary-300);"></div>
+            <div class="text-xs text-center mt-2">300</div>
+          </div>
+          <div>
+            <div class="color-swatch" style="background: var(--p-primary-400);"></div>
+            <div class="text-xs text-center mt-2">400</div>
+          </div>
+          <div>
+            <div class="color-swatch" style="background: var(--p-primary-500);"></div>
+            <div class="text-xs text-center mt-2 font-bold">500</div>
+          </div>
+          <div>
+            <div class="color-swatch" style="background: var(--p-primary-600);"></div>
+            <div class="text-xs text-center mt-2 font-bold">600</div>
+          </div>
+          <div>
+            <div class="color-swatch" style="background: var(--p-primary-700);"></div>
+            <div class="text-xs text-center mt-2">700</div>
+          </div>
+          <div>
+            <div class="color-swatch" style="background: var(--p-primary-800);"></div>
+            <div class="text-xs text-center mt-2">800</div>
+          </div>
+          <div>
+            <div class="color-swatch" style="background: var(--p-primary-900);"></div>
+            <div class="text-xs text-center mt-2">900</div>
+          </div>
+          <div>
+            <div class="color-swatch" style="background: var(--p-primary-950);"></div>
+            <div class="text-xs text-center mt-2">950</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Component Examples -->
+      <div class="demo-card">
+        <h2 class="text-2xl font-bold mb-4">Component Examples</h2>
+        <p class="text-muted mb-6">All components automatically adapt to the theme</p>
+
+        <div class="feature-grid">
+          <!-- Buttons -->
+          <div>
+            <h3 class="text-lg font-semibold mb-3">Buttons</h3>
+            <div class="flex flex-col gap-2">
+              <button class="btn btn-primary">Primary Button</button>
+              <button class="btn btn-outline">Outline Button</button>
+              <button class="btn btn-ghost">Ghost Button</button>
+            </div>
+          </div>
+
+          <!-- Form Inputs -->
+          <div>
+            <h3 class="text-lg font-semibold mb-3">Form Inputs</h3>
+            <div class="flex flex-col gap-2">
+              <input type="text" class="form-input" placeholder="Text input">
+              <select class="form-input">
+                <option>Select option</option>
+                <option>Option 1</option>
+                <option>Option 2</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Badges -->
+          <div>
+            <h3 class="text-lg font-semibold mb-3">Badges</h3>
+            <div class="flex flex-wrap gap-2">
+              <span class="badge badge-priority-high">High Priority</span>
+              <span class="badge badge-priority-medium">Medium</span>
+              <span class="badge badge-priority-low">Low Priority</span>
+            </div>
+          </div>
+
+          <!-- Cards -->
+          <div>
+            <h3 class="text-lg font-semibold mb-3">Cards</h3>
+            <div class="card">
+              <h4 class="font-semibold mb-2">Card Title</h4>
+              <p class="text-sm text-muted">Card content adapts automatically to the current theme.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Implementation Guide -->
+      <div class="demo-card">
+        <h2 class="text-2xl font-bold mb-4">Implementation Guide</h2>
+
+        <div class="mb-6">
+          <h3 class="text-lg font-semibold mb-3">JavaScript Toggle Function</h3>
+          <div class="code-block">
+function toggleTheme() {
+  const html = document.documentElement;
+  html.classList.toggle('dark');
+
+  // Optional: Save preference
+  localStorage.setItem('theme',
+    html.classList.contains('dark') ? 'dark' : 'light'
+  );
+}
+          </div>
+        </div>
+
+        <div class="mb-6">
+          <h3 class="text-lg font-semibold mb-3">Load Saved Preference</h3>
+          <div class="code-block">
+// On page load
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme === 'dark') {
+  document.documentElement.classList.add('dark');
+} else {
+  document.documentElement.classList.remove('dark');
+}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+          <div>
+            <h3 class="text-lg font-semibold mb-3">✅ Benefits</h3>
+            <ul class="space-y-2 text-sm">
+              <li class="flex items-start gap-2">
+                <i data-lucide="check" class="icon-sm" style="color: #22c55e; margin-top: 2px;"></i>
+                <span>Single CSS file for both themes</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <i data-lucide="check" class="icon-sm" style="color: #22c55e; margin-top: 2px;"></i>
+                <span>Instant theme switching</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <i data-lucide="check" class="icon-sm" style="color: #22c55e; margin-top: 2px;"></i>
+                <span>No component duplication</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <i data-lucide="check" class="icon-sm" style="color: #22c55e; margin-top: 2px;"></i>
+                <span>Automatic CSS variable cascading</span>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 class="text-lg font-semibold mb-3">🎨 Design System</h3>
+            <ul class="space-y-2 text-sm">
+              <li class="flex items-start gap-2">
+                <i data-lucide="palette" class="icon-sm text-primary" style="margin-top: 2px;"></i>
+                <span>PrimeVue violet palette</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <i data-lucide="grid" class="icon-sm text-primary" style="margin-top: 2px;"></i>
+                <span>Consistent spacing system</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <i data-lucide="type" class="icon-sm text-primary" style="margin-top: 2px;"></i>
+                <span>Unified typography scale</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <i data-lucide="layout" class="icon-sm text-primary" style="margin-top: 2px;"></i>
+                <span>Responsive components</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Floating Theme Toggle Button -->
+  <button class="theme-toggle-btn" id="themeToggleBtn" title="Toggle Theme">
+    <i data-lucide="moon" id="toggleIcon" style="width: 24px; height: 24px;"></i>
+  </button>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Sidebar toggle
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    menuToggle.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      sidebarOverlay.classList.toggle('show');
+    });
+
+    sidebarOverlay.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('show');
+    });
+
+    // Theme toggle functionality
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const toggleIcon = document.getElementById('toggleIcon');
+    const themeIcon = document.getElementById('themeIcon');
+    const currentTheme = document.getElementById('currentTheme');
+    const htmlClass = document.getElementById('htmlClass');
+    const html = document.documentElement;
+
+    function updateThemeUI() {
+      const isDark = html.classList.contains('dark');
+
+      // Update toggle button icon
+      toggleIcon.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+
+      // Update display icon
+      themeIcon.setAttribute('data-lucide', isDark ? 'moon' : 'sun');
+
+      // Update text
+      currentTheme.textContent = isDark ? 'Dark Mode' : 'Light Mode';
+      htmlClass.textContent = isDark ? 'dark' : '';
+
+      // Re-initialize icons
+      lucide.createIcons();
+    }
+
+    function toggleTheme() {
+      html.classList.toggle('dark');
+
+      // Save preference to localStorage
+      localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
+
+      // Update UI
+      updateThemeUI();
+    }
+
+    // Load saved theme preference
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'light') {
+      html.classList.remove('dark');
+    }
+
+    // Initialize UI
+    updateThemeUI();
+
+    // Attach event listener
+    themeToggleBtn.addEventListener('click', toggleTheme);
+  </script>
+</body>
+</html>

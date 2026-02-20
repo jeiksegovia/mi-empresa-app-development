@@ -1,0 +1,98 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.yarn/
+.npm/
+
+# Build output
+dist/
+build/
+out/
+.output/
+.nuxt/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+!.env.template
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.iml
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Database
+postgres_data/
+*.sqlite
+*.sqlite3
+*.db
+
+# Prisma generated files
+backend/src/generated/
+prisma/migrations/*.sql
+!prisma/migrations/migration_lock.toml
+
+# Test coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Docker
+.docker/
+
+# Serverless Framework
+.serverless/
+.build/
+.webpack/
+
+# CloudFormation
+cfn-templates/output/
+*.packaged.yaml
+*.packaged.yml
+
+# AWS
+.aws-sam/
+samconfig.toml
+
+# Nuxt specific
+.nuxt/
+.output/
+.data/
+.nitro/
+.cache/
+
+# Build artifacts
+*.tsbuildinfo
+tsconfig.tsbuildinfo

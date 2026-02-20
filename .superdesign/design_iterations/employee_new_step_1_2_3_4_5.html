@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nuevo Empleado - Paso 5: Documentos | Mi Empresa</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    body {
+      background: var(--surface-ground) !important;
+      color: var(--text-color) !important;
+      font-family: var(--font-family) !important;
+      min-height: 100vh !important;
+    }
+
+    .wizard-container {
+      max-width: 1000px !important;
+      margin: 0 auto !important;
+      padding: var(--spacing-2xl) var(--spacing-lg) !important;
+    }
+
+    .wizard-header {
+      margin-bottom: var(--spacing-2xl) !important;
+    }
+
+    .wizard-title {
+      font-size: 2rem !important;
+      font-weight: 700 !important;
+      color: var(--text-color) !important;
+      margin-bottom: var(--spacing-xl) !important;
+    }
+
+    /* Stepper */
+    .stepper {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      margin-bottom: var(--spacing-2xl) !important;
+      position: relative !important;
+    }
+
+    .stepper::before {
+      content: '' !important;
+      position: absolute !important;
+      top: 20px !important;
+      left: 0 !important;
+      right: 0 !important;
+      height: 2px !important;
+      background: var(--surface-border) !important;
+      z-index: 0 !important;
+    }
+
+    .step {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: var(--spacing-sm) !important;
+      position: relative !important;
+      z-index: 1 !important;
+      flex: 1 !important;
+    }
+
+    .step-circle {
+      width: 40px !important;
+      height: 40px !important;
+      border-radius: 50% !important;
+      background: var(--surface-card) !important;
+      border: 2px solid var(--surface-border) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-weight: 600 !important;
+      color: var(--text-color-secondary) !important;
+      transition: all 0.3s ease !important;
+    }
+
+    .step.completed .step-circle {
+      background: var(--p-primary-500) !important;
+      border-color: var(--p-primary-500) !important;
+      color: white !important;
+    }
+
+    .step.active .step-circle {
+      background: var(--p-primary-500) !important;
+      border-color: var(--p-primary-500) !important;
+      color: white !important;
+      box-shadow: 0 0 0 4px var(--p-primary-500-alpha) !important;
+    }
+
+    .step-label {
+      font-size: 0.875rem !important;
+      color: var(--text-color-secondary) !important;
+      text-align: center !important;
+    }
+
+    .step.active .step-label,
+    .step.completed .step-label {
+      color: var(--text-color) !important;
+      font-weight: 500 !important;
+    }
+
+    /* Section Cards */
+    .section-card {
+      background: var(--surface-card) !important;
+      border: 1px solid var(--surface-border) !important;
+      border-radius: var(--border-radius) !important;
+      padding: var(--spacing-xl) !important;
+      margin-bottom: var(--spacing-xl) !important;
+    }
+
+    .section-header {
+      display: flex !important;
+      align-items: center !important;
+      gap: var(--spacing-md) !important;
+      margin-bottom: var(--spacing-xl) !important;
+    }
+
+    .section-icon {
+      width: 28px !important;
+      height: 28px !important;
+      color: var(--p-primary-500) !important;
+    }
+
+    .section-title {
+      font-size: 1.25rem !important;
+      font-weight: 600 !important;
+      color: var(--text-color) !important;
+    }
+
+    /* Document Upload Area */
+    .document-item {
+      background: var(--surface-ground) !important;
+      border: 1px solid var(--surface-border) !important;
+      border-radius: var(--border-radius) !important;
+      padding: var(--spacing-lg) !important;
+      margin-bottom: var(--spacing-lg) !important;
+    }
+
+    .document-header {
+      display: flex !important;
+      align-items: center !important;
+      gap: var(--spacing-sm) !important;
+      margin-bottom: var(--spacing-md) !important;
+    }
+
+    .document-title {
+      font-size: 0.9375rem !important;
+      font-weight: 600 !important;
+      color: var(--text-color) !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: var(--spacing-xs) !important;
+    }
+
+    .required-badge {
+      font-size: 0.75rem !important;
+      color: var(--p-red-500) !important;
+      background: var(--p-red-500-alpha) !important;
+      padding: 2px 8px !important;
+      border-radius: 4px !important;
+      font-weight: 500 !important;
+    }
+
+    /* Upload Zone */
+    .upload-zone {
+      border: 2px dashed var(--surface-border) !important;
+      border-radius: var(--border-radius) !important;
+      padding: var(--spacing-xl) !important;
+      text-align: center !important;
+      cursor: pointer !important;
+      transition: all 0.2s ease !important;
+      position: relative !important;
+    }
+
+    .upload-zone:hover {
+      border-color: var(--p-primary-500) !important;
+      background: var(--p-primary-500-alpha) !important;
+    }
+
+    .upload-zone.drag-over {
+      border-color: var(--p-primary-500) !important;
+      background: var(--p-primary-500-alpha) !important;
+      border-style: solid !important;
+    }
+
+    .upload-icon {
+      width: 48px !important;
+      height: 48px !important;
+      color: var(--text-color-secondary) !important;
+      margin: 0 auto var(--spacing-md) !important;
+    }
+
+    .upload-text {
+      font-size: 0.875rem !important;
+      color: var(--text-color) !important;
+      margin-bottom: var(--spacing-xs) !important;
+    }
+
+    .upload-hint {
+      font-size: 0.75rem !important;
+      color: var(--text-color-secondary) !important;
+    }
+
+    /* Uploaded File Display */
+    .uploaded-file {
+      display: flex !important;
+      align-items: center !important;
+      gap: var(--spacing-md) !important;
+      padding: var(--spacing-md) !important;
+      background: var(--surface-card) !important;
+      border: 1px solid var(--surface-border) !important;
+      border-radius: var(--border-radius) !important;
+      margin-bottom: var(--spacing-sm) !important;
+    }
+
+    .file-icon {
+      width: 40px !important;
+      height: 40px !important;
+      background: var(--p-primary-500-alpha) !important;
+      border-radius: var(--border-radius) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      color: var(--p-primary-500) !important;
+    }
+
+    .file-info {
+      flex: 1 !important;
+    }
+
+    .file-name {
+      font-size: 0.875rem !important;
+      font-weight: 500 !important;
+      color: var(--text-color) !important;
+      margin-bottom: 2px !important;
+    }
+
+    .file-meta {
+      font-size: 0.75rem !important;
+      color: var(--text-color-secondary) !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: var(--spacing-md) !important;
+    }
+
+    .file-actions {
+      display: flex !important;
+      gap: var(--spacing-xs) !important;
+    }
+
+    .file-action-btn {
+      background: transparent !important;
+      border: none !important;
+      color: var(--text-color-secondary) !important;
+      cursor: pointer !important;
+      padding: var(--spacing-xs) !important;
+      border-radius: var(--border-radius) !important;
+      display: flex !important;
+      align-items: center !important;
+      transition: all 0.2s ease !important;
+    }
+
+    .file-action-btn:hover {
+      background: var(--surface-ground) !important;
+      color: var(--text-color) !important;
+    }
+
+    .file-action-btn.delete:hover {
+      background: var(--p-red-500-alpha) !important;
+      color: var(--p-red-500) !important;
+    }
+
+    .file-action-btn i {
+      width: 18px !important;
+      height: 18px !important;
+    }
+
+    /* Success Checkmark */
+    .success-check {
+      width: 24px !important;
+      height: 24px !important;
+      background: var(--p-green-500) !important;
+      border-radius: 50% !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      color: white !important;
+    }
+
+    .success-check i {
+      width: 16px !important;
+      height: 16px !important;
+    }
+
+    /* Notes Textarea */
+    .notes-textarea {
+      width: 100% !important;
+      min-height: 120px !important;
+      resize: vertical !important;
+    }
+
+    /* Navigation Buttons */
+    .nav-buttons {
+      display: flex !important;
+      justify-content: space-between !important;
+      margin-top: var(--spacing-2xl) !important;
+      gap: var(--spacing-lg) !important;
+    }
+
+    /* Hidden File Input */
+    .hidden-input {
+      display: none !important;
+    }
+
+    /* Progress Indicator */
+    .upload-progress {
+      margin-top: var(--spacing-md) !important;
+    }
+
+    .progress-bar {
+      width: 100% !important;
+      height: 6px !important;
+      background: var(--surface-border) !important;
+      border-radius: 3px !important;
+      overflow: hidden !important;
+    }
+
+    .progress-fill {
+      height: 100% !important;
+      background: var(--p-primary-500) !important;
+      transition: width 0.3s ease !important;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .wizard-container {
+        padding: var(--spacing-lg) var(--spacing-md) !important;
+      }
+
+      .file-meta {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: var(--spacing-xs) !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Header -->
+  <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <a href="employees_list_1.html" class="btn btn-ghost btn-icon">
+          <i data-lucide="arrow-left" class="icon"></i>
+        </a>
+        <h1 class="text-xl font-semibold">Empleados > Nuevo empleado</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <button class="btn btn-ghost btn-icon relative">
+          <i data-lucide="bell" class="icon"></i>
+          <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+        </button>
+        <button class="btn btn-ghost btn-icon">
+          <i data-lucide="user-circle" class="icon"></i>
+        </button>
+        <span class="text-sm font-medium hidden md:inline">jeik-sa</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="wizard-container">
+    <!-- Header -->
+    <div class="wizard-header">
+      <h1 class="wizard-title">Nuevo Empleado</h1>
+
+      <!-- Stepper -->
+      <div class="stepper">
+        <div class="step completed">
+          <div class="step-circle">
+            <i data-lucide="check" style="width: 20px; height: 20px;"></i>
+          </div>
+          <span class="step-label">Datos Personales</span>
+        </div>
+        <div class="step completed">
+          <div class="step-circle">
+            <i data-lucide="check" style="width: 20px; height: 20px;"></i>
+          </div>
+          <span class="step-label">Formación</span>
+        </div>
+        <div class="step completed">
+          <div class="step-circle">
+            <i data-lucide="check" style="width: 20px; height: 20px;"></i>
+          </div>
+          <span class="step-label">Contrato y Familia</span>
+        </div>
+        <div class="step completed">
+          <div class="step-circle">
+            <i data-lucide="check" style="width: 20px; height: 20px;"></i>
+          </div>
+          <span class="step-label">Nómina</span>
+        </div>
+        <div class="step active">
+          <div class="step-circle">5</div>
+          <span class="step-label">Documentos</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Required Documents Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <i data-lucide="file-text" class="section-icon"></i>
+        <h2 class="section-title">Documentos Requeridos</h2>
+      </div>
+
+      <!-- ID Card -->
+      <div class="document-item">
+        <div class="document-header">
+          <span class="document-title">
+            Cédula de Ciudadanía
+            <span class="required-badge">Requerido</span>
+          </span>
+        </div>
+        <div class="upload-zone" data-document="id-card">
+          <i data-lucide="upload" class="upload-icon"></i>
+          <div class="upload-text">Arrastra archivos aquí o haz clic para seleccionar</div>
+          <div class="upload-hint">Formatos: PDF, JPG, PNG (Max 10MB)</div>
+        </div>
+        <input type="file" class="hidden-input" id="id-card-input" accept=".pdf,.jpg,.jpeg,.png" data-target="id-card">
+        <div class="uploaded-files-container" id="id-card-files"></div>
+      </div>
+
+      <!-- Resume/CV -->
+      <div class="document-item">
+        <div class="document-header">
+          <span class="document-title">
+            Hoja de Vida (CV)
+            <span class="required-badge">Requerido</span>
+          </span>
+        </div>
+        <div class="upload-zone" data-document="resume">
+          <i data-lucide="upload" class="upload-icon"></i>
+          <div class="upload-text">Arrastra archivos aquí o haz clic para seleccionar</div>
+          <div class="upload-hint">Formatos: PDF, DOC, DOCX (Max 10MB)</div>
+        </div>
+        <input type="file" class="hidden-input" id="resume-input" accept=".pdf,.doc,.docx" data-target="resume">
+        <div class="uploaded-files-container" id="resume-files"></div>
+      </div>
+
+      <!-- Diploma/Certificate -->
+      <div class="document-item">
+        <div class="document-header">
+          <span class="document-title">
+            Diploma/Certificado de Estudios
+            <span class="required-badge">Requerido</span>
+          </span>
+        </div>
+        <div class="upload-zone" data-document="diploma">
+          <i data-lucide="upload" class="upload-icon"></i>
+          <div class="upload-text">Arrastra archivos aquí o haz clic para seleccionar</div>
+          <div class="upload-hint">Formatos: PDF, JPG, PNG (Max 10MB)</div>
+        </div>
+        <input type="file" class="hidden-input" id="diploma-input" accept=".pdf,.jpg,.jpeg,.png" data-target="diploma">
+        <div class="uploaded-files-container" id="diploma-files"></div>
+      </div>
+
+      <!-- Bank Certificate -->
+      <div class="document-item">
+        <div class="document-header">
+          <span class="document-title">
+            Certificación Bancaria
+            <span class="required-badge">Requerido</span>
+          </span>
+        </div>
+        <div class="upload-zone" data-document="bank-cert">
+          <i data-lucide="upload" class="upload-icon"></i>
+          <div class="upload-text">Arrastra archivos aquí o haz clic para seleccionar</div>
+          <div class="upload-hint">Formatos: PDF (Max 10MB)</div>
+        </div>
+        <input type="file" class="hidden-input" id="bank-cert-input" accept=".pdf" data-target="bank-cert">
+        <div class="uploaded-files-container" id="bank-cert-files"></div>
+      </div>
+    </div>
+
+    <!-- Optional Documents Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <i data-lucide="paperclip" class="section-icon"></i>
+        <h2 class="section-title">Documentos Opcionales</h2>
+      </div>
+
+      <!-- Training Certificates -->
+      <div class="document-item">
+        <div class="document-header">
+          <span class="document-title">Certificados de Formación</span>
+        </div>
+        <div class="upload-zone" data-document="training">
+          <i data-lucide="upload" class="upload-icon"></i>
+          <div class="upload-text">+ Agregar archivos</div>
+          <div class="upload-hint">Múltiples archivos permitidos - PDF, JPG, PNG (Max 10MB c/u)</div>
+        </div>
+        <input type="file" class="hidden-input" id="training-input" accept=".pdf,.jpg,.jpeg,.png" multiple data-target="training">
+        <div class="uploaded-files-container" id="training-files"></div>
+      </div>
+
+      <!-- Recommendation Letters -->
+      <div class="document-item">
+        <div class="document-header">
+          <span class="document-title">Cartas de Recomendación</span>
+        </div>
+        <div class="upload-zone" data-document="recommendation">
+          <i data-lucide="upload" class="upload-icon"></i>
+          <div class="upload-text">+ Agregar archivos</div>
+          <div class="upload-hint">Múltiples archivos permitidos - PDF, DOC, DOCX (Max 10MB c/u)</div>
+        </div>
+        <input type="file" class="hidden-input" id="recommendation-input" accept=".pdf,.doc,.docx" multiple data-target="recommendation">
+        <div class="uploaded-files-container" id="recommendation-files"></div>
+      </div>
+
+      <!-- Other Documents -->
+      <div class="document-item">
+        <div class="document-header">
+          <span class="document-title">Otros Documentos</span>
+        </div>
+        <div class="upload-zone" data-document="other">
+          <i data-lucide="upload" class="upload-icon"></i>
+          <div class="upload-text">+ Agregar archivos</div>
+          <div class="upload-hint">Múltiples archivos permitidos - Todos los formatos (Max 10MB c/u)</div>
+        </div>
+        <input type="file" class="hidden-input" id="other-input" multiple data-target="other">
+        <div class="uploaded-files-container" id="other-files"></div>
+      </div>
+    </div>
+
+    <!-- Additional Notes Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <i data-lucide="message-square" class="section-icon"></i>
+        <h2 class="section-title">Notas Adicionales</h2>
+      </div>
+
+      <textarea
+        class="form-input notes-textarea"
+        id="additionalNotes"
+        placeholder="Escribe cualquier información adicional relevante sobre el empleado (instrucciones de onboarding, requerimientos especiales, etc.)"
+      ></textarea>
+    </div>
+
+    <!-- Navigation Buttons -->
+    <div class="nav-buttons">
+      <button class="btn btn-outline" onclick="window.location.href='employee_new_step_1_2_3_4.html'">
+        <i data-lucide="arrow-left" style="width: 18px; height: 18px;"></i>
+        <span>Atrás</span>
+      </button>
+      <a href="employees_list_1.html" class="btn btn-primary">
+        <i data-lucide="check" style="width: 18px; height: 18px;"></i>
+        <span>Guardar y Finalizar</span>
+      </a>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Store uploaded files
+    const uploadedFiles = {
+      'id-card': [],
+      'resume': [],
+      'diploma': [],
+      'bank-cert': [],
+      'training': [],
+      'recommendation': [],
+      'other': []
+    };
+
+    // Setup upload zones
+    document.querySelectorAll('.upload-zone').forEach(zone => {
+      const documentType = zone.getAttribute('data-document');
+      const input = document.getElementById(`${documentType}-input`);
+
+      // Click to upload
+      zone.addEventListener('click', () => {
+        input.click();
+      });
+
+      // Drag and drop
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.classList.add('drag-over');
+      });
+
+      zone.addEventListener('dragleave', () => {
+        zone.classList.remove('drag-over');
+      });
+
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+        handleFiles(e.dataTransfer.files, documentType);
+      });
+    });
+
+    // Setup file inputs
+    document.querySelectorAll('.hidden-input').forEach(input => {
+      input.addEventListener('change', (e) => {
+        const documentType = input.getAttribute('data-target');
+        handleFiles(e.target.files, documentType);
+      });
+    });
+
+    // Handle file upload
+    function handleFiles(files, documentType) {
+      const maxSize = 10 * 1024 * 1024; // 10MB
+
+      Array.from(files).forEach(file => {
+        // Validate file size
+        if (file.size > maxSize) {
+          alert(`El archivo ${file.name} supera el tamaño máximo de 10MB`);
+          return;
+        }
+
+        // Add to uploaded files
+        const fileData = {
+          name: file.name,
+          size: formatFileSize(file.size),
+          timestamp: new Date(),
+          file: file
+        };
+
+        uploadedFiles[documentType].push(fileData);
+        displayUploadedFile(fileData, documentType);
+      });
+    }
+
+    // Display uploaded file
+    function displayUploadedFile(fileData, documentType) {
+      const container = document.getElementById(`${documentType}-files`);
+
+      const fileElement = document.createElement('div');
+      fileElement.className = 'uploaded-file';
+      fileElement.innerHTML = `
+        <div class="success-check">
+          <i data-lucide="check"></i>
+        </div>
+        <div class="file-icon">
+          <i data-lucide="file"></i>
+        </div>
+        <div class="file-info">
+          <div class="file-name">${fileData.name}</div>
+          <div class="file-meta">
+            <span>${fileData.size}</span>
+            <span>📅 Subido: ${getTimeAgo(fileData.timestamp)}</span>
+          </div>
+        </div>
+        <div class="file-actions">
+          <button class="file-action-btn view" title="Ver archivo">
+            <i data-lucide="eye"></i>
+          </button>
+          <button class="file-action-btn delete" title="Eliminar" data-file="${fileData.name}" data-type="${documentType}">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </div>
+      `;
+
+      container.appendChild(fileElement);
+      lucide.createIcons();
+
+      // Attach delete handler
+      fileElement.querySelector('.delete').addEventListener('click', function(e) {
+        const fileName = e.currentTarget.getAttribute('data-file');
+        const type = e.currentTarget.getAttribute('data-type');
+        deleteFile(fileName, type, fileElement);
+      });
+
+      // Attach view handler
+      fileElement.querySelector('.view').addEventListener('click', function() {
+        // Simulate file preview (in real app, would open file viewer)
+        alert(`Abriendo vista previa de: ${fileData.name}`);
+      });
+    }
+
+    // Delete file
+    function deleteFile(fileName, type, element) {
+      if (confirm(`¿Estás seguro de eliminar ${fileName}?`)) {
+        // Remove from array
+        uploadedFiles[type] = uploadedFiles[type].filter(f => f.name !== fileName);
+
+        // Remove element with animation
+        element.style.opacity = '0';
+        element.style.transform = 'translateX(-20px)';
+        setTimeout(() => element.remove(), 200);
+      }
+    }
+
+    // Format file size
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    // Get time ago
+    function getTimeAgo(date) {
+      const seconds = Math.floor((new Date() - date) / 1000);
+
+      if (seconds < 60) return 'Hace unos segundos';
+      if (seconds < 120) return 'Hace 1 minuto';
+      if (seconds < 3600) return `Hace ${Math.floor(seconds / 60)} minutos`;
+      if (seconds < 7200) return 'Hace 1 hora';
+      if (seconds < 86400) return `Hace ${Math.floor(seconds / 3600)} horas`;
+      return 'Hace más de un día';
+    }
+
+    // Finish button validation removed - using direct link navigation
+  </script>
+</body>
+</html>

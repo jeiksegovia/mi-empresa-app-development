@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Certificados - Mi Empresa App</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: -280px;
+      width: 280px;
+      height: 100vh;
+      background: var(--surface-card);
+      border-right: 1px solid var(--border);
+      transition: left 0.3s ease-out;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .sidebar.open {
+      left: 0;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+      z-index: 99;
+    }
+
+    .sidebar-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius);
+      transition: all 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--foreground);
+    }
+
+    .sidebar-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .sidebar-item.active {
+      background: var(--p-primary-500);
+      color: white;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .data-table thead {
+      background: var(--surface-hover);
+    }
+
+    .data-table th {
+      padding: var(--spacing-md) var(--spacing-lg);
+      text-align: left;
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--text-color-secondary);
+      border-bottom: 2px solid var(--border);
+    }
+
+    .data-table tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s ease;
+      cursor: pointer;
+    }
+
+    .data-table tbody tr:hover {
+      background: var(--surface-hover);
+    }
+
+    .data-table td {
+      padding: var(--spacing-lg);
+      font-size: var(--font-size-sm);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border-radius: var(--radius);
+      font-size: var(--font-size-xs);
+      font-weight: 600;
+    }
+
+    .status-valid {
+      background: rgba(34, 197, 94, 0.2);
+      color: #22c55e;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .status-expiring {
+      background: rgba(251, 146, 60, 0.2);
+      color: #fb923c;
+      border: 1px solid rgba(251, 146, 60, 0.3);
+    }
+
+    .status-expired {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .group-header {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-lg) var(--spacing-xl);
+      background: var(--surface-hover);
+      border-radius: var(--radius-lg);
+      margin-bottom: var(--spacing-md);
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s;
+    }
+
+    .group-header:hover {
+      background: var(--surface-card);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .group-header.expired {
+      border-left: 4px solid #ef4444;
+    }
+
+    .group-header.expiring {
+      border-left: 4px solid #fb923c;
+    }
+
+    .group-header.valid {
+      border-left: 4px solid #22c55e;
+    }
+
+    .group-content {
+      margin-bottom: var(--spacing-2xl);
+    }
+
+    .group-content.collapsed {
+      display: none;
+    }
+
+    .toggle-icon {
+      transition: transform 0.2s;
+    }
+
+    .toggle-icon.rotated {
+      transform: rotate(-90deg);
+    }
+
+    .dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .dropdown-content {
+      display: none;
+      position: absolute;
+      right: 0;
+      background: var(--surface-card);
+      min-width: 180px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      z-index: 10;
+      overflow: hidden;
+    }
+
+    .dropdown-content.show {
+      display: block;
+    }
+
+    .dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      padding: var(--spacing-md) var(--spacing-lg);
+      cursor: pointer;
+      transition: background 0.15s;
+      font-size: var(--font-size-sm);
+      color: var(--foreground);
+    }
+
+    .dropdown-item:hover {
+      background: var(--surface-hover);
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar" id="sidebar">
+    <div style="padding: var(--spacing-xl);">
+      <!-- Logo + Company Name -->
+      <div class="flex items-center gap-3 mb-8">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: var(--p-primary-500);">
+          <i data-lucide="building-2" class="icon-lg" style="color: white;"></i>
+        </div>
+        <div>
+          <h2 class="font-semibold text-base">Mi Empresa</h2>
+          <p class="text-xs text-muted">jeik-sa</p>
+        </div>
+      </div>
+
+      <!-- Navigation Items -->
+      <nav>
+        <a href="dashboard_1.html" class="sidebar-item">
+          <i data-lucide="home" class="icon"></i>
+          <span>Inicio</span>
+        </a>
+        <a href="employees_list_1.html" class="sidebar-item">
+          <i data-lucide="users" class="icon"></i>
+          <span>Empleados</span>
+        </a>
+        <a href="patients_list_1.html" class="sidebar-item">
+          <i data-lucide="user" class="icon"></i>
+          <span>Pacientes</span>
+        </a>
+        <a href="instruments_list_1.html" class="sidebar-item">
+          <i data-lucide="clipboard-list" class="icon"></i>
+          <span>Instrumentos</span>
+        </a>
+        <a href="certificates-v2_1.html" class="sidebar-item active">
+          <i data-lucide="file-check" class="icon"></i>
+          <span>Certificados</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="wallet" class="icon"></i>
+          <span>Nómina</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="bar-chart" class="icon"></i>
+          <span>Reportes</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="settings" class="icon"></i>
+          <span>Configuración</span>
+        </a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Header -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <!-- Left Section -->
+        <div class="flex items-center gap-4">
+          <!-- Menu Toggle Button -->
+          <button id="menuToggle" class="btn btn-ghost btn-icon">
+            <i data-lucide="menu" class="icon"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Certificados</h1>
+        </div>
+
+        <!-- Right Section -->
+        <div class="flex items-center gap-3">
+          <!-- Notifications Bell -->
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+          </button>
+
+          <!-- User Profile Icon -->
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+
+          <!-- Username -->
+          <span class="text-sm font-medium hidden md:inline">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <div class="container" style="padding: var(--spacing-xl); max-width: 1400px; margin: 0 auto;">
+
+      <!-- Page Title Section -->
+      <div class="flex items-start justify-between mb-8">
+        <div>
+          <h2 class="text-3xl font-bold mb-2">Certificados</h2>
+          <p class="text-muted">Gestiona tus certificados empresariales con alertas de vencimiento</p>
+        </div>
+        <button class="btn btn-primary" onclick="window.location.href='certificate-v2_create_1.html'">
+          <i data-lucide="plus" class="icon"></i>
+          <span>Nuevo Certificado</span>
+        </button>
+      </div>
+
+      <!-- Search and Filters -->
+      <div class="card mb-6" style="padding: var(--spacing-lg);">
+        <div class="flex flex-col md:flex-row items-stretch md:items-center gap-4">
+          <!-- Search Bar -->
+          <div class="flex-1">
+            <div class="relative">
+              <i data-lucide="search" class="icon absolute left-3 top-1/2 transform -translate-y-1/2 text-muted"></i>
+              <input type="text" class="form-input" placeholder="Buscar certificados..." style="padding-left: 2.5rem;" id="searchInput">
+            </div>
+          </div>
+
+          <!-- Filters -->
+          <select class="form-input" style="min-width: 180px;" id="statusFilter">
+            <option value="all">Todos los estados</option>
+            <option value="expired">Vencidos</option>
+            <option value="expiring">Por vencer</option>
+            <option value="valid">Vigentes</option>
+          </select>
+
+          <select class="form-input" style="min-width: 180px;" id="sortSelect">
+            <option value="status">Ordenar por estado</option>
+            <option value="name">Ordenar por nombre</option>
+            <option value="expiration">Ordenar por vencimiento</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Stats Overview -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <!-- Total -->
+        <div class="card">
+          <div class="flex items-start justify-between mb-4">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg" style="background: rgba(139, 92, 246, 0.1);">
+              <i data-lucide="file-text" class="icon-lg" style="color: var(--p-primary-500);"></i>
+            </div>
+          </div>
+          <div class="text-3xl font-bold mb-1">12</div>
+          <div class="text-sm text-muted">Total Certificados</div>
+        </div>
+
+        <!-- Valid -->
+        <div class="card">
+          <div class="flex items-start justify-between mb-4">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg" style="background: rgba(34, 197, 94, 0.1);">
+              <i data-lucide="check-circle" class="icon-lg" style="color: #22c55e;"></i>
+            </div>
+          </div>
+          <div class="text-3xl font-bold mb-1">8</div>
+          <div class="text-sm text-muted">Vigentes</div>
+        </div>
+
+        <!-- Expiring -->
+        <div class="card">
+          <div class="flex items-start justify-between mb-4">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg" style="background: rgba(251, 146, 60, 0.1);">
+              <i data-lucide="alert-triangle" class="icon-lg" style="color: #fb923c;"></i>
+            </div>
+          </div>
+          <div class="text-3xl font-bold mb-1">2</div>
+          <div class="text-sm text-muted">Por Vencer</div>
+        </div>
+
+        <!-- Expired -->
+        <div class="card">
+          <div class="flex items-start justify-between mb-4">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg" style="background: rgba(239, 68, 68, 0.1);">
+              <i data-lucide="x-circle" class="icon-lg" style="color: #ef4444;"></i>
+            </div>
+          </div>
+          <div class="text-3xl font-bold mb-1">2</div>
+          <div class="text-sm text-muted">Vencidos</div>
+        </div>
+      </div>
+
+      <!-- EXPIRED GROUP -->
+      <div class="group-header expired" data-group="expired">
+        <i data-lucide="chevron-down" class="toggle-icon icon"></i>
+        <i data-lucide="x-circle" class="icon" style="color: #ef4444;"></i>
+        <div class="flex-1">
+          <span class="font-semibold" style="color: #ef4444;">VENCIDOS</span>
+          <span class="text-sm text-muted ml-2">(2 certificados)</span>
+        </div>
+      </div>
+
+      <div class="group-content" id="group-expired">
+        <div class="card" style="overflow-x: auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nombre del Certificado</th>
+                <th>Estado</th>
+                <th>Fecha Expedición</th>
+                <th>Fecha Vencimiento</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Expired Certificate 1 -->
+              <tr onclick="window.location.href='certificate-v2_detail_1.html'" data-status="expired">
+                <td>
+                  <div class="flex items-center gap-3">
+                    <i data-lucide="file-text" class="icon text-muted"></i>
+                    <span class="font-medium">Cámara de Comercio</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="status-badge status-expired">
+                    <i data-lucide="x-circle" class="w-3 h-3"></i>
+                    Vencido
+                  </span>
+                </td>
+                <td><span class="text-sm">01 Feb 2024</span></td>
+                <td><span class="text-sm font-medium" style="color: #ef4444;">01 Feb 2025</span></td>
+                <td>
+                  <div class="flex items-center gap-2">
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation();" title="Descargar">
+                      <i data-lucide="download" class="icon-sm"></i>
+                    </button>
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation(); window.location.href='certificate-v2_create_1.html';" title="Actualizar versión">
+                      <i data-lucide="upload" class="icon-sm"></i>
+                    </button>
+                    <div class="dropdown">
+                      <button class="btn btn-ghost btn-icon btn-sm dropdown-toggle" onclick="event.stopPropagation();">
+                        <i data-lucide="more-vertical" class="icon-sm"></i>
+                      </button>
+                      <div class="dropdown-content">
+                        <div class="dropdown-item">
+                          <i data-lucide="eye" class="icon-sm"></i>
+                          <span>Ver detalle</span>
+                        </div>
+                        <div class="dropdown-item">
+                          <i data-lucide="clock" class="icon-sm"></i>
+                          <span>Ver historial</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Expired Certificate 2 -->
+              <tr onclick="window.location.href='certificate-v2_detail_1.html'" data-status="expired">
+                <td>
+                  <div class="flex items-center gap-3">
+                    <i data-lucide="file-text" class="icon text-muted"></i>
+                    <span class="font-medium">Certificado de Placas</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="status-badge status-expired">
+                    <i data-lucide="x-circle" class="w-3 h-3"></i>
+                    Vencido
+                  </span>
+                </td>
+                <td><span class="text-sm">15 Dic 2023</span></td>
+                <td><span class="text-sm font-medium" style="color: #ef4444;">15 Dic 2024</span></td>
+                <td>
+                  <div class="flex items-center gap-2">
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation();" title="Descargar">
+                      <i data-lucide="download" class="icon-sm"></i>
+                    </button>
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation();" title="Actualizar versión">
+                      <i data-lucide="upload" class="icon-sm"></i>
+                    </button>
+                    <div class="dropdown">
+                      <button class="btn btn-ghost btn-icon btn-sm dropdown-toggle" onclick="event.stopPropagation();">
+                        <i data-lucide="more-vertical" class="icon-sm"></i>
+                      </button>
+                      <div class="dropdown-content">
+                        <div class="dropdown-item">
+                          <i data-lucide="eye" class="icon-sm"></i>
+                          <span>Ver detalle</span>
+                        </div>
+                        <div class="dropdown-item">
+                          <i data-lucide="clock" class="icon-sm"></i>
+                          <span>Ver historial</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- EXPIRING GROUP -->
+      <div class="group-header expiring" data-group="expiring">
+        <i data-lucide="chevron-down" class="toggle-icon icon"></i>
+        <i data-lucide="alert-triangle" class="icon" style="color: #fb923c;"></i>
+        <div class="flex-1">
+          <span class="font-semibold" style="color: #fb923c;">POR VENCER</span>
+          <span class="text-sm text-muted ml-2">(2 certificados)</span>
+        </div>
+      </div>
+
+      <div class="group-content" id="group-expiring">
+        <div class="card" style="overflow-x: auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nombre del Certificado</th>
+                <th>Estado</th>
+                <th>Fecha Expedición</th>
+                <th>Fecha Vencimiento</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Expiring Certificate 1 -->
+              <tr onclick="window.location.href='certificate-v2_detail_1.html'" data-status="expiring">
+                <td>
+                  <div class="flex items-center gap-3">
+                    <i data-lucide="file-text" class="icon text-muted"></i>
+                    <span class="font-medium">RUT (Registro Único Tributario)</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="status-badge status-expiring">
+                    <i data-lucide="alert-triangle" class="w-3 h-3"></i>
+                    Por vencer (25 días)
+                  </span>
+                </td>
+                <td><span class="text-sm">03 Mar 2025</span></td>
+                <td><span class="text-sm font-medium" style="color: #fb923c;">02 Feb 2026</span></td>
+                <td>
+                  <div class="flex items-center gap-2">
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation();" title="Descargar">
+                      <i data-lucide="download" class="icon-sm"></i>
+                    </button>
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation();" title="Actualizar versión">
+                      <i data-lucide="upload" class="icon-sm"></i>
+                    </button>
+                    <div class="dropdown">
+                      <button class="btn btn-ghost btn-icon btn-sm dropdown-toggle" onclick="event.stopPropagation();">
+                        <i data-lucide="more-vertical" class="icon-sm"></i>
+                      </button>
+                      <div class="dropdown-content">
+                        <div class="dropdown-item">
+                          <i data-lucide="eye" class="icon-sm"></i>
+                          <span>Ver detalle</span>
+                        </div>
+                        <div class="dropdown-item">
+                          <i data-lucide="clock" class="icon-sm"></i>
+                          <span>Ver historial</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Expiring Certificate 2 -->
+              <tr onclick="window.location.href='certificate-v2_detail_1.html'" data-status="expiring">
+                <td>
+                  <div class="flex items-center gap-3">
+                    <i data-lucide="file-text" class="icon text-muted"></i>
+                    <span class="font-medium">Certificado de Plagas</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="status-badge status-expiring">
+                    <i data-lucide="alert-triangle" class="w-3 h-3"></i>
+                    Por vencer (18 días)
+                  </span>
+                </td>
+                <td><span class="text-sm">20 Ene 2025</span></td>
+                <td><span class="text-sm font-medium" style="color: #fb923c;">26 Ene 2026</span></td>
+                <td>
+                  <div class="flex items-center gap-2">
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation();" title="Descargar">
+                      <i data-lucide="download" class="icon-sm"></i>
+                    </button>
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation();" title="Actualizar versión">
+                      <i data-lucide="upload" class="icon-sm"></i>
+                    </button>
+                    <div class="dropdown">
+                      <button class="btn btn-ghost btn-icon btn-sm dropdown-toggle" onclick="event.stopPropagation();">
+                        <i data-lucide="more-vertical" class="icon-sm"></i>
+                      </button>
+                      <div class="dropdown-content">
+                        <div class="dropdown-item">
+                          <i data-lucide="eye" class="icon-sm"></i>
+                          <span>Ver detalle</span>
+                        </div>
+                        <div class="dropdown-item">
+                          <i data-lucide="clock" class="icon-sm"></i>
+                          <span>Ver historial</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- VALID GROUP -->
+      <div class="group-header valid" data-group="valid">
+        <i data-lucide="chevron-down" class="toggle-icon icon"></i>
+        <i data-lucide="check-circle" class="icon" style="color: #22c55e;"></i>
+        <div class="flex-1">
+          <span class="font-semibold" style="color: #22c55e;">VIGENTES</span>
+          <span class="text-sm text-muted ml-2">(8 certificados)</span>
+        </div>
+      </div>
+
+      <div class="group-content" id="group-valid">
+        <div class="card" style="overflow-x: auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nombre del Certificado</th>
+                <th>Estado</th>
+                <th>Fecha Expedición</th>
+                <th>Fecha Vencimiento</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Valid Certificate 1 -->
+              <tr onclick="window.location.href='certificate-v2_detail_1.html'" data-status="valid">
+                <td>
+                  <div class="flex items-center gap-3">
+                    <i data-lucide="file-text" class="icon text-muted"></i>
+                    <span class="font-medium">Resolución 055</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="status-badge status-valid">
+                    <i data-lucide="check-circle" class="w-3 h-3"></i>
+                    Vigente
+                  </span>
+                </td>
+                <td><span class="text-sm">10 May 2025</span></td>
+                <td><span class="text-sm font-medium">10 May 2027</span></td>
+                <td>
+                  <div class="flex items-center gap-2">
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation();" title="Descargar">
+                      <i data-lucide="download" class="icon-sm"></i>
+                    </button>
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation();" title="Actualizar versión">
+                      <i data-lucide="upload" class="icon-sm"></i>
+                    </button>
+                    <div class="dropdown">
+                      <button class="btn btn-ghost btn-icon btn-sm dropdown-toggle" onclick="event.stopPropagation();">
+                        <i data-lucide="more-vertical" class="icon-sm"></i>
+                      </button>
+                      <div class="dropdown-content">
+                        <div class="dropdown-item">
+                          <i data-lucide="eye" class="icon-sm"></i>
+                          <span>Ver detalle</span>
+                        </div>
+                        <div class="dropdown-item">
+                          <i data-lucide="clock" class="icon-sm"></i>
+                          <span>Ver historial</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Valid Certificate 2 -->
+              <tr onclick="window.location.href='certificate-v2_detail_1.html'" data-status="valid">
+                <td>
+                  <div class="flex items-center gap-3">
+                    <i data-lucide="file-text" class="icon text-muted"></i>
+                    <span class="font-medium">Habilitación en Casa - Secretaría de Salud</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="status-badge status-valid">
+                    <i data-lucide="check-circle" class="w-3 h-3"></i>
+                    Vigente
+                  </span>
+                </td>
+                <td><span class="text-sm">01 Jun 2025</span></td>
+                <td><span class="text-sm font-medium">01 Jun 2027</span></td>
+                <td>
+                  <div class="flex items-center gap-2">
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation();" title="Descargar">
+                      <i data-lucide="download" class="icon-sm"></i>
+                    </button>
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation();" title="Actualizar versión">
+                      <i data-lucide="upload" class="icon-sm"></i>
+                    </button>
+                    <div class="dropdown">
+                      <button class="btn btn-ghost btn-icon btn-sm dropdown-toggle" onclick="event.stopPropagation();">
+                        <i data-lucide="more-vertical" class="icon-sm"></i>
+                      </button>
+                      <div class="dropdown-content">
+                        <div class="dropdown-item">
+                          <i data-lucide="eye" class="icon-sm"></i>
+                          <span>Ver detalle</span>
+                        </div>
+                        <div class="dropdown-item">
+                          <i data-lucide="clock" class="icon-sm"></i>
+                          <span>Ver historial</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- More valid certificates (showing 2 of 8) -->
+              <tr onclick="window.location.href='certificate-v2_detail_1.html'" data-status="valid">
+                <td>
+                  <div class="flex items-center gap-3">
+                    <i data-lucide="file-text" class="icon text-muted"></i>
+                    <span class="font-medium">Certificado de Bomberos</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="status-badge status-valid">
+                    <i data-lucide="check-circle" class="w-3 h-3"></i>
+                    Vigente
+                  </span>
+                </td>
+                <td><span class="text-sm">15 Ago 2025</span></td>
+                <td><span class="text-sm font-medium">15 Ago 2026</span></td>
+                <td>
+                  <div class="flex items-center gap-2">
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation();" title="Descargar">
+                      <i data-lucide="download" class="icon-sm"></i>
+                    </button>
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation();" title="Actualizar versión">
+                      <i data-lucide="upload" class="icon-sm"></i>
+                    </button>
+                    <div class="dropdown">
+                      <button class="btn btn-ghost btn-icon btn-sm dropdown-toggle" onclick="event.stopPropagation();">
+                        <i data-lucide="more-vertical" class="icon-sm"></i>
+                      </button>
+                      <div class="dropdown-content">
+                        <div class="dropdown-item">
+                          <i data-lucide="eye" class="icon-sm"></i>
+                          <span>Ver detalle</span>
+                        </div>
+                        <div class="dropdown-item">
+                          <i data-lucide="clock" class="icon-sm"></i>
+                          <span>Ver historial</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Sidebar toggle functionality
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    menuToggle.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+      sidebarOverlay.classList.toggle('show');
+    });
+
+    sidebarOverlay.addEventListener('click', function() {
+      sidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('show');
+    });
+
+    // Group collapse/expand functionality
+    document.querySelectorAll('.group-header').forEach(header => {
+      header.addEventListener('click', function() {
+        const groupName = this.getAttribute('data-group');
+        const content = document.getElementById('group-' + groupName);
+        const icon = this.querySelector('.toggle-icon');
+
+        content.classList.toggle('collapsed');
+        icon.classList.toggle('rotated');
+      });
+    });
+
+    // Dropdown functionality
+    const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
+
+    dropdownToggles.forEach(toggle => {
+      toggle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const dropdown = this.nextElementSibling;
+
+        // Close other dropdowns
+        document.querySelectorAll('.dropdown-content').forEach(d => {
+          if (d !== dropdown) d.classList.remove('show');
+        });
+
+        dropdown.classList.toggle('show');
+      });
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function() {
+      document.querySelectorAll('.dropdown-content').forEach(d => {
+        d.classList.remove('show');
+      });
+    });
+
+    // Search functionality
+    const searchInput = document.getElementById('searchInput');
+    searchInput.addEventListener('input', function(e) {
+      const searchTerm = e.target.value.toLowerCase();
+      const rows = document.querySelectorAll('.data-table tbody tr');
+
+      rows.forEach(row => {
+        const name = row.querySelector('.font-medium').textContent.toLowerCase();
+        if (name.includes(searchTerm)) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    });
+
+    // Status filter
+    const statusFilter = document.getElementById('statusFilter');
+    statusFilter.addEventListener('change', function(e) {
+      const filterValue = e.target.value;
+
+      if (filterValue === 'all') {
+        // Show all groups
+        document.querySelectorAll('.group-header, .group-content').forEach(el => {
+          el.style.display = '';
+        });
+      } else {
+        // Hide all groups first
+        document.querySelectorAll('.group-header, .group-content').forEach(el => {
+          el.style.display = 'none';
+        });
+
+        // Show only selected group
+        document.querySelector(`[data-group="${filterValue}"]`).style.display = '';
+        document.getElementById(`group-${filterValue}`).style.display = '';
+      }
+    });
+  </script>
+</body>
+</html>

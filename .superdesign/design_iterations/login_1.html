@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Iniciar Sesión - Mi Empresa App</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .animate-fade-in-up {
+      animation: fadeInUp 0.5s ease-out;
+    }
+
+    .login-container {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .gradient-bg {
+      background: linear-gradient(135deg, var(--p-primary-950) 0%, var(--p-primary-800) 50%, var(--p-primary-600) 100%);
+    }
+
+    .password-toggle {
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .password-toggle:hover {
+      color: var(--p-primary-400);
+    }
+  </style>
+</head>
+<body class="gradient-bg">
+
+  <div class="login-container">
+    <div class="container container-sm">
+
+      <div class="card animate-fade-in-up" style="max-width: 420px; margin: 0 auto;">
+
+        <!-- Logo -->
+        <div class="text-center mb-8">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4" style="background: var(--p-primary-100);">
+            <i data-lucide="building-2" class="icon-xl" style="color: var(--p-primary-600);"></i>
+          </div>
+          <h1 class="text-2xl font-bold mb-2">Mi Empresa App</h1>
+          <p class="text-sm text-muted">Inicia sesión para continuar</p>
+        </div>
+
+        <!-- Login Form -->
+        <form id="loginForm">
+
+          <!-- Email Input -->
+          <div class="mb-4">
+            <label for="email" class="block text-sm font-medium mb-2">Correo electrónico</label>
+            <input
+              type="email"
+              id="email"
+              class="form-input"
+              placeholder="tu@empresa.com"
+              required
+            >
+          </div>
+
+          <!-- Password Input -->
+          <div class="mb-4">
+            <label for="password" class="block text-sm font-medium mb-2">Contraseña</label>
+            <div class="relative">
+              <input
+                type="password"
+                id="password"
+                class="form-input"
+                placeholder="••••••••"
+                required
+                style="padding-right: 2.5rem;"
+              >
+              <button
+                type="button"
+                id="togglePassword"
+                class="password-toggle absolute right-3 top-1/2 transform -translate-y-1/2"
+                style="color: var(--muted-foreground);"
+              >
+                <i data-lucide="eye" class="icon"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Remember Me -->
+          <div class="flex items-center mb-6">
+            <input
+              type="checkbox"
+              id="remember"
+              class="w-4 h-4 rounded"
+              style="accent-color: var(--p-primary-500);"
+            >
+            <label for="remember" class="ml-2 text-sm">Recordarme</label>
+          </div>
+
+          <!-- Submit Button -->
+          <button type="submit" class="btn btn-primary w-full mb-4">
+            <span>Iniciar sesión</span>
+            <i data-lucide="log-in" class="icon"></i>
+          </button>
+
+          <!-- Forgot Password -->
+          <div class="text-center">
+            <a href="#" class="text-sm text-primary" style="text-decoration: none;">
+              ¿Olvidaste tu contraseña?
+            </a>
+          </div>
+
+        </form>
+
+        <!-- Divider -->
+        <div class="mt-6 pt-6" style="border-top: 1px solid var(--border);">
+          <p class="text-center text-sm text-muted">
+            ¿Primera vez? <a href="#" class="text-primary font-medium" style="text-decoration: none;">Contáctanos</a>
+          </p>
+        </div>
+
+      </div>
+
+      <!-- Back to Home -->
+      <div class="text-center mt-6">
+        <a href="get_started_1.html" class="text-sm inline-flex items-center gap-2" style="color: white; text-decoration: none;">
+          <i data-lucide="arrow-left" class="icon-sm"></i>
+          <span>Volver al inicio</span>
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Password toggle functionality
+    const togglePassword = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('password');
+    let showPassword = false;
+
+    togglePassword.addEventListener('click', function() {
+      showPassword = !showPassword;
+      passwordInput.type = showPassword ? 'text' : 'password';
+
+      const icon = this.querySelector('i');
+      icon.setAttribute('data-lucide', showPassword ? 'eye-off' : 'eye');
+      lucide.createIcons();
+    });
+
+    // Form submission
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      // Redirect to dashboard
+      window.location.href = 'dashboard_1.html';
+    });
+  </script>
+
+</body>
+</html>

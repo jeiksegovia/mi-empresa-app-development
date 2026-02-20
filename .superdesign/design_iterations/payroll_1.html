@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nómina | Mi Empresa</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    body {
+      background: var(--surface-ground) !important;
+      color: var(--text-color) !important;
+      font-family: var(--font-family) !important;
+      min-height: 100vh !important;
+    }
+
+    .page-container {
+      max-width: 1400px !important;
+      margin: 0 auto !important;
+      padding: var(--spacing-xl) var(--spacing-lg) !important;
+    }
+
+    .page-header {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      margin-bottom: var(--spacing-xl) !important;
+    }
+
+    .page-title {
+      font-size: 2rem !important;
+      font-weight: 700 !important;
+      color: var(--text-color) !important;
+    }
+
+    /* Tabs */
+    .tabs-container {
+      margin-bottom: var(--spacing-xl) !important;
+    }
+
+    /* Filters Bar */
+    .filters-bar {
+      display: flex !important;
+      gap: var(--spacing-lg) !important;
+      margin-bottom: var(--spacing-xl) !important;
+      align-items: center !important;
+    }
+
+    .filter-group {
+      display: flex !important;
+      align-items: center !important;
+      gap: var(--spacing-sm) !important;
+    }
+
+    .filter-label {
+      font-size: 0.875rem !important;
+      font-weight: 500 !important;
+      color: var(--text-color) !important;
+    }
+
+    .search-wrapper {
+      flex: 1 !important;
+      max-width: 400px !important;
+      position: relative !important;
+    }
+
+    .search-icon {
+      position: absolute !important;
+      left: 12px !important;
+      top: 50% !important;
+      transform: translateY(-50%) !important;
+      width: 20px !important;
+      height: 20px !important;
+      color: var(--text-color-secondary) !important;
+    }
+
+    .search-input {
+      padding-left: 40px !important;
+    }
+
+    /* Summary Cards */
+    .summary-cards {
+      display: grid !important;
+      grid-template-columns: repeat(3, 1fr) !important;
+      gap: var(--spacing-lg) !important;
+      margin-bottom: var(--spacing-xl) !important;
+    }
+
+    .summary-card {
+      background: var(--surface-card) !important;
+      border: 1px solid var(--surface-border) !important;
+      border-radius: var(--border-radius) !important;
+      padding: var(--spacing-lg) !important;
+    }
+
+    .summary-card.earnings {
+      border-left: 4px solid var(--p-primary-500) !important;
+    }
+
+    .summary-card.deductions {
+      border-left: 4px solid var(--p-orange-500) !important;
+    }
+
+    .summary-card.net {
+      border-left: 4px solid var(--p-green-500) !important;
+    }
+
+    .summary-label {
+      font-size: 0.875rem !important;
+      color: var(--text-color-secondary) !important;
+      margin-bottom: var(--spacing-sm) !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: var(--spacing-xs) !important;
+    }
+
+    .summary-label i {
+      width: 18px !important;
+      height: 18px !important;
+    }
+
+    .summary-amount {
+      font-size: 1.75rem !important;
+      font-weight: 700 !important;
+      color: var(--text-color) !important;
+      margin-bottom: var(--spacing-xs) !important;
+    }
+
+    .summary-count {
+      font-size: 0.75rem !important;
+      color: var(--text-color-secondary) !important;
+    }
+
+    /* Table Styles */
+    .table-container {
+      background: var(--surface-card) !important;
+      border: 1px solid var(--surface-border) !important;
+      border-radius: var(--border-radius) !important;
+      overflow: hidden !important;
+    }
+
+    .data-table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+    }
+
+    .data-table thead {
+      background: var(--surface-ground) !important;
+      border-bottom: 2px solid var(--surface-border) !important;
+    }
+
+    .data-table th {
+      padding: var(--spacing-md) var(--spacing-lg) !important;
+      text-align: left !important;
+      font-size: 0.875rem !important;
+      font-weight: 600 !important;
+      color: var(--text-color) !important;
+      white-space: nowrap !important;
+    }
+
+    .data-table tbody tr {
+      border-bottom: 1px solid var(--surface-border) !important;
+      transition: background-color 0.2s ease !important;
+    }
+
+    .data-table tbody tr:hover {
+      background: var(--surface-ground) !important;
+    }
+
+    .data-table tbody tr.expanded {
+      background: var(--surface-ground) !important;
+    }
+
+    .data-table td {
+      padding: var(--spacing-lg) !important;
+      font-size: 0.875rem !important;
+      color: var(--text-color) !important;
+    }
+
+    /* Employee Cell */
+    .employee-cell {
+      display: flex !important;
+      align-items: center !important;
+      gap: var(--spacing-md) !important;
+    }
+
+    .employee-info {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 2px !important;
+    }
+
+    .employee-name {
+      font-weight: 600 !important;
+      color: var(--text-color) !important;
+    }
+
+    .employee-position {
+      font-size: 0.8125rem !important;
+      color: var(--text-color-secondary) !important;
+    }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: var(--spacing-xs) !important;
+      padding: 4px 10px !important;
+      border-radius: 12px !important;
+      font-size: 0.75rem !important;
+      font-weight: 600 !important;
+    }
+
+    .status-badge.paid {
+      background: var(--p-green-500-alpha) !important;
+      color: var(--p-green-600) !important;
+    }
+
+    .status-badge.pending {
+      background: var(--p-orange-500-alpha) !important;
+      color: var(--p-orange-600) !important;
+    }
+
+    .status-badge i {
+      width: 14px !important;
+      height: 14px !important;
+    }
+
+    /* Expandable Row Details */
+    .details-row {
+      display: none !important;
+    }
+
+    .details-row.show {
+      display: table-row !important;
+    }
+
+    .details-content {
+      padding: var(--spacing-xl) !important;
+      background: var(--surface-ground) !important;
+      border-top: 1px solid var(--surface-border) !important;
+    }
+
+    .details-grid {
+      display: grid !important;
+      grid-template-columns: repeat(3, 1fr) !important;
+      gap: var(--spacing-xl) !important;
+    }
+
+    .details-section {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: var(--spacing-md) !important;
+    }
+
+    .details-title {
+      font-size: 0.875rem !important;
+      font-weight: 600 !important;
+      color: var(--text-color) !important;
+      margin-bottom: var(--spacing-sm) !important;
+      padding-bottom: var(--spacing-sm) !important;
+      border-bottom: 1px solid var(--surface-border) !important;
+    }
+
+    .detail-line {
+      display: flex !important;
+      justify-content: space-between !important;
+      font-size: 0.8125rem !important;
+    }
+
+    .detail-label {
+      color: var(--text-color-secondary) !important;
+    }
+
+    .detail-value {
+      font-weight: 600 !important;
+      color: var(--text-color) !important;
+    }
+
+    /* Expand Button */
+    .expand-btn {
+      background: transparent !important;
+      border: none !important;
+      color: var(--p-primary-500) !important;
+      cursor: pointer !important;
+      padding: var(--spacing-xs) !important;
+      border-radius: var(--border-radius) !important;
+      display: flex !important;
+      align-items: center !important;
+      transition: all 0.2s ease !important;
+    }
+
+    .expand-btn:hover {
+      background: var(--p-primary-500-alpha) !important;
+    }
+
+    .expand-btn i {
+      width: 20px !important;
+      height: 20px !important;
+      transition: transform 0.2s ease !important;
+    }
+
+    .expand-btn.expanded i {
+      transform: rotate(180deg) !important;
+    }
+
+    /* Bulk Actions Bar */
+    .bulk-actions {
+      display: flex !important;
+      gap: var(--spacing-md) !important;
+      padding: var(--spacing-lg) !important;
+      background: var(--surface-card) !important;
+      border-top: 1px solid var(--surface-border) !important;
+      align-items: center !important;
+    }
+
+    .selected-count {
+      font-size: 0.875rem !important;
+      color: var(--text-color-secondary) !important;
+      margin-right: auto !important;
+    }
+
+    /* Pagination */
+    .pagination {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      padding: var(--spacing-lg) !important;
+      background: var(--surface-card) !important;
+      border-top: 1px solid var(--surface-border) !important;
+    }
+
+    .pagination-info {
+      font-size: 0.875rem !important;
+      color: var(--text-color-secondary) !important;
+    }
+
+    .pagination-controls {
+      display: flex !important;
+      gap: var(--spacing-sm) !important;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      display: none !important;
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      background: rgba(0, 0, 0, 0.7) !important;
+      z-index: 1000 !important;
+      align-items: center !important;
+      justify-content: center !important;
+      padding: var(--spacing-lg) !important;
+    }
+
+    .modal-overlay.show {
+      display: flex !important;
+    }
+
+    .modal-content {
+      background: var(--surface-card) !important;
+      border-radius: var(--border-radius) !important;
+      max-width: 800px !important;
+      width: 100% !important;
+      max-height: 90vh !important;
+      overflow-y: auto !important;
+      box-shadow: var(--shadow-xl) !important;
+    }
+
+    .voucher-header {
+      padding: var(--spacing-xl) !important;
+      border-bottom: 2px solid var(--surface-border) !important;
+      text-align: center !important;
+    }
+
+    .company-name {
+      font-size: 1.5rem !important;
+      font-weight: 700 !important;
+      color: var(--text-color) !important;
+      margin-bottom: var(--spacing-xs) !important;
+    }
+
+    .voucher-title {
+      font-size: 1rem !important;
+      color: var(--text-color-secondary) !important;
+    }
+
+    .voucher-body {
+      padding: var(--spacing-xl) !important;
+    }
+
+    .voucher-section {
+      margin-bottom: var(--spacing-xl) !important;
+    }
+
+    .voucher-section-title {
+      font-size: 1rem !important;
+      font-weight: 600 !important;
+      color: var(--text-color) !important;
+      margin-bottom: var(--spacing-md) !important;
+      padding-bottom: var(--spacing-sm) !important;
+      border-bottom: 1px solid var(--surface-border) !important;
+    }
+
+    .voucher-info-grid {
+      display: grid !important;
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: var(--spacing-md) !important;
+      margin-bottom: var(--spacing-lg) !important;
+    }
+
+    .voucher-info-item {
+      font-size: 0.875rem !important;
+    }
+
+    .voucher-info-label {
+      color: var(--text-color-secondary) !important;
+      font-weight: 500 !important;
+    }
+
+    .voucher-info-value {
+      color: var(--text-color) !important;
+      font-weight: 600 !important;
+    }
+
+    .voucher-table {
+      width: 100% !important;
+      margin-bottom: var(--spacing-lg) !important;
+    }
+
+    .voucher-table td {
+      padding: var(--spacing-sm) 0 !important;
+      font-size: 0.875rem !important;
+    }
+
+    .voucher-table td:last-child {
+      text-align: right !important;
+      font-weight: 600 !important;
+    }
+
+    .voucher-total {
+      background: var(--p-primary-500-alpha) !important;
+      padding: var(--spacing-md) !important;
+      border-radius: var(--border-radius) !important;
+      margin-top: var(--spacing-lg) !important;
+    }
+
+    .voucher-total-row {
+      display: flex !important;
+      justify-content: space-between !important;
+      font-size: 1.125rem !important;
+      font-weight: 700 !important;
+      color: var(--p-primary-500) !important;
+    }
+
+    .modal-actions {
+      padding: var(--spacing-lg) var(--spacing-xl) !important;
+      border-top: 1px solid var(--surface-border) !important;
+      display: flex !important;
+      gap: var(--spacing-md) !important;
+      justify-content: flex-end !important;
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .summary-cards {
+        grid-template-columns: 1fr !important;
+      }
+
+      .details-grid {
+        grid-template-columns: 1fr !important;
+      }
+
+      .filters-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+      }
+
+      .search-wrapper {
+        max-width: 100% !important;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .page-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: var(--spacing-md) !important;
+      }
+
+      .bulk-actions {
+        flex-wrap: wrap !important;
+      }
+    }
+
+    /* Print Styles */
+    @media print {
+      body {
+        background: white !important;
+      }
+
+      .modal-overlay {
+        background: white !important;
+      }
+
+      .modal-actions,
+      .page-header,
+      .filters-bar,
+      .bulk-actions {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <!-- Header -->
+    <div class="page-header">
+      <h1 class="page-title">Nómina</h1>
+      <button class="btn btn-primary">
+        <i data-lucide="plus" style="width: 18px; height: 18px;"></i>
+        <span>Nueva Nómina</span>
+      </button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-container">
+      <div class="tab-list">
+        <button class="tab-button active" data-filter="all">Todos</button>
+        <button class="tab-button" data-filter="pending">Pendientes</button>
+        <button class="tab-button" data-filter="paid">Pagados</button>
+      </div>
+    </div>
+
+    <!-- Filters Bar -->
+    <div class="filters-bar">
+      <div class="filter-group">
+        <span class="filter-label">Período:</span>
+        <select class="form-input" id="periodFilter">
+          <option value="2024-12">Diciembre 2024</option>
+          <option value="2024-11">Noviembre 2024</option>
+          <option value="2024-10">Octubre 2024</option>
+          <option value="2024-09">Septiembre 2024</option>
+        </select>
+      </div>
+
+      <div class="search-wrapper">
+        <i data-lucide="search" class="search-icon"></i>
+        <input type="text" class="form-input search-input" id="searchInput" placeholder="Buscar empleado...">
+      </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+      <div class="summary-card earnings">
+        <div class="summary-label">
+          <i data-lucide="trending-up"></i>
+          <span>Total Devengado</span>
+        </div>
+        <div class="summary-amount">$125,450,000</div>
+        <div class="summary-count">45 empleados</div>
+      </div>
+
+      <div class="summary-card deductions">
+        <div class="summary-label">
+          <i data-lucide="trending-down"></i>
+          <span>Total Deducciones</span>
+        </div>
+        <div class="summary-amount">$32,180,000</div>
+        <div class="summary-count">45 empleados</div>
+      </div>
+
+      <div class="summary-card net">
+        <div class="summary-label">
+          <i data-lucide="dollar-sign"></i>
+          <span>Neto a Pagar</span>
+        </div>
+        <div class="summary-amount">$93,270,000</div>
+        <div class="summary-count">45 empleados</div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 40px;">
+              <input type="checkbox" id="selectAll">
+            </th>
+            <th>Empleado</th>
+            <th>Devengado</th>
+            <th>Deducciones</th>
+            <th>Neto</th>
+            <th>Estado</th>
+            <th style="width: 100px;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Employee 1 -->
+          <tr data-employee="1" data-status="paid">
+            <td>
+              <input type="checkbox" class="row-checkbox" data-id="1">
+            </td>
+            <td>
+              <div class="employee-cell">
+                <div class="employee-info">
+                  <span class="employee-name">Juan Pérez García</span>
+                  <span class="employee-position">Desarrollador Senior</span>
+                </div>
+              </div>
+            </td>
+            <td>$4,640,606</td>
+            <td>$405,000</td>
+            <td><strong>$4,235,606</strong></td>
+            <td>
+              <span class="status-badge paid">
+                <i data-lucide="check-circle"></i>
+                Pagado
+              </span>
+              <div style="font-size: 0.75rem; color: var(--text-color-secondary); margin-top: 4px;">
+                28 Dic 2024
+              </div>
+            </td>
+            <td>
+              <div style="display: flex; gap: var(--spacing-xs);">
+                <button class="btn btn-sm btn-outline view-voucher" data-employee="1">
+                  <i data-lucide="file-text" style="width: 16px; height: 16px;"></i>
+                </button>
+                <button class="expand-btn" data-target="1">
+                  <i data-lucide="chevron-down"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          <tr class="details-row" id="details-1">
+            <td colspan="7">
+              <div class="details-content">
+                <div class="details-grid">
+                  <div class="details-section">
+                    <div class="details-title">Devengados</div>
+                    <div class="detail-line">
+                      <span class="detail-label">Salario base</span>
+                      <span class="detail-value">$4,500,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Aux. transporte</span>
+                      <span class="detail-value">$140,606</span>
+                    </div>
+                  </div>
+
+                  <div class="details-section">
+                    <div class="details-title">Deducciones</div>
+                    <div class="detail-line">
+                      <span class="detail-label">Salud (4%)</span>
+                      <span class="detail-value">$180,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Pensión (4%)</span>
+                      <span class="detail-value">$180,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Solidaridad (1%)</span>
+                      <span class="detail-value">$45,000</span>
+                    </div>
+                  </div>
+
+                  <div class="details-section">
+                    <div class="details-title">Aportes Empleador</div>
+                    <div class="detail-line">
+                      <span class="detail-label">Salud (8.5%)</span>
+                      <span class="detail-value">$382,500</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Pensión (12%)</span>
+                      <span class="detail-value">$540,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">ARL (0.522%)</span>
+                      <span class="detail-value">$23,490</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">ICBF (3%)</span>
+                      <span class="detail-value">$135,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">SENA (2%)</span>
+                      <span class="detail-value">$90,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Caja Comp. (4%)</span>
+                      <span class="detail-value">$180,000</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Employee 2 -->
+          <tr data-employee="2" data-status="pending">
+            <td>
+              <input type="checkbox" class="row-checkbox" data-id="2">
+            </td>
+            <td>
+              <div class="employee-cell">
+                <div class="employee-info">
+                  <span class="employee-name">María González López</span>
+                  <span class="employee-position">Gerente RRHH</span>
+                </div>
+              </div>
+            </td>
+            <td>$8,200,000</td>
+            <td>$738,000</td>
+            <td><strong>$7,462,000</strong></td>
+            <td>
+              <span class="status-badge pending">
+                <i data-lucide="clock"></i>
+                Pendiente
+              </span>
+            </td>
+            <td>
+              <div style="display: flex; gap: var(--spacing-xs);">
+                <button class="btn btn-sm btn-outline view-voucher" data-employee="2">
+                  <i data-lucide="file-text" style="width: 16px; height: 16px;"></i>
+                </button>
+                <button class="expand-btn" data-target="2">
+                  <i data-lucide="chevron-down"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          <tr class="details-row" id="details-2">
+            <td colspan="7">
+              <div class="details-content">
+                <div class="details-grid">
+                  <div class="details-section">
+                    <div class="details-title">Devengados</div>
+                    <div class="detail-line">
+                      <span class="detail-label">Salario base</span>
+                      <span class="detail-value">$8,000,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Aux. transporte</span>
+                      <span class="detail-value">$140,606</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Bonificación</span>
+                      <span class="detail-value">$59,394</span>
+                    </div>
+                  </div>
+
+                  <div class="details-section">
+                    <div class="details-title">Deducciones</div>
+                    <div class="detail-line">
+                      <span class="detail-label">Salud (4%)</span>
+                      <span class="detail-value">$320,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Pensión (4%)</span>
+                      <span class="detail-value">$320,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Solidaridad (1%)</span>
+                      <span class="detail-value">$82,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Crédito libranza</span>
+                      <span class="detail-value">$16,000</span>
+                    </div>
+                  </div>
+
+                  <div class="details-section">
+                    <div class="details-title">Aportes Empleador</div>
+                    <div class="detail-line">
+                      <span class="detail-label">Salud (8.5%)</span>
+                      <span class="detail-value">$680,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Pensión (12%)</span>
+                      <span class="detail-value">$960,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">ARL (0.522%)</span>
+                      <span class="detail-value">$41,760</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">ICBF (3%)</span>
+                      <span class="detail-value">$240,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">SENA (2%)</span>
+                      <span class="detail-value">$160,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Caja Comp. (4%)</span>
+                      <span class="detail-value">$320,000</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Employee 3 -->
+          <tr data-employee="3" data-status="paid">
+            <td>
+              <input type="checkbox" class="row-checkbox" data-id="3">
+            </td>
+            <td>
+              <div class="employee-cell">
+                <div class="employee-info">
+                  <span class="employee-name">Carlos Rodríguez Martínez</span>
+                  <span class="employee-position">Analista de Datos</span>
+                </div>
+              </div>
+            </td>
+            <td>$3,800,000</td>
+            <td>$304,000</td>
+            <td><strong>$3,496,000</strong></td>
+            <td>
+              <span class="status-badge paid">
+                <i data-lucide="check-circle"></i>
+                Pagado
+              </span>
+              <div style="font-size: 0.75rem; color: var(--text-color-secondary); margin-top: 4px;">
+                28 Dic 2024
+              </div>
+            </td>
+            <td>
+              <div style="display: flex; gap: var(--spacing-xs);">
+                <button class="btn btn-sm btn-outline view-voucher" data-employee="3">
+                  <i data-lucide="file-text" style="width: 16px; height: 16px;"></i>
+                </button>
+                <button class="expand-btn" data-target="3">
+                  <i data-lucide="chevron-down"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          <tr class="details-row" id="details-3">
+            <td colspan="7">
+              <div class="details-content">
+                <div class="details-grid">
+                  <div class="details-section">
+                    <div class="details-title">Devengados</div>
+                    <div class="detail-line">
+                      <span class="detail-label">Salario base</span>
+                      <span class="detail-value">$3,800,000</span>
+                    </div>
+                  </div>
+
+                  <div class="details-section">
+                    <div class="details-title">Deducciones</div>
+                    <div class="detail-line">
+                      <span class="detail-label">Salud (4%)</span>
+                      <span class="detail-value">$152,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Pensión (4%)</span>
+                      <span class="detail-value">$152,000</span>
+                    </div>
+                  </div>
+
+                  <div class="details-section">
+                    <div class="details-title">Aportes Empleador</div>
+                    <div class="detail-line">
+                      <span class="detail-label">Salud (8.5%)</span>
+                      <span class="detail-value">$323,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Pensión (12%)</span>
+                      <span class="detail-value">$456,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">ARL (0.522%)</span>
+                      <span class="detail-value">$19,836</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">ICBF (3%)</span>
+                      <span class="detail-value">$114,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">SENA (2%)</span>
+                      <span class="detail-value">$76,000</span>
+                    </div>
+                    <div class="detail-line">
+                      <span class="detail-label">Caja Comp. (4%)</span>
+                      <span class="detail-value">$152,000</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Bulk Actions -->
+      <div class="bulk-actions">
+        <span class="selected-count" id="selectedCount">0 seleccionados</span>
+        <button class="btn btn-sm btn-outline" id="generateVouchers">
+          <i data-lucide="file-text" style="width: 16px; height: 16px;"></i>
+          <span>Generar comprobantes</span>
+        </button>
+        <button class="btn btn-sm btn-outline" id="markAsPaid">
+          <i data-lucide="check" style="width: 16px; height: 16px;"></i>
+          <span>Marcar como pagado</span>
+        </button>
+        <button class="btn btn-sm btn-outline" id="exportExcel">
+          <i data-lucide="download" style="width: 16px; height: 16px;"></i>
+          <span>Exportar a Excel</span>
+        </button>
+      </div>
+
+      <!-- Pagination -->
+      <div class="pagination">
+        <div class="pagination-info">Mostrando 1-3 de 45</div>
+        <div class="pagination-controls">
+          <button class="btn btn-sm btn-outline">
+            <i data-lucide="chevron-left" style="width: 16px; height: 16px;"></i>
+            <span>Anterior</span>
+          </button>
+          <button class="btn btn-sm btn-outline">
+            <span>Siguiente</span>
+            <i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Voucher Modal -->
+  <div class="modal-overlay" id="voucherModal">
+    <div class="modal-content">
+      <div class="voucher-header">
+        <div class="company-name">Mi Empresa</div>
+        <div class="voucher-title">Comprobante de Nómina</div>
+        <div style="font-size: 0.875rem; color: var(--text-color-secondary); margin-top: var(--spacing-sm);">
+          Período: Diciembre 2024
+        </div>
+      </div>
+
+      <div class="voucher-body">
+        <!-- Employee Info -->
+        <div class="voucher-section">
+          <div class="voucher-section-title">Información del Empleado</div>
+          <div class="voucher-info-grid">
+            <div class="voucher-info-item">
+              <div class="voucher-info-label">Nombre:</div>
+              <div class="voucher-info-value" id="voucherName">Juan Pérez García</div>
+            </div>
+            <div class="voucher-info-item">
+              <div class="voucher-info-label">Identificación:</div>
+              <div class="voucher-info-value">1.234.567.890</div>
+            </div>
+            <div class="voucher-info-item">
+              <div class="voucher-info-label">Cargo:</div>
+              <div class="voucher-info-value" id="voucherPosition">Desarrollador Senior</div>
+            </div>
+            <div class="voucher-info-item">
+              <div class="voucher-info-label">Fecha de pago:</div>
+              <div class="voucher-info-value">28 Dic 2024</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Earnings -->
+        <div class="voucher-section">
+          <div class="voucher-section-title">Devengados</div>
+          <table class="voucher-table">
+            <tbody>
+              <tr>
+                <td>Salario base</td>
+                <td>$4,500,000</td>
+              </tr>
+              <tr>
+                <td>Auxilio de transporte</td>
+                <td>$140,606</td>
+              </tr>
+              <tr style="border-top: 1px solid var(--surface-border);">
+                <td><strong>Total Devengado</strong></td>
+                <td><strong>$4,640,606</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Deductions -->
+        <div class="voucher-section">
+          <div class="voucher-section-title">Deducciones</div>
+          <table class="voucher-table">
+            <tbody>
+              <tr>
+                <td>Salud (4%)</td>
+                <td>$180,000</td>
+              </tr>
+              <tr>
+                <td>Pensión (4%)</td>
+                <td>$180,000</td>
+              </tr>
+              <tr>
+                <td>Solidaridad (1%)</td>
+                <td>$45,000</td>
+              </tr>
+              <tr style="border-top: 1px solid var(--surface-border);">
+                <td><strong>Total Deducciones</strong></td>
+                <td><strong>$405,000</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Net Pay -->
+        <div class="voucher-total">
+          <div class="voucher-total-row">
+            <span>NETO A PAGAR</span>
+            <span>$4,235,606</span>
+          </div>
+        </div>
+
+        <!-- Employer Contributions -->
+        <div class="voucher-section" style="margin-top: var(--spacing-xl);">
+          <div class="voucher-section-title">Aportes del Empleador (Parafiscales)</div>
+          <table class="voucher-table">
+            <tbody>
+              <tr>
+                <td>Salud (8.5%)</td>
+                <td>$382,500</td>
+              </tr>
+              <tr>
+                <td>Pensión (12%)</td>
+                <td>$540,000</td>
+              </tr>
+              <tr>
+                <td>ARL (0.522%)</td>
+                <td>$23,490</td>
+              </tr>
+              <tr>
+                <td>ICBF (3%)</td>
+                <td>$135,000</td>
+              </tr>
+              <tr>
+                <td>SENA (2%)</td>
+                <td>$90,000</td>
+              </tr>
+              <tr>
+                <td>Caja de Compensación (4%)</td>
+                <td>$180,000</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Signatures -->
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--spacing-xl); margin-top: var(--spacing-2xl); padding-top: var(--spacing-xl); border-top: 1px solid var(--surface-border);">
+          <div style="text-align: center;">
+            <div style="border-top: 1px solid var(--text-color-secondary); padding-top: var(--spacing-sm); margin-top: 60px;">
+              Firma del Empleado
+            </div>
+          </div>
+          <div style="text-align: center;">
+            <div style="border-top: 1px solid var(--text-color-secondary); padding-top: var(--spacing-sm); margin-top: 60px;">
+              Firma del Empleador
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-outline" id="closeModal">Cerrar</button>
+        <button class="btn btn-outline" onclick="window.print()">
+          <i data-lucide="printer" style="width: 16px; height: 16px;"></i>
+          <span>Imprimir</span>
+        </button>
+        <button class="btn btn-primary">
+          <i data-lucide="download" style="width: 16px; height: 16px;"></i>
+          <span>Descargar PDF</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Expand/Collapse rows
+    document.querySelectorAll('.expand-btn').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const target = this.getAttribute('data-target');
+        const detailsRow = document.getElementById(`details-${target}`);
+
+        detailsRow.classList.toggle('show');
+        this.classList.toggle('expanded');
+      });
+    });
+
+    // Checkbox selection
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+    const selectedCountSpan = document.getElementById('selectedCount');
+
+    function updateSelectedCount() {
+      const checkedCount = document.querySelectorAll('.row-checkbox:checked').length;
+      selectedCountSpan.textContent = `${checkedCount} seleccionado${checkedCount !== 1 ? 's' : ''}`;
+    }
+
+    selectAllCheckbox.addEventListener('change', function() {
+      rowCheckboxes.forEach(cb => {
+        cb.checked = this.checked;
+      });
+      updateSelectedCount();
+    });
+
+    rowCheckboxes.forEach(cb => {
+      cb.addEventListener('change', function() {
+        updateSelectedCount();
+        selectAllCheckbox.checked = document.querySelectorAll('.row-checkbox:checked').length === rowCheckboxes.length;
+      });
+    });
+
+    // Tab filtering
+    document.querySelectorAll('.tab-button').forEach(btn => {
+      btn.addEventListener('click', function() {
+        // Update active tab
+        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+
+        const filter = this.getAttribute('data-filter');
+        const rows = document.querySelectorAll('tbody tr:not(.details-row)');
+
+        rows.forEach(row => {
+          const status = row.getAttribute('data-status');
+          if (filter === 'all' || filter === status) {
+            row.style.display = '';
+          } else {
+            row.style.display = 'none';
+          }
+        });
+      });
+    });
+
+    // Search functionality
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+      const searchTerm = e.target.value.toLowerCase();
+      const rows = document.querySelectorAll('tbody tr:not(.details-row)');
+
+      rows.forEach(row => {
+        const employeeName = row.querySelector('.employee-name')?.textContent.toLowerCase() || '';
+        const employeePosition = row.querySelector('.employee-position')?.textContent.toLowerCase() || '';
+
+        if (employeeName.includes(searchTerm) || employeePosition.includes(searchTerm)) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    });
+
+    // View voucher modal
+    const modal = document.getElementById('voucherModal');
+
+    document.querySelectorAll('.view-voucher').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        modal.classList.add('show');
+      });
+    });
+
+    document.getElementById('closeModal').addEventListener('click', function() {
+      modal.classList.remove('show');
+    });
+
+    // Close modal on overlay click
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) {
+        modal.classList.remove('show');
+      }
+    });
+
+    // Bulk actions
+    document.getElementById('generateVouchers').addEventListener('click', function() {
+      const checkedCount = document.querySelectorAll('.row-checkbox:checked').length;
+      if (checkedCount === 0) {
+        alert('Por favor selecciona al menos un empleado.');
+        return;
+      }
+      alert(`Generando ${checkedCount} comprobante(s) de nómina...`);
+    });
+
+    document.getElementById('markAsPaid').addEventListener('click', function() {
+      const checkedCount = document.querySelectorAll('.row-checkbox:checked').length;
+      if (checkedCount === 0) {
+        alert('Por favor selecciona al menos un empleado.');
+        return;
+      }
+      if (confirm(`¿Marcar ${checkedCount} empleado(s) como pagado?`)) {
+        alert(`${checkedCount} empleado(s) marcado(s) como pagado.`);
+      }
+    });
+
+    document.getElementById('exportExcel').addEventListener('click', function() {
+      alert('Exportando nómina a Excel...');
+    });
+  </script>
+</body>
+</html>

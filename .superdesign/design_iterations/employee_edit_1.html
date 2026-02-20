@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editar Empleado - Mi Empresa</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    /* Sidebar styles (consistent with other screens) */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: -280px;
+      width: 280px;
+      height: 100vh;
+      background: var(--surface-card);
+      border-right: 1px solid var(--border);
+      transition: left 0.3s ease-out;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .sidebar.open {
+      left: 0;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+      z-index: 99;
+    }
+
+    .sidebar-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius);
+      transition: all 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--foreground);
+    }
+
+    .sidebar-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .sidebar-item.active {
+      background: var(--p-primary-500);
+      color: white;
+    }
+
+    /* Sticky Save Bar */
+    .save-bar {
+      position: sticky;
+      top: 64px;
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-lg) var(--spacing-xl);
+      margin-bottom: var(--spacing-xl);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 10;
+      box-shadow: var(--shadow);
+    }
+
+    .save-bar.has-changes {
+      border-color: var(--p-primary-500);
+      background: rgba(139, 92, 246, 0.05);
+    }
+
+    .unsaved-indicator {
+      display: none;
+      align-items: center;
+      gap: var(--spacing-sm);
+      color: var(--p-orange-500);
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .unsaved-indicator.show {
+      display: flex;
+    }
+
+    /* Form Sections */
+    .form-section {
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius-lg);
+      margin-bottom: var(--spacing-lg);
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--spacing-lg) var(--spacing-xl);
+      cursor: pointer;
+      transition: background 0.2s;
+      user-select: none;
+    }
+
+    .section-header:hover {
+      background: var(--surface-hover);
+    }
+
+    .section-header-left {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+    }
+
+    .section-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--text-color);
+    }
+
+    .section-icon {
+      color: var(--p-primary-500);
+    }
+
+    .section-toggle {
+      transition: transform 0.3s ease;
+    }
+
+    .section-toggle.open {
+      transform: rotate(180deg);
+    }
+
+    .section-content {
+      padding: var(--spacing-xl);
+      border-top: 1px solid var(--surface-border);
+      display: none;
+    }
+
+    .section-content.open {
+      display: block;
+    }
+
+    /* Form Grid */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--spacing-lg);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+    }
+
+    .form-group.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .form-label {
+      font-size: var(--font-size-sm);
+      font-weight: 500;
+      color: var(--text-color);
+    }
+
+    .required::after {
+      content: ' *';
+      color: #ef4444;
+    }
+
+    .form-help {
+      font-size: var(--font-size-xs);
+      color: var(--text-color-secondary);
+    }
+
+    .form-error {
+      font-size: var(--font-size-xs);
+      color: var(--p-red-500);
+      display: none;
+    }
+
+    .form-error.show {
+      display: block;
+    }
+
+    .form-input.error {
+      border-color: var(--p-red-500);
+    }
+
+    /* Entry Cards (for experiences, education, etc.) */
+    .entry-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-md);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .entry-card {
+      background: var(--surface-ground);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-lg);
+      transition: all 0.2s;
+    }
+
+    .entry-card:hover {
+      background: var(--surface-hover);
+    }
+
+    .entry-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .entry-title {
+      font-weight: 600;
+      color: var(--text-color);
+    }
+
+    .entry-subtitle {
+      font-size: 0.875rem;
+      color: var(--text-color-secondary);
+    }
+
+    .entry-actions {
+      display: flex;
+      gap: var(--spacing-sm);
+    }
+
+    .entry-collapsed .entry-content {
+      display: none;
+    }
+
+    .add-entry-btn {
+      width: 100%;
+      border: 2px dashed var(--surface-border);
+      background: transparent;
+      color: var(--p-primary-500);
+      transition: all 0.2s;
+    }
+
+    .add-entry-btn:hover {
+      border-color: var(--p-primary-500);
+      background: rgba(139, 92, 246, 0.05);
+    }
+
+    /* Modal for editing entries */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      padding: var(--spacing-xl);
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .modal-content {
+      background: var(--surface-card);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--surface-border);
+      max-width: 800px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: var(--spacing-2xl);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--spacing-xl);
+    }
+
+    .modal-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-color);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .save-bar {
+        flex-direction: column;
+        gap: var(--spacing-md);
+        align-items: stretch;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div style="padding: var(--spacing-xl);">
+      <div class="flex items-center gap-3 mb-8">
+        <div class="flex items-center justify-center w-10 h-10 rounded-lg" style="background: var(--p-primary-500);">
+          <i data-lucide="building-2" class="icon-lg" style="color: white;"></i>
+        </div>
+        <div>
+          <h2 class="font-semibold text-base">Mi Empresa</h2>
+          <p class="text-xs text-muted">jeik-sa</p>
+        </div>
+      </div>
+      <nav>
+        <a href="dashboard_1.html" class="sidebar-item">
+          <i data-lucide="home" class="icon"></i>
+          <span>Inicio</span>
+        </a>
+        <a href="employees_list_1.html" class="sidebar-item active">
+          <i data-lucide="users" class="icon"></i>
+          <span>Empleados</span>
+        </a>
+        <a href="patients_list_1.html" class="sidebar-item">
+          <i data-lucide="user" class="icon"></i>
+          <span>Pacientes</span>
+        </a>
+                <a href="instruments_list_1.html" class="sidebar-item">
+          <i data-lucide="clipboard-list" class="icon"></i>
+          <span>Instrumentos</span>
+        </a>
+<a href="certificates-v2_1.html" class="sidebar-item">
+          <i data-lucide="file-check" class="icon"></i>
+          <span>Certificados</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="wallet" class="icon"></i>
+          <span>Nómina</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="bar-chart" class="icon"></i>
+          <span>Reportes</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="settings" class="icon"></i>
+          <span>Configuración</span>
+        </a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <div style="min-height: 100vh; background: var(--background);">
+
+    <!-- Top Header -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <button id="menuToggle" class="btn btn-ghost btn-icon">
+            <i data-lucide="menu" class="icon"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Editar Empleado</h1>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+          </button>
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+          <span class="text-sm font-medium">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main style="padding: var(--spacing-2xl) var(--spacing-xl);">
+
+      <!-- Back Button -->
+      <a href="employee_profile_1.html" class="inline-flex items-center gap-2 text-sm font-medium mb-6" style="color: var(--text-color-secondary); text-decoration: none; transition: all 200ms ease;">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        Volver al perfil
+      </a>
+
+      <!-- Page Title -->
+      <div class="mb-8">
+        <h2 class="text-3xl font-bold mb-2">Editar: Juan Carlos Pérez Rodríguez</h2>
+        <p class="text-muted">Modifica la información del empleado</p>
+      </div>
+
+      <!-- Sticky Save Bar -->
+      <div class="save-bar" id="saveBar">
+        <div class="flex items-center gap-4">
+          <div class="unsaved-indicator" id="unsavedIndicator">
+            <i data-lucide="alert-circle" class="w-5 h-5"></i>
+            <span>Cambios sin guardar</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="btn btn-outline" id="cancelBtn">
+            <i data-lucide="x" class="w-4 h-4"></i>
+            Cancelar
+          </button>
+          <button class="btn btn-primary" id="saveBtn">
+            <i data-lucide="save" class="w-4 h-4"></i>
+            Guardar Cambios
+          </button>
+        </div>
+      </div>
+
+      <form id="employeeForm">
+
+        <!-- Section 1: Personal Information -->
+        <div class="form-section">
+          <div class="section-header" data-section="personal">
+            <div class="section-header-left">
+              <i data-lucide="user" class="icon-lg section-icon"></i>
+              <div>
+                <div class="section-title">Información Personal</div>
+                <div class="text-sm text-muted">Datos básicos del empleado</div>
+              </div>
+            </div>
+            <i data-lucide="chevron-down" class="icon section-toggle open"></i>
+          </div>
+          <div class="section-content open" id="personal-content">
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label required">Nombres</label>
+                <input type="text" class="form-input" value="Juan Carlos" required>
+                <span class="form-error">Este campo es obligatorio</span>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">Apellidos</label>
+                <input type="text" class="form-input" value="Pérez Rodríguez" required>
+                <span class="form-error">Este campo es obligatorio</span>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">Tipo de Identificación</label>
+                <select class="form-input" required>
+                  <option value="cc" selected>Cédula de Ciudadanía</option>
+                  <option value="ce">Cédula de Extranjería</option>
+                  <option value="pasaporte">Pasaporte</option>
+                  <option value="pep">PEP</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">Número de Identificación</label>
+                <input type="text" class="form-input" value="1234567890" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">Fecha de Nacimiento</label>
+                <input type="date" class="form-input" value="1990-03-15" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">Género</label>
+                <select class="form-input" required>
+                  <option value="masculino" selected>Masculino</option>
+                  <option value="femenino">Femenino</option>
+                  <option value="otro">Otro</option>
+                  <option value="prefiero-no-decir">Prefiero no decir</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Estado Civil</label>
+                <select class="form-input">
+                  <option value="soltero">Soltero/a</option>
+                  <option value="casado" selected>Casado/a</option>
+                  <option value="union-libre">Unión Libre</option>
+                  <option value="divorciado">Divorciado/a</option>
+                  <option value="viudo">Viudo/a</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Tipo de Sangre</label>
+                <select class="form-input">
+                  <option value="">Seleccionar</option>
+                  <option value="O+" selected>O+</option>
+                  <option value="O-">O-</option>
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">Email</label>
+                <input type="email" class="form-input" value="juan.perez@empresa.com" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">Teléfono</label>
+                <input type="tel" class="form-input" value="+57 300 123 4567" required>
+              </div>
+
+              <div class="form-group full-width">
+                <label class="form-label">Dirección</label>
+                <input type="text" class="form-input" value="Calle 45 #23-67">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Ciudad</label>
+                <input type="text" class="form-input" value="Bogotá">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Departamento</label>
+                <select class="form-input">
+                  <option value="">Seleccionar</option>
+                  <option value="cundinamarca" selected>Cundinamarca</option>
+                  <option value="antioquia">Antioquia</option>
+                  <option value="valle">Valle del Cauca</option>
+                  <!-- More departments -->
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Work Experience -->
+        <div class="form-section">
+          <div class="section-header" data-section="experience">
+            <div class="section-header-left">
+              <i data-lucide="briefcase" class="icon-lg section-icon"></i>
+              <div>
+                <div class="section-title">Experiencia Laboral</div>
+                <div class="text-sm text-muted">Trabajos anteriores</div>
+              </div>
+            </div>
+            <i data-lucide="chevron-down" class="icon section-toggle"></i>
+          </div>
+          <div class="section-content" id="experience-content">
+            <div class="entry-list" id="experienceList">
+              <!-- Entry 1 -->
+              <div class="entry-card entry-collapsed" data-entry-id="exp-1">
+                <div class="entry-header">
+                  <div>
+                    <div class="entry-title">Senior Developer - Tech Corp</div>
+                    <div class="entry-subtitle">2020 - 2022 (2 años)</div>
+                  </div>
+                  <div class="entry-actions">
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm toggle-entry">
+                      <i data-lucide="chevron-down" class="icon-sm"></i>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm edit-entry">
+                      <i data-lucide="edit" class="icon-sm"></i>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm delete-entry">
+                      <i data-lucide="trash-2" class="icon-sm" style="color: #ef4444;"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="entry-content">
+                  <p class="text-sm text-muted">Desarrollo de aplicaciones web con React y Node.js. Liderazgo de equipo de 5 desarrolladores.</p>
+                </div>
+              </div>
+
+              <!-- Entry 2 -->
+              <div class="entry-card entry-collapsed" data-entry-id="exp-2">
+                <div class="entry-header">
+                  <div>
+                    <div class="entry-title">Full Stack Developer - Digital Solutions</div>
+                    <div class="entry-subtitle">2018 - 2020 (2 años)</div>
+                  </div>
+                  <div class="entry-actions">
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm toggle-entry">
+                      <i data-lucide="chevron-down" class="icon-sm"></i>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm edit-entry">
+                      <i data-lucide="edit" class="icon-sm"></i>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm delete-entry">
+                      <i data-lucide="trash-2" class="icon-sm" style="color: #ef4444;"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="entry-content">
+                  <p class="text-sm text-muted">Desarrollo frontend con Angular y backend con Java Spring Boot.</p>
+                </div>
+              </div>
+            </div>
+
+            <button type="button" class="btn add-entry-btn" id="addExperienceBtn">
+              <i data-lucide="plus" class="icon"></i>
+              <span>Agregar experiencia</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Section 3: Education -->
+        <div class="form-section">
+          <div class="section-header" data-section="education">
+            <div class="section-header-left">
+              <i data-lucide="graduation-cap" class="icon-lg section-icon"></i>
+              <div>
+                <div class="section-title">Educación</div>
+                <div class="text-sm text-muted">Estudios y certificaciones</div>
+              </div>
+            </div>
+            <i data-lucide="chevron-down" class="icon section-toggle"></i>
+          </div>
+          <div class="section-content" id="education-content">
+            <div class="entry-list" id="educationList">
+              <!-- Entry 1 -->
+              <div class="entry-card entry-collapsed" data-entry-id="edu-1">
+                <div class="entry-header">
+                  <div>
+                    <div class="entry-title">Ingeniería de Sistemas</div>
+                    <div class="entry-subtitle">Universidad Nacional de Colombia - 2012</div>
+                  </div>
+                  <div class="entry-actions">
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm toggle-entry">
+                      <i data-lucide="chevron-down" class="icon-sm"></i>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm edit-entry">
+                      <i data-lucide="edit" class="icon-sm"></i>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm delete-entry">
+                      <i data-lucide="trash-2" class="icon-sm" style="color: #ef4444;"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="entry-content">
+                  <p class="text-sm text-muted">Título: Ingeniero de Sistemas</p>
+                </div>
+              </div>
+            </div>
+
+            <button type="button" class="btn add-entry-btn" id="addEducationBtn">
+              <i data-lucide="plus" class="icon"></i>
+              <span>Agregar estudio</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Section 4: Contract & Family -->
+        <div class="form-section">
+          <div class="section-header" data-section="contract">
+            <div class="section-header-left">
+              <i data-lucide="file-text" class="icon-lg section-icon"></i>
+              <div>
+                <div class="section-title">Contrato y Familia</div>
+                <div class="text-sm text-muted">Información contractual y núcleo familiar</div>
+              </div>
+            </div>
+            <i data-lucide="chevron-down" class="icon section-toggle"></i>
+          </div>
+          <div class="section-content" id="contract-content">
+            <h4 class="font-semibold mb-4">Información del Contrato</h4>
+            <div class="form-grid mb-8">
+              <div class="form-group">
+                <label class="form-label required">Tipo de Contrato</label>
+                <select class="form-input" required>
+                  <option value="indefinido" selected>Indefinido</option>
+                  <option value="fijo">Término Fijo</option>
+                  <option value="obra">Obra o Labor</option>
+                  <option value="servicios">Prestación de Servicios</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">Modalidad</label>
+                <select class="form-input" required>
+                  <option value="presencial" selected>Presencial</option>
+                  <option value="remoto">Remoto</option>
+                  <option value="hibrido">Híbrido</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">Fecha de Inicio</label>
+                <input type="date" class="form-input" value="2022-10-01" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">Cargo</label>
+                <input type="text" class="form-input" value="Desarrollador Full Stack Senior" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Departamento</label>
+                <input type="text" class="form-input" value="Tecnología">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Sede</label>
+                <input type="text" class="form-input" value="Bogotá - Oficina Principal">
+              </div>
+            </div>
+
+            <h4 class="font-semibold mb-4">Núcleo Familiar</h4>
+            <div class="entry-list" id="familyList">
+              <!-- Entry 1 -->
+              <div class="entry-card entry-collapsed" data-entry-id="fam-1">
+                <div class="entry-header">
+                  <div>
+                    <div class="entry-title">María Pérez García</div>
+                    <div class="entry-subtitle">Esposa - 32 años</div>
+                  </div>
+                  <div class="entry-actions">
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm toggle-entry">
+                      <i data-lucide="chevron-down" class="icon-sm"></i>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm edit-entry">
+                      <i data-lucide="edit" class="icon-sm"></i>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm delete-entry">
+                      <i data-lucide="trash-2" class="icon-sm" style="color: #ef4444;"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="entry-content">
+                  <p class="text-sm text-muted">CC: 1.098.765.432 • Tel: +57 300 987 6543</p>
+                </div>
+              </div>
+            </div>
+
+            <button type="button" class="btn add-entry-btn" id="addFamilyBtn">
+              <i data-lucide="plus" class="icon"></i>
+              <span>Agregar familiar</span>
+            </button>
+
+            <h4 class="font-semibold mb-4 mt-8">Contacto de Emergencia</h4>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label required">Nombre</label>
+                <input type="text" class="form-input" value="María Pérez" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">Relación</label>
+                <input type="text" class="form-input" value="Esposa" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">Teléfono</label>
+                <input type="tel" class="form-input" value="+57 300 987 6543" required>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 5: Payroll -->
+        <div class="form-section">
+          <div class="section-header" data-section="payroll">
+            <div class="section-header-left">
+              <i data-lucide="banknote" class="icon-lg section-icon"></i>
+              <div>
+                <div class="section-title">Nómina</div>
+                <div class="text-sm text-muted">Configuración salarial</div>
+              </div>
+            </div>
+            <i data-lucide="chevron-down" class="icon section-toggle"></i>
+          </div>
+          <div class="section-content" id="payroll-content">
+            <h4 class="font-semibold mb-4">Información Salarial</h4>
+            <div class="form-grid mb-8">
+              <div class="form-group">
+                <label class="form-label required">Salario Base</label>
+                <input type="text" class="form-input" value="4500000" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Auxilio de Transporte</label>
+                <input type="text" class="form-input" value="140606">
+                <span class="form-help">Valor legal 2024</span>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Bonificaciones</label>
+                <input type="text" class="form-input" value="0">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Otras Deducciones</label>
+                <input type="text" class="form-input" value="50000">
+              </div>
+            </div>
+
+            <h4 class="font-semibold mb-4">Seguridad Social</h4>
+            <div class="form-grid mb-8">
+              <div class="form-group">
+                <label class="form-label required">EPS</label>
+                <select class="form-input" required>
+                  <option value="">Seleccionar</option>
+                  <option value="sanitas" selected>Sanitas</option>
+                  <option value="sura">Sura</option>
+                  <option value="compensar">Compensar</option>
+                  <option value="salud-total">Salud Total</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">AFP</label>
+                <select class="form-input" required>
+                  <option value="">Seleccionar</option>
+                  <option value="porvenir" selected>Porvenir</option>
+                  <option value="proteccion">Protección</option>
+                  <option value="colfondos">Colfondos</option>
+                  <option value="colpensiones">Colpensiones</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">ARL</label>
+                <select class="form-input" required>
+                  <option value="">Seleccionar</option>
+                  <option value="sura" selected>Sura</option>
+                  <option value="positiva">Positiva</option>
+                  <option value="liberty">Liberty</option>
+                  <option value="bolivar">Bolívar</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">Clase de Riesgo</label>
+                <select class="form-input" required>
+                  <option value="I" selected>Clase I (Mínimo)</option>
+                  <option value="II">Clase II (Bajo)</option>
+                  <option value="III">Clase III (Medio)</option>
+                  <option value="IV">Clase IV (Alto)</option>
+                  <option value="V">Clase V (Máximo)</option>
+                </select>
+              </div>
+            </div>
+
+            <h4 class="font-semibold mb-4">Información Bancaria</h4>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label required">Banco</label>
+                <select class="form-input" required>
+                  <option value="">Seleccionar</option>
+                  <option value="bancolombia" selected>Bancolombia</option>
+                  <option value="davivienda">Davivienda</option>
+                  <option value="bbva">BBVA</option>
+                  <option value="bogota">Banco de Bogotá</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label required">Tipo de Cuenta</label>
+                <select class="form-input" required>
+                  <option value="">Seleccionar</option>
+                  <option value="ahorros" selected>Ahorros</option>
+                  <option value="corriente">Corriente</option>
+                </select>
+              </div>
+
+              <div class="form-group full-width">
+                <label class="form-label required">Número de Cuenta</label>
+                <input type="text" class="form-input" value="12345678" required>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 6: Documents -->
+        <div class="form-section">
+          <div class="section-header" data-section="documents">
+            <div class="section-header-left">
+              <i data-lucide="folder" class="icon-lg section-icon"></i>
+              <div>
+                <div class="section-title">Documentos</div>
+                <div class="text-sm text-muted">Archivos adjuntos</div>
+              </div>
+            </div>
+            <i data-lucide="chevron-down" class="icon section-toggle"></i>
+          </div>
+          <div class="section-content" id="documents-content">
+            <div class="mb-4">
+              <button type="button" class="btn btn-primary">
+                <i data-lucide="upload" class="w-4 h-4"></i>
+                Subir nuevo documento
+              </button>
+            </div>
+
+            <div class="entry-list">
+              <div class="entry-card">
+                <div class="entry-header">
+                  <div class="flex items-center gap-3">
+                    <i data-lucide="file-text" class="icon text-blue-500"></i>
+                    <div>
+                      <div class="entry-title">Cédula de Ciudadanía</div>
+                      <div class="entry-subtitle">cedula_1234567890.pdf (245 KB) • 01/10/2022</div>
+                    </div>
+                  </div>
+                  <div class="entry-actions">
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm">
+                      <i data-lucide="eye" class="icon-sm"></i>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm">
+                      <i data-lucide="download" class="icon-sm"></i>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm">
+                      <i data-lucide="trash-2" class="icon-sm" style="color: #ef4444;"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="entry-card">
+                <div class="entry-header">
+                  <div class="flex items-center gap-3">
+                    <i data-lucide="file-text" class="icon text-blue-500"></i>
+                    <div>
+                      <div class="entry-title">Hoja de Vida</div>
+                      <div class="entry-subtitle">cv_juan_perez.pdf (512 KB) • 01/10/2022</div>
+                    </div>
+                  </div>
+                  <div class="entry-actions">
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm">
+                      <i data-lucide="eye" class="icon-sm"></i>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm">
+                      <i data-lucide="download" class="icon-sm"></i>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm">
+                      <i data-lucide="trash-2" class="icon-sm" style="color: #ef4444;"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </form>
+
+      <!-- Bottom Action Bar -->
+      <div class="card mt-8" style="padding: var(--spacing-lg) var(--spacing-xl);">
+        <div class="flex items-center justify-between">
+          <div class="text-sm text-muted">
+            <i data-lucide="info" class="icon-sm inline"></i>
+            Los campos marcados con * son obligatorios
+          </div>
+          <div class="flex items-center gap-3">
+            <button type="button" class="btn btn-outline" id="cancelBtnBottom">
+              <i data-lucide="x" class="w-4 h-4"></i>
+              Cancelar
+            </button>
+            <button type="button" class="btn btn-primary" id="saveBtnBottom">
+              <i data-lucide="save" class="w-4 h-4"></i>
+              Guardar Cambios
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- Edit Entry Modal (generic for experiences, education, etc.) -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalTitle">Editar Entrada</h3>
+        <button type="button" class="btn btn-ghost btn-icon" id="closeModal">
+          <i data-lucide="x" class="icon"></i>
+        </button>
+      </div>
+
+      <form id="entryForm">
+        <div class="form-grid">
+          <!-- Dynamic content will be loaded here -->
+        </div>
+
+        <div class="flex items-center justify-end gap-3 mt-6">
+          <button type="button" class="btn btn-outline" id="cancelEntry">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Sidebar toggle
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    menuToggle.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+      sidebarOverlay.classList.toggle('show');
+    });
+
+    sidebarOverlay.addEventListener('click', function() {
+      sidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('show');
+    });
+
+    // Section accordion functionality
+    const sectionHeaders = document.querySelectorAll('.section-header');
+    sectionHeaders.forEach(header => {
+      header.addEventListener('click', function() {
+        const section = this.dataset.section;
+        const content = document.getElementById(`${section}-content`);
+        const toggle = this.querySelector('.section-toggle');
+
+        content.classList.toggle('open');
+        toggle.classList.toggle('open');
+
+        lucide.createIcons();
+      });
+    });
+
+    // Entry toggle (expand/collapse)
+    document.querySelectorAll('.toggle-entry').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const card = this.closest('.entry-card');
+        card.classList.toggle('entry-collapsed');
+
+        const icon = this.querySelector('i');
+        const isCollapsed = card.classList.contains('entry-collapsed');
+        icon.setAttribute('data-lucide', isCollapsed ? 'chevron-down' : 'chevron-up');
+        lucide.createIcons();
+      });
+    });
+
+    // Track form changes
+    let hasUnsavedChanges = false;
+    const form = document.getElementById('employeeForm');
+    const saveBar = document.getElementById('saveBar');
+    const unsavedIndicator = document.getElementById('unsavedIndicator');
+
+    form.addEventListener('input', function() {
+      hasUnsavedChanges = true;
+      saveBar.classList.add('has-changes');
+      unsavedIndicator.classList.add('show');
+    });
+
+    form.addEventListener('change', function() {
+      hasUnsavedChanges = true;
+      saveBar.classList.add('has-changes');
+      unsavedIndicator.classList.add('show');
+    });
+
+    // Save functionality
+    function saveForm() {
+      // Validate form
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+
+      // In production, send data to server
+      console.log('Saving form data...');
+
+      // Simulate save
+      setTimeout(() => {
+        hasUnsavedChanges = false;
+        saveBar.classList.remove('has-changes');
+        unsavedIndicator.classList.remove('show');
+        alert('Cambios guardados exitosamente!');
+
+        // Redirect to profile
+        // window.location.href = 'employee_profile_1.html';
+      }, 500);
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', saveForm);
+    document.getElementById('saveBtnBottom').addEventListener('click', saveForm);
+
+    // Cancel functionality
+    function cancelEdit() {
+      if (hasUnsavedChanges) {
+        if (confirm('Tienes cambios sin guardar. ¿Estás seguro de que quieres salir?')) {
+          window.location.href = 'employee_profile_1.html';
+        }
+      } else {
+        window.location.href = 'employee_profile_1.html';
+      }
+    }
+
+    document.getElementById('cancelBtn').addEventListener('click', cancelEdit);
+    document.getElementById('cancelBtnBottom').addEventListener('click', cancelEdit);
+
+    // Warn before leaving with unsaved changes
+    window.addEventListener('beforeunload', function(e) {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+
+    // Modal functionality
+    const editModal = document.getElementById('editModal');
+    const closeModal = document.getElementById('closeModal');
+    const cancelEntry = document.getElementById('cancelEntry');
+
+    closeModal.addEventListener('click', () => editModal.classList.remove('show'));
+    cancelEntry.addEventListener('click', () => editModal.classList.remove('show'));
+
+    editModal.addEventListener('click', function(e) {
+      if (e.target === this) {
+        this.classList.remove('show');
+      }
+    });
+
+    // Edit entry buttons
+    document.querySelectorAll('.edit-entry').forEach(btn => {
+      btn.addEventListener('click', function() {
+        editModal.classList.add('show');
+        lucide.createIcons();
+      });
+    });
+
+    // Delete entry buttons
+    document.querySelectorAll('.delete-entry').forEach(btn => {
+      btn.addEventListener('click', function() {
+        if (confirm('¿Estás seguro de que quieres eliminar esta entrada?')) {
+          const card = this.closest('.entry-card');
+          card.remove();
+          hasUnsavedChanges = true;
+          saveBar.classList.add('has-changes');
+          unsavedIndicator.classList.add('show');
+        }
+      });
+    });
+
+    // Add entry buttons
+    document.getElementById('addExperienceBtn').addEventListener('click', () => {
+      editModal.classList.add('show');
+      document.getElementById('modalTitle').textContent = 'Agregar Experiencia Laboral';
+      lucide.createIcons();
+    });
+
+    document.getElementById('addEducationBtn').addEventListener('click', () => {
+      editModal.classList.add('show');
+      document.getElementById('modalTitle').textContent = 'Agregar Estudio';
+      lucide.createIcons();
+    });
+
+    document.getElementById('addFamilyBtn').addEventListener('click', () => {
+      editModal.classList.add('show');
+      document.getElementById('modalTitle').textContent = 'Agregar Familiar';
+      lucide.createIcons();
+    });
+  </script>
+
+</body>
+</html>

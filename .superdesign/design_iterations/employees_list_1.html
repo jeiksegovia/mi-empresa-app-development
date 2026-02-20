@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Empleados - Mi Empresa App</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    /* Sidebar styles (same as dashboard) */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: -280px;
+      width: 280px;
+      height: 100vh;
+      background: var(--surface-card);
+      border-right: 1px solid var(--border);
+      transition: left 0.3s ease-out;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .sidebar.open {
+      left: 0;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+      z-index: 99;
+    }
+
+    .sidebar-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius);
+      transition: all 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--foreground);
+    }
+
+    .sidebar-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .sidebar-item.active {
+      background: var(--p-primary-500);
+      color: white;
+    }
+
+    .stat-card {
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .stat-card.active {
+      border-color: var(--p-primary-500);
+      box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+    }
+
+    /* Data Table Styles */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .data-table thead {
+      background: var(--surface-hover);
+    }
+
+    .data-table th {
+      padding: var(--spacing-md) var(--spacing-lg);
+      text-align: left;
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      border-bottom: 2px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.2s;
+    }
+
+    .data-table th:hover {
+      background: var(--surface-border);
+    }
+
+    .data-table th.sortable {
+      position: relative;
+      padding-right: 2rem;
+    }
+
+    .data-table th .sort-icon {
+      position: absolute;
+      right: 0.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      opacity: 0.3;
+      transition: opacity 0.2s;
+    }
+
+    .data-table th:hover .sort-icon {
+      opacity: 0.6;
+    }
+
+    .data-table tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+
+    .data-table tbody tr:hover {
+      background: var(--surface-hover);
+    }
+
+    .data-table tbody tr.selected {
+      background: rgba(139, 92, 246, 0.1);
+    }
+
+    .data-table td {
+      padding: var(--spacing-lg);
+      font-size: var(--font-size-sm);
+    }
+
+    .data-table td:first-child {
+      width: 40px;
+      text-align: center;
+    }
+
+    /* Expandable row */
+    .expanded-row {
+      background: var(--surface-section);
+    }
+
+    .expanded-content {
+      padding: var(--spacing-xl);
+      border-top: 1px solid var(--border);
+    }
+
+    .expanded-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--spacing-lg);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .info-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      font-size: var(--font-size-sm);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+    }
+
+    .status-active {
+      background: #22c55e;
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+    }
+
+    .status-inactive {
+      background: #64748b;
+    }
+
+    /* Dropdown menu */
+    .dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .dropdown-content {
+      display: none;
+      position: absolute;
+      right: 0;
+      background: var(--surface-card);
+      min-width: 160px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      z-index: 10;
+      margin-top: 4px;
+    }
+
+    .dropdown-content.show {
+      display: block;
+    }
+
+    .dropdown-item {
+      padding: var(--spacing-sm) var(--spacing-md);
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      font-size: var(--font-size-sm);
+    }
+
+    .dropdown-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .dropdown-item:first-child {
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+
+    .dropdown-item:last-child {
+      border-radius: 0 0 var(--radius) var(--radius);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div style="padding: var(--spacing-xl);">
+      <div class="flex items-center gap-3 mb-8">
+        <div class="flex items-center justify-center w-10 h-10 rounded-lg" style="background: var(--p-primary-500);">
+          <i data-lucide="building-2" class="icon-lg" style="color: white;"></i>
+        </div>
+        <div>
+          <h2 class="font-semibold text-base">Mi Empresa</h2>
+          <p class="text-xs text-muted">jeik-sa</p>
+        </div>
+      </div>
+      <nav>
+        <a href="dashboard_1.html" class="sidebar-item">
+          <i data-lucide="home" class="icon"></i>
+          <span>Inicio</span>
+        </a>
+        <a href="employees_list_1.html" class="sidebar-item active">
+          <i data-lucide="users" class="icon"></i>
+          <span>Empleados</span>
+        </a>
+        <a href="patients_list_1.html" class="sidebar-item">
+          <i data-lucide="user" class="icon"></i>
+          <span>Pacientes</span>
+        </a>
+        <a href="instruments_list_1.html" class="sidebar-item">
+          <i data-lucide="clipboard-list" class="icon"></i>
+          <span>Instrumentos</span>
+        </a>
+        <a href="certificates-v2_1.html" class="sidebar-item">
+          <i data-lucide="file-check" class="icon"></i>
+          <span>Certificados</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="wallet" class="icon"></i>
+          <span>Nómina</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="bar-chart" class="icon"></i>
+          <span>Reportes</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="settings" class="icon"></i>
+          <span>Configuración</span>
+        </a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <div style="min-height: 100vh; background: var(--background);">
+
+    <!-- Top Header -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <button id="menuToggle" class="btn btn-ghost btn-icon">
+            <i data-lucide="menu" class="icon"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Empleados</h1>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+          </button>
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+          <span class="text-sm font-medium">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main style="padding: var(--spacing-2xl) var(--spacing-xl);">
+
+      <!-- Page Title -->
+      <div class="flex items-start justify-between mb-8">
+        <div>
+          <h2 class="text-3xl font-bold mb-2">Empleados</h2>
+          <p class="text-muted">Gestiona empleados fácilmente o usa Excel para una importación masiva</p>
+        </div>
+        <a href="employee_new_step_1.html" class="btn btn-primary">
+          <i data-lucide="plus" class="icon"></i>
+          <span>Nuevo empleado</span>
+        </a>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-lg mb-8">
+
+        <!-- All Employees -->
+        <div class="card stat-card active" data-filter="all">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2 mb-2">
+                <i data-lucide="clipboard-list" class="icon text-muted"></i>
+                <span class="text-sm text-muted">Todos</span>
+              </div>
+              <div class="text-2xl font-bold">45 empleados</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active -->
+        <div class="card stat-card" data-filter="active">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2 mb-2">
+                <i data-lucide="check-circle" class="icon" style="color: #22c55e;"></i>
+                <span class="text-sm text-muted">Activos</span>
+              </div>
+              <div class="text-2xl font-bold">42 empleados</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inactive -->
+        <div class="card stat-card" data-filter="inactive">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2 mb-2">
+                <i data-lucide="pause-circle" class="icon text-muted"></i>
+                <span class="text-sm text-muted">Inactivos</span>
+              </div>
+              <div class="text-2xl font-bold">3 empleados</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Search and Filters -->
+      <div class="card mb-6" style="padding: var(--spacing-lg);">
+        <div class="flex items-center gap-4">
+          <div class="flex-1">
+            <div class="relative">
+              <i data-lucide="search" class="icon absolute left-3 top-1/2 transform -translate-y-1/2 text-muted"></i>
+              <input
+                type="text"
+                class="form-input"
+                placeholder="Buscar por nombre, identificación o cargo..."
+                style="padding-left: 2.5rem;"
+              >
+            </div>
+          </div>
+          <button class="btn btn-outline">
+            <i data-lucide="filter" class="icon"></i>
+            <span>Filtrar</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="card" style="overflow-x: auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>
+                <input type="checkbox" id="selectAll" style="accent-color: var(--p-primary-500);">
+              </th>
+              <th class="sortable">
+                Nombre
+                <i data-lucide="chevrons-up-down" class="sort-icon icon-sm"></i>
+              </th>
+              <th class="sortable">
+                Cargo
+                <i data-lucide="chevrons-up-down" class="sort-icon icon-sm"></i>
+              </th>
+              <th class="sortable">
+                Identificación
+                <i data-lucide="chevrons-up-down" class="sort-icon icon-sm"></i>
+              </th>
+              <th class="sortable">
+                Salario
+                <i data-lucide="chevrons-up-down" class="sort-icon icon-sm"></i>
+              </th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Row 1 -->
+            <tr data-status="active" data-id="1">
+              <td>
+                <input type="checkbox" class="row-checkbox" style="accent-color: var(--p-primary-500);">
+              </td>
+              <td><span class="font-medium">Juan Pérez García</span></td>
+              <td><span class="text-muted">Desarrollador Senior</span></td>
+              <td><span class="text-muted">1122334455</span></td>
+              <td><span class="font-medium">$ 11,000,000</span></td>
+              <td>
+                <span class="status-dot status-active"></span>
+                <span>Activo</span>
+              </td>
+              <td>
+                <div class="flex items-center gap-2">
+                  <button class="btn btn-ghost btn-icon btn-sm expand-btn" data-row="1">
+                    <i data-lucide="chevron-down" class="icon-sm"></i>
+                  </button>
+                  <div class="dropdown">
+                    <button class="btn btn-ghost btn-icon btn-sm dropdown-toggle">
+                      <i data-lucide="more-vertical" class="icon-sm"></i>
+                    </button>
+                    <div class="dropdown-content">
+                      <a href="employee_profile_1.html" class="dropdown-item">
+                        <i data-lucide="eye" class="icon-sm"></i>
+                        <span>Ver perfil</span>
+                      </a>
+                      <div class="dropdown-item">
+                        <i data-lucide="edit" class="icon-sm"></i>
+                        <span>Editar</span>
+                      </div>
+                      <div class="dropdown-item">
+                        <i data-lucide="file-text" class="icon-sm"></i>
+                        <span>Generar certificado</span>
+                      </div>
+                      <div class="dropdown-item">
+                        <i data-lucide="user-x" class="icon-sm"></i>
+                        <span>Desactivar</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <!-- Expanded Row 1 -->
+            <tr class="expanded-row" id="expanded-1" style="display: none;">
+              <td colspan="7">
+                <div class="expanded-content">
+                  <div class="expanded-info">
+                    <div class="info-item">
+                      <i data-lucide="mail" class="icon-sm text-muted"></i>
+                      <span>juan.perez@empresa.com</span>
+                    </div>
+                    <div class="info-item">
+                      <i data-lucide="phone" class="icon-sm text-muted"></i>
+                      <span>+57 321 1234567</span>
+                    </div>
+                    <div class="info-item">
+                      <i data-lucide="calendar" class="icon-sm text-muted"></i>
+                      <span>Ingreso: 15 Ene 2023</span>
+                    </div>
+                    <div class="info-item">
+                      <i data-lucide="file-text" class="icon-sm text-muted"></i>
+                      <span>Contrato: Indefinido</span>
+                    </div>
+                  </div>
+                  <div class="flex gap-2">
+                    <a href="employee_profile_1.html" class="btn btn-outline btn-sm">
+                      <i data-lucide="user" class="icon-sm"></i>
+                      <span>Ver perfil completo</span>
+                    </a>
+                    <button class="btn btn-outline btn-sm">
+                      <i data-lucide="edit" class="icon-sm"></i>
+                      <span>Editar</span>
+                    </button>
+                    <button class="btn btn-outline btn-sm">
+                      <i data-lucide="download" class="icon-sm"></i>
+                      <span>Generar certificado</span>
+                    </button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 2 -->
+            <tr data-status="active" data-id="2">
+              <td>
+                <input type="checkbox" class="row-checkbox" style="accent-color: var(--p-primary-500);">
+              </td>
+              <td><span class="font-medium">María López Sánchez</span></td>
+              <td><span class="text-muted">Diseñadora UX/UI</span></td>
+              <td><span class="text-muted">9988776655</span></td>
+              <td><span class="font-medium">$ 9,500,000</span></td>
+              <td>
+                <span class="status-dot status-active"></span>
+                <span>Activo</span>
+              </td>
+              <td>
+                <div class="flex items-center gap-2">
+                  <button class="btn btn-ghost btn-icon btn-sm expand-btn" data-row="2">
+                    <i data-lucide="chevron-down" class="icon-sm"></i>
+                  </button>
+                  <div class="dropdown">
+                    <button class="btn btn-ghost btn-icon btn-sm dropdown-toggle">
+                      <i data-lucide="more-vertical" class="icon-sm"></i>
+                    </button>
+                    <div class="dropdown-content">
+                      <a href="employee_profile_1.html" class="dropdown-item">
+                        <i data-lucide="eye" class="icon-sm"></i>
+                        <span>Ver perfil</span>
+                      </a>
+                      <div class="dropdown-item">
+                        <i data-lucide="edit" class="icon-sm"></i>
+                        <span>Editar</span>
+                      </div>
+                      <div class="dropdown-item">
+                        <i data-lucide="file-text" class="icon-sm"></i>
+                        <span>Generar certificado</span>
+                      </div>
+                      <div class="dropdown-item">
+                        <i data-lucide="user-x" class="icon-sm"></i>
+                        <span>Desactivar</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <!-- Expanded Row 2 -->
+            <tr class="expanded-row" id="expanded-2" style="display: none;">
+              <td colspan="7">
+                <div class="expanded-content">
+                  <div class="expanded-info">
+                    <div class="info-item">
+                      <i data-lucide="mail" class="icon-sm text-muted"></i>
+                      <span>maria.lopez@empresa.com</span>
+                    </div>
+                    <div class="info-item">
+                      <i data-lucide="phone" class="icon-sm text-muted"></i>
+                      <span>+57 312 9876543</span>
+                    </div>
+                    <div class="info-item">
+                      <i data-lucide="calendar" class="icon-sm text-muted"></i>
+                      <span>Ingreso: 20 Mar 2022</span>
+                    </div>
+                    <div class="info-item">
+                      <i data-lucide="file-text" class="icon-sm text-muted"></i>
+                      <span>Contrato: Indefinido</span>
+                    </div>
+                  </div>
+                  <div class="flex gap-2">
+                    <a href="employee_profile_1.html" class="btn btn-outline btn-sm">
+                      <i data-lucide="user" class="icon-sm"></i>
+                      <span>Ver perfil completo</span>
+                    </a>
+                    <button class="btn btn-outline btn-sm">
+                      <i data-lucide="edit" class="icon-sm"></i>
+                      <span>Editar</span>
+                    </button>
+                    <button class="btn btn-outline btn-sm">
+                      <i data-lucide="download" class="icon-sm"></i>
+                      <span>Generar certificado</span>
+                    </button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 3 -->
+            <tr data-status="active" data-id="3">
+              <td>
+                <input type="checkbox" class="row-checkbox" style="accent-color: var(--p-primary-500);">
+              </td>
+              <td><span class="font-medium">Carlos Gómez Ramírez</span></td>
+              <td><span class="text-muted">Gerente de Proyectos</span></td>
+              <td><span class="text-muted">5544332211</span></td>
+              <td><span class="font-medium">$ 15,000,000</span></td>
+              <td>
+                <span class="status-dot status-active"></span>
+                <span>Activo</span>
+              </td>
+              <td>
+                <div class="flex items-center gap-2">
+                  <button class="btn btn-ghost btn-icon btn-sm expand-btn" data-row="3">
+                    <i data-lucide="chevron-down" class="icon-sm"></i>
+                  </button>
+                  <div class="dropdown">
+                    <button class="btn btn-ghost btn-icon btn-sm dropdown-toggle">
+                      <i data-lucide="more-vertical" class="icon-sm"></i>
+                    </button>
+                    <div class="dropdown-content">
+                      <a href="employee_profile_1.html" class="dropdown-item">
+                        <i data-lucide="eye" class="icon-sm"></i>
+                        <span>Ver perfil</span>
+                      </a>
+                      <div class="dropdown-item">
+                        <i data-lucide="edit" class="icon-sm"></i>
+                        <span>Editar</span>
+                      </div>
+                      <div class="dropdown-item">
+                        <i data-lucide="file-text" class="icon-sm"></i>
+                        <span>Generar certificado</span>
+                      </div>
+                      <div class="dropdown-item">
+                        <i data-lucide="user-x" class="icon-sm"></i>
+                        <span>Desactivar</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <!-- Expanded Row 3 -->
+            <tr class="expanded-row" id="expanded-3" style="display: none;">
+              <td colspan="7">
+                <div class="expanded-content">
+                  <div class="expanded-info">
+                    <div class="info-item">
+                      <i data-lucide="mail" class="icon-sm text-muted"></i>
+                      <span>carlos.gomez@empresa.com</span>
+                    </div>
+                    <div class="info-item">
+                      <i data-lucide="phone" class="icon-sm text-muted"></i>
+                      <span>+57 300 1122334</span>
+                    </div>
+                    <div class="info-item">
+                      <i data-lucide="calendar" class="icon-sm text-muted"></i>
+                      <span>Ingreso: 10 Jun 2020</span>
+                    </div>
+                    <div class="info-item">
+                      <i data-lucide="file-text" class="icon-sm text-muted"></i>
+                      <span>Contrato: Indefinido</span>
+                    </div>
+                  </div>
+                  <div class="flex gap-2">
+                    <a href="employee_profile_1.html" class="btn btn-outline btn-sm">
+                      <i data-lucide="user" class="icon-sm"></i>
+                      <span>Ver perfil completo</span>
+                    </a>
+                    <button class="btn btn-outline btn-sm">
+                      <i data-lucide="edit" class="icon-sm"></i>
+                      <span>Editar</span>
+                    </button>
+                    <button class="btn btn-outline btn-sm">
+                      <i data-lucide="download" class="icon-sm"></i>
+                      <span>Generar certificado</span>
+                    </button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 4 - Inactive -->
+            <tr data-status="inactive" data-id="4">
+              <td>
+                <input type="checkbox" class="row-checkbox" style="accent-color: var(--p-primary-500);">
+              </td>
+              <td><span class="font-medium">Ana Torres Medina</span></td>
+              <td><span class="text-muted">Desarrolladora Frontend</span></td>
+              <td><span class="text-muted">7766554433</span></td>
+              <td><span class="font-medium">$ 8,500,000</span></td>
+              <td>
+                <span class="status-dot status-inactive"></span>
+                <span>Inactivo</span>
+              </td>
+              <td>
+                <div class="flex items-center gap-2">
+                  <button class="btn btn-ghost btn-icon btn-sm expand-btn" data-row="4">
+                    <i data-lucide="chevron-down" class="icon-sm"></i>
+                  </button>
+                  <div class="dropdown">
+                    <button class="btn btn-ghost btn-icon btn-sm dropdown-toggle">
+                      <i data-lucide="more-vertical" class="icon-sm"></i>
+                    </button>
+                    <div class="dropdown-content">
+                      <a href="employee_profile_1.html" class="dropdown-item">
+                        <i data-lucide="eye" class="icon-sm"></i>
+                        <span>Ver perfil</span>
+                      </a>
+                      <div class="dropdown-item">
+                        <i data-lucide="user-check" class="icon-sm"></i>
+                        <span>Reactivar</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <!-- Expanded Row 4 -->
+            <tr class="expanded-row" id="expanded-4" style="display: none;">
+              <td colspan="7">
+                <div class="expanded-content">
+                  <div class="expanded-info">
+                    <div class="info-item">
+                      <i data-lucide="mail" class="icon-sm text-muted"></i>
+                      <span>ana.torres@empresa.com</span>
+                    </div>
+                    <div class="info-item">
+                      <i data-lucide="phone" class="icon-sm text-muted"></i>
+                      <span>+57 315 5544332</span>
+                    </div>
+                    <div class="info-item">
+                      <i data-lucide="calendar" class="icon-sm text-muted"></i>
+                      <span>Ingreso: 05 Feb 2024</span>
+                    </div>
+                    <div class="info-item">
+                      <i data-lucide="file-text" class="icon-sm text-muted"></i>
+                      <span>Contrato: Término Fijo</span>
+                    </div>
+                  </div>
+                  <div class="flex gap-2">
+                    <a href="#" class="btn btn-outline btn-sm">
+                      <i data-lucide="user" class="icon-sm"></i>
+                      <span>Ver perfil completo</span>
+                    </button>
+                    <button class="btn btn-outline btn-sm">
+                      <i data-lucide="user-check" class="icon-sm"></i>
+                      <span>Reactivar empleado</span>
+                    </button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="flex items-center justify-between mt-6">
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-muted">Items por página:</span>
+          <select class="form-input" style="width: auto; padding: 0.375rem 2rem 0.375rem 0.75rem;">
+            <option>10</option>
+            <option>25</option>
+            <option>50</option>
+            <option>100</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-muted">1-10 de 45</span>
+          <div class="flex items-center gap-1">
+            <button class="btn btn-ghost btn-icon btn-sm" disabled>
+              <i data-lucide="chevron-left" class="icon-sm"></i>
+            </button>
+            <button class="btn btn-ghost btn-sm" style="background: var(--p-primary-500); color: white;">1</button>
+            <button class="btn btn-ghost btn-sm">2</button>
+            <button class="btn btn-ghost btn-sm">3</button>
+            <button class="btn btn-ghost btn-sm">4</button>
+            <button class="btn btn-ghost btn-sm">5</button>
+            <button class="btn btn-ghost btn-icon btn-sm">
+              <i data-lucide="chevron-right" class="icon-sm"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Sidebar toggle
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    menuToggle.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+      sidebarOverlay.classList.toggle('show');
+    });
+
+    sidebarOverlay.addEventListener('click', function() {
+      sidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('show');
+    });
+
+    // Stat cards filter
+    const statCards = document.querySelectorAll('.stat-card');
+    const tableRows = document.querySelectorAll('tbody tr[data-status]');
+
+    statCards.forEach(card => {
+      card.addEventListener('click', function() {
+        const filter = this.dataset.filter;
+
+        // Update active state
+        statCards.forEach(c => c.classList.remove('active'));
+        this.classList.add('active');
+
+        // Filter table rows (including their expanded rows)
+        tableRows.forEach(row => {
+          const expandedRow = row.nextElementSibling;
+          if (filter === 'all') {
+            row.style.display = '';
+          } else {
+            row.style.display = row.dataset.status === filter ? '' : 'none';
+            if (expandedRow && expandedRow.classList.contains('expanded-row')) {
+              expandedRow.style.display = row.dataset.status === filter ? '' : 'none';
+            }
+          }
+        });
+      });
+    });
+
+    // Select all checkbox
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+
+    selectAllCheckbox.addEventListener('change', function() {
+      rowCheckboxes.forEach(checkbox => {
+        checkbox.checked = this.checked;
+        const row = checkbox.closest('tr');
+        if (this.checked) {
+          row.classList.add('selected');
+        } else {
+          row.classList.remove('selected');
+        }
+      });
+    });
+
+    rowCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', function() {
+        const row = this.closest('tr');
+        if (this.checked) {
+          row.classList.add('selected');
+        } else {
+          row.classList.remove('selected');
+        }
+
+        // Update select all checkbox
+        const allChecked = Array.from(rowCheckboxes).every(cb => cb.checked);
+        selectAllCheckbox.checked = allChecked;
+      });
+    });
+
+    // Expandable rows
+    const expandButtons = document.querySelectorAll('.expand-btn');
+    expandButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        const rowId = this.dataset.row;
+        const expandedRow = document.getElementById(`expanded-${rowId}`);
+        const icon = this.querySelector('i');
+
+        if (expandedRow.style.display === 'none' || expandedRow.style.display === '') {
+          expandedRow.style.display = 'table-row';
+          icon.setAttribute('data-lucide', 'chevron-up');
+        } else {
+          expandedRow.style.display = 'none';
+          icon.setAttribute('data-lucide', 'chevron-down');
+        }
+        lucide.createIcons();
+      });
+    });
+
+    // Dropdown menus
+    const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
+    dropdownToggles.forEach(toggle => {
+      toggle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const dropdown = this.nextElementSibling;
+
+        // Close other dropdowns
+        document.querySelectorAll('.dropdown-content').forEach(d => {
+          if (d !== dropdown) d.classList.remove('show');
+        });
+
+        dropdown.classList.toggle('show');
+      });
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function() {
+      document.querySelectorAll('.dropdown-content').forEach(d => {
+        d.classList.remove('show');
+      });
+    });
+
+    // Prevent dropdown from closing when clicking inside
+    document.querySelectorAll('.dropdown-content').forEach(dropdown => {
+      dropdown.addEventListener('click', function(e) {
+        e.stopPropagation();
+      });
+    });
+  </script>
+
+</body>
+</html>

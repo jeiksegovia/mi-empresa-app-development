@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Completar Evaluación - Mi Empresa App</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: -280px;
+      width: 280px;
+      height: 100vh;
+      background: var(--surface-card);
+      border-right: 1px solid var(--border);
+      transition: left 0.3s ease-out;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .sidebar.open {
+      left: 0;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+      z-index: 99;
+    }
+
+    .sidebar-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius);
+      transition: all 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--foreground);
+    }
+
+    .sidebar-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .sidebar-item.active {
+      background: var(--p-primary-500);
+      color: white;
+    }
+
+    .main-content {
+      min-height: 100vh;
+      background: var(--background);
+    }
+
+    /* Breadcrumb */
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      font-size: var(--font-size-sm);
+      color: var(--text-muted);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .breadcrumb a {
+      color: var(--p-primary-500);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .breadcrumb a:hover {
+      color: var(--p-primary-600);
+    }
+
+    /* Two Column Layout */
+    .two-column {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: var(--spacing-xl);
+    }
+
+    @media (max-width: 968px) {
+      .two-column {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Patient Info Card */
+    .patient-card {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-lg);
+      padding: var(--spacing-xl);
+    }
+
+    .patient-photo {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: var(--surface-hover);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* Upload Area */
+    .upload-area {
+      border: 3px dashed var(--border);
+      border-radius: var(--radius);
+      padding: var(--spacing-3xl);
+      text-align: center;
+      background: var(--surface-hover);
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+
+    .upload-area:hover {
+      border-color: var(--p-primary-500);
+      background: rgba(139, 92, 246, 0.05);
+    }
+
+    .upload-area.dragover {
+      border-color: var(--p-primary-500);
+      background: rgba(139, 92, 246, 0.1);
+    }
+
+    /* Step Card */
+    .step-card {
+      position: relative;
+      padding-left: var(--spacing-2xl);
+    }
+
+    .step-number {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--p-primary-500);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: var(--font-size-sm);
+    }
+
+    .badge-tipo {
+      display: inline-flex;
+      align-items: center;
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border-radius: var(--radius);
+      font-size: var(--font-size-xs);
+      font-weight: 600;
+    }
+
+    .badge-valoracion {
+      background: rgba(139, 92, 246, 0.2);
+      color: var(--p-primary-400);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+
+    .badge-nutricion {
+      background: rgba(34, 197, 94, 0.2);
+      color: #22c55e;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar" id="sidebar">
+    <div style="padding: var(--spacing-xl);">
+      <!-- Logo + Company Name -->
+      <div class="flex items-center gap-3 mb-8">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: var(--p-primary-500);">
+          <i data-lucide="building-2" class="icon-lg" style="color: white;"></i>
+        </div>
+        <div>
+          <h2 class="font-semibold text-base">Mi Empresa</h2>
+          <p class="text-xs text-muted">jeik-sa</p>
+        </div>
+      </div>
+
+      <!-- Navigation Items -->
+      <nav>
+        <a href="dashboard_1.html" class="sidebar-item">
+          <i data-lucide="home" class="icon"></i>
+          <span>Inicio</span>
+        </a>
+        <a href="employees_list_1.html" class="sidebar-item">
+          <i data-lucide="users" class="icon"></i>
+          <span>Empleados</span>
+        </a>
+        <a href="patients_list_1.html" class="sidebar-item active">
+          <i data-lucide="user" class="icon"></i>
+          <span>Pacientes</span>
+        </a>
+        <a href="instruments_list_1.html" class="sidebar-item">
+          <i data-lucide="clipboard-list" class="icon"></i>
+          <span>Instrumentos</span>
+        </a>
+        <a href="certificates-v2_1.html" class="sidebar-item">
+          <i data-lucide="file-check" class="icon"></i>
+          <span>Certificados</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="wallet" class="icon"></i>
+          <span>Nómina</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="bar-chart" class="icon"></i>
+          <span>Reportes</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="settings" class="icon"></i>
+          <span>Configuración</span>
+        </a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Header Bar -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <!-- Left Section -->
+        <div class="flex items-center gap-4">
+          <button id="menuToggle" class="btn btn-ghost btn-icon">
+            <i data-lucide="menu" class="icon"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Completar Evaluación</h1>
+        </div>
+
+        <!-- Right Section -->
+        <div class="flex items-center gap-3">
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+          </button>
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+          <span class="text-sm font-medium hidden md:inline">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <div class="container" style="padding: var(--spacing-xl); max-width: 1400px; margin: 0 auto;">
+
+      <!-- Back Button -->
+      <div style="margin-bottom: var(--spacing-lg);">
+        <a href="patient_profile_1.html" class="btn btn-ghost" style="padding-left: 0;">
+          <i data-lucide="arrow-left" class="icon"></i>
+          <span>Volver al perfil del paciente</span>
+        </a>
+      </div>
+
+      <!-- Breadcrumb -->
+      <div class="breadcrumb">
+        <a href="patients_list_1.html">Pacientes</a>
+        <i data-lucide="chevron-right" class="icon-sm"></i>
+        <a href="patient_profile_1.html">Pedro García</a>
+        <i data-lucide="chevron-right" class="icon-sm"></i>
+        <span>Completar Ficha</span>
+      </div>
+
+      <!-- Page Title -->
+      <div class="mb-8">
+        <h2 class="text-3xl font-bold mb-2">Completar Evaluación</h2>
+        <p class="text-muted">Siga los pasos para completar la evaluación del paciente</p>
+      </div>
+
+      <!-- Two Column Layout -->
+      <div class="two-column">
+        <!-- Left Column: Patient & Instrument Info -->
+        <div>
+          <!-- Patient Info Card -->
+          <div class="card mb-6">
+            <div class="patient-card">
+              <div class="patient-photo">
+                <i data-lucide="user" class="icon-xl" style="color: var(--p-primary-500);"></i>
+              </div>
+              <div>
+                <h3 class="font-bold text-lg mb-1">Pedro García</h3>
+                <p class="text-sm text-muted">CC 1.234.567.890</p>
+                <p class="text-sm text-muted">72 años</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Instrument Info Card -->
+          <div class="card" style="padding: var(--spacing-xl);">
+            <div class="flex items-start gap-3 mb-4">
+              <i data-lucide="clipboard-list" class="icon-lg" style="color: var(--p-primary-500);"></i>
+              <div>
+                <h3 class="font-bold mb-1">Ficha de Valoración General</h3>
+                <p class="text-xs text-muted mb-2">Código: 1.2.1</p>
+                <span class="badge-tipo badge-valoracion">Valoración</span>
+              </div>
+            </div>
+            <div class="text-sm text-muted" style="margin-top: var(--spacing-md); padding-top: var(--spacing-md); border-top: 1px solid var(--border);">
+              <p class="mb-1"><strong>Periodicidad:</strong> Anual</p>
+              <p><strong>Responsable:</strong> Gerontóloga</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Workflow Steps -->
+        <div>
+          <!-- Step 1: Download Template -->
+          <div class="card mb-6" style="padding: var(--spacing-xl);">
+            <div class="step-card">
+              <div class="step-number">1</div>
+              <h3 class="font-bold text-lg mb-3">Descargar Plantilla</h3>
+              <p class="text-sm text-muted mb-4">Descargue la plantilla de Excel para completar la evaluación offline</p>
+              <button class="btn btn-primary">
+                <i data-lucide="download" class="icon-sm"></i>
+                <span>Descargar Plantilla Excel</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 2: Complete Form -->
+          <div class="card mb-6" style="padding: var(--spacing-xl);">
+            <div class="step-card">
+              <div class="step-number">2</div>
+              <h3 class="font-bold text-lg mb-3">Completar la Ficha</h3>
+              <p class="text-sm text-muted">Complete la plantilla en Excel con los datos del paciente. Asegúrese de llenar todos los campos requeridos antes de continuar.</p>
+            </div>
+          </div>
+
+          <!-- Step 3: Upload File -->
+          <div class="card mb-6" style="padding: var(--spacing-xl);">
+            <div class="step-card">
+              <div class="step-number">3</div>
+              <h3 class="font-bold text-lg mb-4">Subir Archivo Completado</h3>
+
+              <div class="upload-area" id="uploadArea">
+                <i data-lucide="upload-cloud" class="icon-xl mb-3" style="color: var(--p-primary-500); width: 64px; height: 64px; margin: 0 auto;"></i>
+                <p class="font-semibold text-lg mb-1">Arrastra el archivo aquí</p>
+                <p class="text-sm text-muted mb-3">o haz clic para seleccionar</p>
+                <p class="text-xs text-muted">Formatos aceptados: .xlsx, .xls (Máx. 10 MB)</p>
+                <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+              </div>
+
+              <div id="fileInfo" class="mt-4" style="display: none;">
+                <div class="flex items-center justify-between p-4 rounded" style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3);">
+                  <div class="flex items-center gap-3">
+                    <i data-lucide="file-spreadsheet" class="icon-lg" style="color: #22c55e;"></i>
+                    <div>
+                      <p class="font-semibold" id="fileName"></p>
+                      <p class="text-xs text-muted" id="fileSize"></p>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-ghost btn-icon" id="removeFile">
+                    <i data-lucide="x" class="icon"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 4: Additional Information -->
+          <div class="card mb-8" style="padding: var(--spacing-xl);">
+            <div class="step-card">
+              <div class="step-number">4</div>
+              <h3 class="font-bold text-lg mb-4">Información Adicional</h3>
+
+              <div class="mb-4">
+                <label class="form-label">Fecha de evaluación</label>
+                <input type="date" class="form-input" value="2024-01-10">
+              </div>
+
+              <div>
+                <label class="form-label">Notas opcionales</label>
+                <textarea class="form-input" rows="4" placeholder="Agregue cualquier observación o comentario relevante..."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex items-center justify-end gap-3">
+            <button type="button" class="btn btn-outline" onclick="window.location.href='patient_profile_1.html'">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary">
+              <i data-lucide="save" class="icon-sm"></i>
+              <span>Guardar Evaluación</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Sidebar toggle
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    menuToggle.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+      sidebarOverlay.classList.toggle('show');
+    });
+
+    sidebarOverlay.addEventListener('click', function() {
+      sidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('show');
+    });
+
+    // File upload functionality
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const removeFile = document.getElementById('removeFile');
+
+    uploadArea.addEventListener('click', function() {
+      fileInput.click();
+    });
+
+    uploadArea.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', function() {
+      uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', function(e) {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleFile(files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', function() {
+      if (fileInput.files.length > 0) {
+        handleFile(fileInput.files[0]);
+      }
+    });
+
+    removeFile.addEventListener('click', function() {
+      fileInput.value = '';
+      fileInfo.style.display = 'none';
+      uploadArea.style.display = 'block';
+    });
+
+    function handleFile(file) {
+      fileName.textContent = file.name;
+      fileSize.textContent = formatFileSize(file.size);
+      uploadArea.style.display = 'none';
+      fileInfo.style.display = 'block';
+      lucide.createIcons();
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mi Empresa App - Bienvenido</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    /* Custom animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0px);
+      }
+      50% {
+        transform: translateY(-10px);
+      }
+    }
+
+    .animate-fade-in-up {
+      animation: fadeInUp 0.6s ease-out;
+    }
+
+    .animate-float {
+      animation: float 3s ease-in-out infinite;
+    }
+
+    .feature-card {
+      transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 16px -2px rgb(0 0 0 / 0.2);
+    }
+
+    .hero-section {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .gradient-bg {
+      background: linear-gradient(135deg, var(--p-primary-950) 0%, var(--p-primary-800) 50%, var(--p-primary-600) 100%);
+    }
+  </style>
+</head>
+<body class="gradient-bg">
+
+  <!-- Hero Section -->
+  <div class="hero-section">
+    <div class="container container-sm text-center animate-fade-in-up">
+
+      <!-- Logo -->
+      <div class="mb-8 animate-float">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-full" style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px);">
+          <i data-lucide="building-2" class="icon-2xl" style="color: white;"></i>
+        </div>
+      </div>
+
+      <!-- Title -->
+      <h1 class="text-4xl font-bold mb-4" style="color: white;">Mi Empresa App</h1>
+      <p class="text-xl mb-2" style="color: var(--p-primary-200);">Gestiona tu equipo de forma eficiente</p>
+      <p class="text-base mb-12" style="color: var(--p-primary-300);">Control total de personal, nómina, certificados y más</p>
+
+      <!-- CTA Button -->
+      <div class="mb-12">
+        <a href="./login_1.html" class="btn btn-lg" style="background: white; color: var(--p-primary-700); font-weight: 600; padding: 1rem 3rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);">
+          Iniciar sesión
+        </a>
+      </div>
+
+      <!-- Info Text -->
+      <p class="text-sm mb-12" style="color: var(--p-primary-300);">
+        ¿Primera vez? <a href="#" class="font-medium" style="color: white; text-decoration: underline;">Contáctanos</a>
+      </p>
+
+      <!-- Feature Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-lg mt-12">
+
+        <!-- Feature 1: Certificación Empresarial -->
+        <div class="card feature-card" style="background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border-color: rgba(255, 255, 255, 0.1);">
+          <div class="flex flex-col items-center text-center">
+            <div class="mb-4">
+              <i data-lucide="file-check" class="icon-xl" style="color: var(--p-primary-300);"></i>
+            </div>
+            <h3 class="font-semibold mb-2" style="color: white;">Certificación Empresarial</h3>
+            <p class="text-sm" style="color: var(--p-primary-300);">
+              Gestiona documentos regulatorios: RUT, Cámara de Comercio, permisos sanitarios. Alertas 30 días antes del vencimiento para evitar sanciones.
+            </p>
+          </div>
+        </div>
+
+        <!-- Feature 2: Gestión de Personal -->
+        <div class="card feature-card" style="background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border-color: rgba(255, 255, 255, 0.1);">
+          <div class="flex flex-col items-center text-center">
+            <div class="mb-4">
+              <i data-lucide="users" class="icon-xl" style="color: var(--p-primary-300);"></i>
+            </div>
+            <h3 class="font-semibold mb-2" style="color: white;">Gestión de Personal</h3>
+            <p class="text-sm" style="color: var(--p-primary-300);">
+              Administra empleados, contratos y certificaciones. Plantillas legales pre-cargadas como sugerencias. Cada empresa valida y ajusta según necesidades.
+            </p>
+          </div>
+        </div>
+
+        <!-- Feature 3: Gestión de Clientes -->
+        <div class="card feature-card" style="background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border-color: rgba(255, 255, 255, 0.1);">
+          <div class="flex flex-col items-center text-center">
+            <div class="mb-4">
+              <i data-lucide="user-check" class="icon-xl" style="color: var(--p-primary-300);"></i>
+            </div>
+            <h3 class="font-semibold mb-2" style="color: white;">Gestión de Clientes</h3>
+            <p class="text-sm" style="color: var(--p-primary-300);">
+              Centraliza información de clientes: historiales, notas y seguimiento organizado desde cualquier dispositivo.
+            </p>
+          </div>
+        </div>
+
+        <!-- Feature 4: Nómina y Finanzas -->
+        <div class="card feature-card" style="background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border-color: rgba(255, 255, 255, 0.1);">
+          <div class="flex flex-col items-center text-center">
+            <div class="mb-4">
+              <i data-lucide="calculator" class="icon-xl" style="color: var(--p-primary-300);"></i>
+            </div>
+            <h3 class="font-semibold mb-2" style="color: white;">Nómina y Finanzas</h3>
+            <p class="text-sm" style="color: var(--p-primary-300);">
+              Cálculo de salarios, deducciones y comprobantes. No reemplaza sistemas contables. Obligaciones tributarias deben gestionarse con contador público.
+            </p>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+  </script>
+
+</body>
+</html>

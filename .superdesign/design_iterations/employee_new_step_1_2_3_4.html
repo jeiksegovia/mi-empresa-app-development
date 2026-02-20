@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nuevo Empleado - Paso 4: Nómina | Mi Empresa</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    body {
+      background: var(--surface-ground) !important;
+      color: var(--text-color) !important;
+      font-family: var(--font-family) !important;
+      min-height: 100vh !important;
+    }
+
+    .wizard-container {
+      max-width: 1000px !important;
+      margin: 0 auto !important;
+      padding: var(--spacing-2xl) var(--spacing-lg) !important;
+    }
+
+    .wizard-header {
+      margin-bottom: var(--spacing-2xl) !important;
+    }
+
+    .wizard-title {
+      font-size: 2rem !important;
+      font-weight: 700 !important;
+      color: var(--text-color) !important;
+      margin-bottom: var(--spacing-xl) !important;
+    }
+
+    /* Stepper */
+    .stepper {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      margin-bottom: var(--spacing-2xl) !important;
+      position: relative !important;
+    }
+
+    .stepper::before {
+      content: '' !important;
+      position: absolute !important;
+      top: 20px !important;
+      left: 0 !important;
+      right: 0 !important;
+      height: 2px !important;
+      background: var(--surface-border) !important;
+      z-index: 0 !important;
+    }
+
+    .step {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: var(--spacing-sm) !important;
+      position: relative !important;
+      z-index: 1 !important;
+      flex: 1 !important;
+    }
+
+    .step-circle {
+      width: 40px !important;
+      height: 40px !important;
+      border-radius: 50% !important;
+      background: var(--surface-card) !important;
+      border: 2px solid var(--surface-border) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-weight: 600 !important;
+      color: var(--text-color-secondary) !important;
+      transition: all 0.3s ease !important;
+    }
+
+    .step.completed .step-circle {
+      background: var(--p-primary-500) !important;
+      border-color: var(--p-primary-500) !important;
+      color: white !important;
+    }
+
+    .step.active .step-circle {
+      background: var(--p-primary-500) !important;
+      border-color: var(--p-primary-500) !important;
+      color: white !important;
+      box-shadow: 0 0 0 4px var(--p-primary-500-alpha) !important;
+    }
+
+    .step-label {
+      font-size: 0.875rem !important;
+      color: var(--text-color-secondary) !important;
+      text-align: center !important;
+    }
+
+    .step.active .step-label,
+    .step.completed .step-label {
+      color: var(--text-color) !important;
+      font-weight: 500 !important;
+    }
+
+    /* Section Cards */
+    .section-card {
+      background: var(--surface-card) !important;
+      border: 1px solid var(--surface-border) !important;
+      border-radius: var(--border-radius) !important;
+      padding: var(--spacing-xl) !important;
+      margin-bottom: var(--spacing-xl) !important;
+    }
+
+    .section-header {
+      display: flex !important;
+      align-items: center !important;
+      gap: var(--spacing-md) !important;
+      margin-bottom: var(--spacing-xl) !important;
+    }
+
+    .section-icon {
+      width: 28px !important;
+      height: 28px !important;
+      color: var(--p-primary-500) !important;
+    }
+
+    .section-title {
+      font-size: 1.25rem !important;
+      font-weight: 600 !important;
+      color: var(--text-color) !important;
+    }
+
+    /* Form Grid */
+    .form-grid {
+      display: grid !important;
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: var(--spacing-lg) !important;
+      margin-bottom: var(--spacing-lg) !important;
+    }
+
+    .form-group {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: var(--spacing-xs) !important;
+    }
+
+    .form-label {
+      font-size: 0.875rem !important;
+      font-weight: 500 !important;
+      color: var(--text-color) !important;
+    }
+
+    .form-label .required {
+      color: var(--p-red-500) !important;
+    }
+
+    /* Salary Display */
+    .salary-display {
+      background: var(--surface-ground) !important;
+      border: 1px solid var(--surface-border) !important;
+      border-radius: var(--border-radius) !important;
+      padding: var(--spacing-lg) !important;
+      margin-bottom: var(--spacing-xl) !important;
+    }
+
+    .salary-amount {
+      font-size: 1.5rem !important;
+      font-weight: 700 !important;
+      color: var(--p-primary-500) !important;
+    }
+
+    .salary-note {
+      font-size: 0.75rem !important;
+      color: var(--text-color-secondary) !important;
+      margin-top: var(--spacing-xs) !important;
+    }
+
+    /* Benefits List */
+    .benefits-list {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: var(--spacing-md) !important;
+      margin-bottom: var(--spacing-lg) !important;
+    }
+
+    .benefit-item {
+      display: flex !important;
+      align-items: center !important;
+      gap: var(--spacing-md) !important;
+      padding: var(--spacing-md) !important;
+      background: var(--surface-ground) !important;
+      border: 1px solid var(--surface-border) !important;
+      border-radius: var(--border-radius) !important;
+    }
+
+    .benefit-label {
+      flex: 1 !important;
+      font-size: 0.875rem !important;
+      font-weight: 500 !important;
+      color: var(--text-color) !important;
+    }
+
+    .benefit-input {
+      width: 200px !important;
+    }
+
+    /* Currency Input */
+    .currency-input-wrapper {
+      position: relative !important;
+    }
+
+    .currency-symbol {
+      position: absolute !important;
+      left: 12px !important;
+      top: 50% !important;
+      transform: translateY(-50%) !important;
+      color: var(--text-color-secondary) !important;
+      font-weight: 500 !important;
+    }
+
+    .currency-input {
+      padding-left: 32px !important;
+    }
+
+    /* Total Display */
+    .total-display {
+      background: var(--p-primary-500-alpha) !important;
+      border: 2px solid var(--p-primary-500) !important;
+      border-radius: var(--border-radius) !important;
+      padding: var(--spacing-lg) !important;
+      margin-top: var(--spacing-lg) !important;
+    }
+
+    .total-label {
+      font-size: 0.875rem !important;
+      font-weight: 500 !important;
+      color: var(--text-color) !important;
+      margin-bottom: var(--spacing-xs) !important;
+    }
+
+    .total-amount {
+      font-size: 1.75rem !important;
+      font-weight: 700 !important;
+      color: var(--p-primary-500) !important;
+    }
+
+    /* Deductions Section */
+    .auto-deductions {
+      background: var(--surface-ground) !important;
+      border: 1px solid var(--surface-border) !important;
+      border-radius: var(--border-radius) !important;
+      padding: var(--spacing-lg) !important;
+      margin-bottom: var(--spacing-lg) !important;
+    }
+
+    .auto-deductions-title {
+      font-size: 0.875rem !important;
+      font-weight: 600 !important;
+      color: var(--text-color) !important;
+      margin-bottom: var(--spacing-md) !important;
+    }
+
+    .deduction-line {
+      display: flex !important;
+      justify-content: space-between !important;
+      padding: var(--spacing-sm) 0 !important;
+      font-size: 0.875rem !important;
+    }
+
+    .deduction-label {
+      color: var(--text-color-secondary) !important;
+    }
+
+    .deduction-amount {
+      font-weight: 600 !important;
+      color: var(--text-color) !important;
+    }
+
+    /* Entry Cards for Additional Deductions */
+    .entry-card {
+      background: var(--surface-ground) !important;
+      border: 1px solid var(--surface-border) !important;
+      border-radius: var(--border-radius) !important;
+      padding: var(--spacing-lg) !important;
+      margin-bottom: var(--spacing-md) !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: var(--spacing-md) !important;
+    }
+
+    .entry-input {
+      flex: 1 !important;
+    }
+
+    .entry-amount {
+      width: 180px !important;
+    }
+
+    .delete-btn {
+      background: transparent !important;
+      border: none !important;
+      color: var(--p-red-500) !important;
+      cursor: pointer !important;
+      padding: var(--spacing-xs) !important;
+      border-radius: var(--border-radius) !important;
+      display: flex !important;
+      align-items: center !important;
+      transition: all 0.2s ease !important;
+    }
+
+    .delete-btn:hover {
+      background: var(--p-red-500-alpha) !important;
+    }
+
+    .delete-btn i {
+      width: 18px !important;
+      height: 18px !important;
+    }
+
+    /* Add Button */
+    .add-btn {
+      background: transparent !important;
+      border: 2px dashed var(--surface-border) !important;
+      color: var(--p-primary-500) !important;
+      padding: var(--spacing-md) var(--spacing-lg) !important;
+      border-radius: var(--border-radius) !important;
+      cursor: pointer !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: var(--spacing-sm) !important;
+      font-weight: 500 !important;
+      transition: all 0.2s ease !important;
+      width: 100% !important;
+    }
+
+    .add-btn:hover {
+      background: var(--p-primary-500-alpha) !important;
+      border-color: var(--p-primary-500) !important;
+    }
+
+    .add-btn i {
+      width: 20px !important;
+      height: 20px !important;
+    }
+
+    /* Net Pay Display */
+    .net-pay-display {
+      background: var(--p-green-500-alpha) !important;
+      border: 2px solid var(--p-green-500) !important;
+      border-radius: var(--border-radius) !important;
+      padding: var(--spacing-lg) !important;
+      margin-top: var(--spacing-md) !important;
+    }
+
+    .net-pay-label {
+      font-size: 0.875rem !important;
+      font-weight: 500 !important;
+      color: var(--text-color) !important;
+      margin-bottom: var(--spacing-xs) !important;
+    }
+
+    .net-pay-amount {
+      font-size: 1.75rem !important;
+      font-weight: 700 !important;
+      color: var(--p-green-600) !important;
+    }
+
+    /* Navigation Buttons */
+    .nav-buttons {
+      display: flex !important;
+      justify-content: space-between !important;
+      margin-top: var(--spacing-2xl) !important;
+      gap: var(--spacing-lg) !important;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .form-grid {
+        grid-template-columns: 1fr !important;
+      }
+
+      .wizard-container {
+        padding: var(--spacing-lg) var(--spacing-md) !important;
+      }
+
+      .benefit-item {
+        flex-direction: column !important;
+        align-items: stretch !important;
+      }
+
+      .benefit-input {
+        width: 100% !important;
+      }
+
+      .entry-amount {
+        width: 100% !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Header -->
+  <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <a href="employees_list_1.html" class="btn btn-ghost btn-icon">
+          <i data-lucide="arrow-left" class="icon"></i>
+        </a>
+        <h1 class="text-xl font-semibold">Empleados > Nuevo empleado</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <button class="btn btn-ghost btn-icon relative">
+          <i data-lucide="bell" class="icon"></i>
+          <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+        </button>
+        <button class="btn btn-ghost btn-icon">
+          <i data-lucide="user-circle" class="icon"></i>
+        </button>
+        <span class="text-sm font-medium hidden md:inline">jeik-sa</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="wizard-container">
+    <!-- Header -->
+    <div class="wizard-header">
+      <h1 class="wizard-title">Nuevo Empleado</h1>
+
+      <!-- Stepper -->
+      <div class="stepper">
+        <div class="step completed">
+          <div class="step-circle">
+            <i data-lucide="check" style="width: 20px; height: 20px;"></i>
+          </div>
+          <span class="step-label">Datos Personales</span>
+        </div>
+        <div class="step completed">
+          <div class="step-circle">
+            <i data-lucide="check" style="width: 20px; height: 20px;"></i>
+          </div>
+          <span class="step-label">Formación</span>
+        </div>
+        <div class="step completed">
+          <div class="step-circle">
+            <i data-lucide="check" style="width: 20px; height: 20px;"></i>
+          </div>
+          <span class="step-label">Contrato y Familia</span>
+        </div>
+        <div class="step active">
+          <div class="step-circle">4</div>
+          <span class="step-label">Nómina</span>
+        </div>
+        <div class="step">
+          <div class="step-circle">5</div>
+          <span class="step-label">Documentos</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Salary Information Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <i data-lucide="dollar-sign" class="section-icon"></i>
+        <h2 class="section-title">Información Salarial</h2>
+      </div>
+
+      <div class="salary-display">
+        <div style="font-size: 0.875rem; color: var(--text-color-secondary); margin-bottom: var(--spacing-xs);">
+          Salario Base
+        </div>
+        <div class="salary-amount" id="baseSalaryDisplay">$4,500,000</div>
+        <div class="salary-note">Desde paso anterior - solo lectura</div>
+      </div>
+
+      <div class="benefits-list">
+        <div class="benefit-item">
+          <div class="benefit-label">Auxilio de Transporte</div>
+          <div class="currency-input-wrapper benefit-input">
+            <span class="currency-symbol">$</span>
+            <input type="text" class="form-input currency-input benefit-amount" id="transportAid" value="140,606" data-legal="140606">
+          </div>
+        </div>
+
+        <div class="benefit-item">
+          <div class="benefit-label">Auxilio de Alimentación</div>
+          <div class="currency-input-wrapper benefit-input">
+            <span class="currency-symbol">$</span>
+            <input type="text" class="form-input currency-input benefit-amount" id="foodAid" placeholder="0">
+          </div>
+        </div>
+
+        <div class="benefit-item">
+          <div class="benefit-label">Rodamiento</div>
+          <div class="currency-input-wrapper benefit-input">
+            <span class="currency-symbol">$</span>
+            <input type="text" class="form-input currency-input benefit-amount" id="transportAllowance" placeholder="0">
+          </div>
+        </div>
+
+        <div class="benefit-item">
+          <div class="benefit-label">Bonificación</div>
+          <div class="currency-input-wrapper benefit-input">
+            <span class="currency-symbol">$</span>
+            <input type="text" class="form-input currency-input benefit-amount" id="bonus" placeholder="0">
+          </div>
+        </div>
+      </div>
+
+      <div id="customBenefitsContainer"></div>
+
+      <button class="add-btn" id="addBenefit">
+        <i data-lucide="plus"></i>
+        <span>Agregar otro concepto</span>
+      </button>
+
+      <div class="total-display">
+        <div class="total-label">Total Devengado</div>
+        <div class="total-amount" id="totalEarnings">$4,640,606</div>
+      </div>
+    </div>
+
+    <!-- Bank Information Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <i data-lucide="building-2" class="section-icon"></i>
+        <h2 class="section-title">Información Bancaria</h2>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Banco <span class="required">*</span></label>
+          <select class="form-input" id="bank" required>
+            <option value="">Seleccionar...</option>
+            <option value="bancolombia">Bancolombia</option>
+            <option value="davivienda">Davivienda</option>
+            <option value="bogota">Banco de Bogotá</option>
+            <option value="occidente">Banco de Occidente</option>
+            <option value="bbva">BBVA</option>
+            <option value="popular">Banco Popular</option>
+            <option value="av-villas">AV Villas</option>
+            <option value="agrario">Banco Agrario</option>
+            <option value="colpatria">Scotiabank Colpatria</option>
+            <option value="itau">Itaú</option>
+            <option value="gnb-sudameris">GNB Sudameris</option>
+            <option value="caja-social">Banco Caja Social</option>
+            <option value="nequi">Nequi</option>
+            <option value="daviplata">Daviplata</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Tipo de Cuenta <span class="required">*</span></label>
+          <select class="form-input" id="accountType" required>
+            <option value="">Seleccionar...</option>
+            <option value="ahorros">Ahorros</option>
+            <option value="corriente">Corriente</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Número de Cuenta <span class="required">*</span></label>
+          <input type="text" class="form-input" id="accountNumber" placeholder="Número de cuenta" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Titular de Cuenta</label>
+          <input type="text" class="form-input" id="accountHolder" placeholder="Nombre del titular">
+          <span style="font-size: 0.75rem; color: var(--text-color-secondary);">Si es diferente al empleado</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deductions and Contributions Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <i data-lucide="file-minus" class="section-icon"></i>
+        <h2 class="section-title">Deducciones y Aportes</h2>
+      </div>
+
+      <div class="auto-deductions">
+        <div class="auto-deductions-title">Automáticas (Calculadas por el sistema)</div>
+        <div class="deduction-line">
+          <span class="deduction-label">• Salud (4%)</span>
+          <span class="deduction-amount" id="healthDeduction">$180,000</span>
+        </div>
+        <div class="deduction-line">
+          <span class="deduction-label">• Pensión (4%)</span>
+          <span class="deduction-amount" id="pensionDeduction">$180,000</span>
+        </div>
+        <div class="deduction-line">
+          <span class="deduction-label">• Solidaridad (1%)</span>
+          <span class="deduction-amount" id="solidarityDeduction">$45,000</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom: var(--spacing-md); font-size: 0.875rem; font-weight: 600; color: var(--text-color);">
+        Adicionales
+      </div>
+
+      <div id="additionalDeductionsContainer"></div>
+
+      <button class="add-btn" id="addDeduction">
+        <i data-lucide="plus"></i>
+        <span>Agregar deducción</span>
+      </button>
+
+      <div class="total-display">
+        <div class="total-label">Total Deducciones</div>
+        <div class="total-amount" id="totalDeductions">$405,000</div>
+      </div>
+
+      <div class="net-pay-display">
+        <div class="net-pay-label">Neto a Pagar</div>
+        <div class="net-pay-amount" id="netPay">$4,235,606</div>
+      </div>
+    </div>
+
+    <!-- Social Security Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <i data-lucide="shield" class="section-icon"></i>
+        <h2 class="section-title">Seguridad Social</h2>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">EPS (Salud) <span class="required">*</span></label>
+          <select class="form-input" id="eps" required>
+            <option value="">Seleccionar...</option>
+            <option value="sanitas">Sanitas</option>
+            <option value="sura">Sura</option>
+            <option value="compensar">Compensar</option>
+            <option value="famisanar">Famisanar</option>
+            <option value="salud-total">Salud Total</option>
+            <option value="nueva-eps">Nueva EPS</option>
+            <option value="medimas">Medimás</option>
+            <option value="coomeva">Coomeva</option>
+            <option value="aliansalud">Aliansalud</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">AFP (Pensión) <span class="required">*</span></label>
+          <select class="form-input" id="afp" required>
+            <option value="">Seleccionar...</option>
+            <option value="porvenir">Porvenir</option>
+            <option value="proteccion">Protección</option>
+            <option value="colfondos">Colfondos</option>
+            <option value="colpensiones">Colpensiones</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">ARL (Riesgos Laborales) <span class="required">*</span></label>
+          <select class="form-input" id="arl" required>
+            <option value="">Seleccionar...</option>
+            <option value="sura">Sura</option>
+            <option value="positiva">Positiva</option>
+            <option value="liberty">Liberty</option>
+            <option value="bolivar">Bolívar</option>
+            <option value="colmena">Colmena</option>
+            <option value="equidad">Equidad</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Clase de Riesgo <span class="required">*</span></label>
+          <select class="form-input" id="riskClass" required>
+            <option value="">Seleccionar...</option>
+            <option value="1">Clase I - Riesgo Mínimo (0.522%)</option>
+            <option value="2">Clase II - Riesgo Bajo (1.044%)</option>
+            <option value="3">Clase III - Riesgo Medio (2.436%)</option>
+            <option value="4">Clase IV - Riesgo Alto (4.350%)</option>
+            <option value="5">Clase V - Riesgo Máximo (6.960%)</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label class="form-label">Caja de Compensación</label>
+          <select class="form-input" id="compensationFund">
+            <option value="">Seleccionar...</option>
+            <option value="compensar">Compensar</option>
+            <option value="colsubsidio">Colsubsidio</option>
+            <option value="cafam">Cafam</option>
+            <option value="comfama">Comfama</option>
+            <option value="comfenalco">Comfenalco</option>
+            <option value="comfandi">Comfandi</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Buttons -->
+    <div class="nav-buttons">
+      <button class="btn btn-outline" onclick="window.location.href='employee_new_step_1_2_3.html'">
+        <i data-lucide="arrow-left" style="width: 18px; height: 18px;"></i>
+        <span>Atrás</span>
+      </button>
+      <a href="employee_new_step_1_2_3_4_5.html" class="btn btn-primary">
+        <span>Siguiente</span>
+        <i data-lucide="arrow-right" style="width: 18px; height: 18px;"></i>
+      </a>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    let benefitCounter = 0;
+    let deductionCounter = 0;
+
+    // Base salary from previous step (simulated)
+    const baseSalary = 4500000;
+
+    // Format currency
+    function formatCurrency(value) {
+      return parseInt(value).toLocaleString('es-CO');
+    }
+
+    // Parse currency string to number
+    function parseCurrency(value) {
+      return parseInt(value.replace(/\D/g, '')) || 0;
+    }
+
+    // Currency input formatting
+    function setupCurrencyInput(input) {
+      input.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value) {
+          e.target.value = formatCurrency(value);
+        } else {
+          e.target.value = '';
+        }
+        calculateTotals();
+      });
+    }
+
+    // Setup existing benefit inputs
+    document.querySelectorAll('.benefit-amount').forEach(input => {
+      setupCurrencyInput(input);
+    });
+
+    // Calculate automatic deductions
+    function calculateAutoDeductions(totalEarnings) {
+      const health = Math.round(totalEarnings * 0.04);
+      const pension = Math.round(totalEarnings * 0.04);
+      // Solidarity fund applies if salary > 4 SMLMV (4 * 1,300,000 = 5,200,000)
+      const solidarity = totalEarnings > 5200000 ? Math.round(totalEarnings * 0.01) : 0;
+
+      return { health, pension, solidarity };
+    }
+
+    // Calculate totals
+    function calculateTotals() {
+      // Calculate total earnings
+      let totalEarnings = baseSalary;
+
+      // Add fixed benefits
+      totalEarnings += parseCurrency(document.getElementById('transportAid').value);
+      totalEarnings += parseCurrency(document.getElementById('foodAid').value);
+      totalEarnings += parseCurrency(document.getElementById('transportAllowance').value);
+      totalEarnings += parseCurrency(document.getElementById('bonus').value);
+
+      // Add custom benefits
+      document.querySelectorAll('.custom-benefit-amount').forEach(input => {
+        totalEarnings += parseCurrency(input.value);
+      });
+
+      // Update total earnings display
+      document.getElementById('totalEarnings').textContent = '$' + formatCurrency(totalEarnings);
+
+      // Calculate automatic deductions
+      const autoDeductions = calculateAutoDeductions(totalEarnings);
+      document.getElementById('healthDeduction').textContent = '$' + formatCurrency(autoDeductions.health);
+      document.getElementById('pensionDeduction').textContent = '$' + formatCurrency(autoDeductions.pension);
+      document.getElementById('solidarityDeduction').textContent = '$' + formatCurrency(autoDeductions.solidarity);
+
+      // Calculate total deductions
+      let totalDeductions = autoDeductions.health + autoDeductions.pension + autoDeductions.solidarity;
+
+      // Add additional deductions
+      document.querySelectorAll('.additional-deduction-amount').forEach(input => {
+        totalDeductions += parseCurrency(input.value);
+      });
+
+      // Update total deductions display
+      document.getElementById('totalDeductions').textContent = '$' + formatCurrency(totalDeductions);
+
+      // Calculate net pay
+      const netPay = totalEarnings - totalDeductions;
+      document.getElementById('netPay').textContent = '$' + formatCurrency(netPay);
+    }
+
+    // Add custom benefit
+    document.getElementById('addBenefit').addEventListener('click', function() {
+      benefitCounter++;
+      const container = document.getElementById('customBenefitsContainer');
+      const newBenefit = `
+        <div class="entry-card" data-entry="benefit-${benefitCounter}">
+          <input type="text" class="form-input entry-input" placeholder="Nombre del concepto" required>
+          <div class="currency-input-wrapper entry-amount">
+            <span class="currency-symbol">$</span>
+            <input type="text" class="form-input currency-input custom-benefit-amount" placeholder="0">
+          </div>
+          <button class="delete-btn delete-entry" data-target="benefit-${benefitCounter}">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </div>
+      `;
+      container.insertAdjacentHTML('beforeend', newBenefit);
+      lucide.createIcons();
+
+      // Setup currency input for new benefit
+      const newInput = container.querySelector(`[data-entry="benefit-${benefitCounter}"] .custom-benefit-amount`);
+      setupCurrencyInput(newInput);
+
+      attachDeleteHandlers();
+    });
+
+    // Add additional deduction
+    document.getElementById('addDeduction').addEventListener('click', function() {
+      deductionCounter++;
+      const container = document.getElementById('additionalDeductionsContainer');
+      const newDeduction = `
+        <div class="entry-card" data-entry="deduction-${deductionCounter}">
+          <input type="text" class="form-input entry-input" placeholder="Nombre de la deducción" required>
+          <div class="currency-input-wrapper entry-amount">
+            <span class="currency-symbol">$</span>
+            <input type="text" class="form-input currency-input additional-deduction-amount" placeholder="0">
+          </div>
+          <button class="delete-btn delete-entry" data-target="deduction-${deductionCounter}">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </div>
+      `;
+      container.insertAdjacentHTML('beforeend', newDeduction);
+      lucide.createIcons();
+
+      // Setup currency input for new deduction
+      const newInput = container.querySelector(`[data-entry="deduction-${deductionCounter}"] .additional-deduction-amount`);
+      setupCurrencyInput(newInput);
+
+      attachDeleteHandlers();
+    });
+
+    // Delete entry handler
+    function attachDeleteHandlers() {
+      document.querySelectorAll('.delete-entry').forEach(btn => {
+        btn.removeEventListener('click', handleDelete);
+        btn.addEventListener('click', handleDelete);
+      });
+    }
+
+    function handleDelete(e) {
+      const target = e.currentTarget.getAttribute('data-target');
+      const entry = document.querySelector(`[data-entry="${target}"]`);
+      if (entry) {
+        entry.style.opacity = '0';
+        entry.style.transform = 'translateX(-20px)';
+        setTimeout(() => {
+          entry.remove();
+          calculateTotals();
+        }, 200);
+      }
+    }
+
+    // Initial calculation
+    calculateTotals();
+
+    // Form validation removed - using direct link navigation
+  </script>
+</body>
+</html>

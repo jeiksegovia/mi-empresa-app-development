@@ -1,0 +1,696 @@
+// Mi Empresa App - Database Schema
+// Version: 2.0 based on schema-v2.md
+// Generator and Datasource
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========================================
+// AUTHENTICATION MODULE
+// ========================================
+
+model Usuario {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique @db.VarChar(255)
+  password  String   @db.VarChar(255)
+  rol       RolUsuario
+  nombre    String   @db.VarChar(100)
+  apellido  String   @db.VarChar(100)
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  sesiones                  Sesion[]
+  instrumentosCreados       Instrumento[]  @relation("InstrumentoCreador")
+  instrumentosModificados   Instrumento[]  @relation("InstrumentoModificador")
+  registrosResponsables     RegistroFichaCompletada[] @relation("RegistroResponsable")
+  notasCliente              NotaCliente[]
+
+  @@map("usuarios")
+}
+
+model Sesion {
+  id           Int      @id @default(autoincrement())
+  usuarioId    Int      @map("usuario_id")
+  token        String   @unique @db.VarChar(500)
+  ip           String?  @db.VarChar(45)
+  userAgent    String?  @map("user_agent") @db.VarChar(500)
+  expiraEn     DateTime @map("expira_en")
+  activa       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([token])
+  @@index([expiraEn])
+  @@map("sesiones")
+}
+
+// ========================================
+// EMPLOYEE MANAGEMENT MODULE
+// ========================================
+
+model Empleado {
+  id                   Int       @id @default(autoincrement()) @map("empleado_id")
+  nombre               String    @db.VarChar(100)
+  apellido             String    @db.VarChar(100)
+  tipoDocumento        TipoDocumentoEmpleado @map("tipo_documento")
+  numeroDocumento      String    @unique @map("numero_documento") @db.VarChar(50)
+  permisoTrabajo       Boolean   @map("permiso_trabajo") @default(false)
+  genero               String    @db.VarChar(20)
+  fechaNacimiento      DateTime  @map("fecha_nacimiento") @db.Date
+  tipoVivienda         TipoVivienda? @map("tipo_vivienda")
+  direccion            String?   @db.VarChar(255)
+  estratoSocioeconomico Int?     @map("estrato_socioeconomico")
+  estadoCivil          String?   @map("estado_civil") @db.VarChar(50)
+  telefono             String?   @db.VarChar(20)
+  email                String?   @db.VarChar(255)
+  estado               EstadoEmpleado @default(ACTIVO)
+  fechaRegistro        DateTime  @default(now()) @map("fecha_registro")
+
+  // Relations
+  nucleoFamiliar               NucleoFamiliar[]
+  contactosEmergencia          ContactoEmergenciaEmpleado[]
+  cargos                       Cargo[]
+  experienciasLaborales        ExperienciaLaboralExterna[]
+  educacionIdiomas             EducacionIdiomas[]
+  vehiculos                    Vehiculo[]
+  certificadoAlturas           CertificadoAlturas?
+  certificadoRiesgoElectrico   CertificadoRiesgoElectrico?
+  datosMigracion               DatosMigracion?
+  nominas                      Nomina[]
+  vacaciones                   GestionTiempoVacaciones[]
+  ausentismos                  Ausentismo[]
+
+  @@index([numeroDocumento])
+  @@index([estado])
+  @@map("empleados")
+}
+
+model NucleoFamiliar {
+  id              Int      @id @default(autoincrement()) @map("nucleo_id")
+  empleadoId      Int      @map("empleado_id")
+  nombre          String   @db.VarChar(100)
+  apellido        String   @db.VarChar(100)
+  tipoDocumento   TipoDocumentoFamiliar @map("tipo_documento")
+  numeroDocumento String?  @map("numero_documento") @db.VarChar(50)
+  fechaNacimiento DateTime @map("fecha_nacimiento") @db.Date
+  genero          String   @db.VarChar(20)
+  telefono        String?  @db.VarChar(20)
+  parentesco      String   @db.VarChar(50)
+
+  // Relations
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@map("nucleos_familiares")
+}
+
+model ContactoEmergenciaEmpleado {
+  id         Int    @id @default(autoincrement()) @map("contacto_id")
+  empleadoId Int    @map("empleado_id")
+  nombre     String @db.VarChar(100)
+  apellido   String @db.VarChar(100)
+  telefono   String @db.VarChar(20)
+  parentesco String @db.VarChar(50)
+
+  // Relations
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@map("contactos_emergencia_empleados")
+}
+
+model Cargo {
+  id                Int       @id @default(autoincrement()) @map("cargo_id")
+  empleadoId        Int       @map("empleado_id")
+  fechaIngreso      DateTime  @map("fecha_ingreso") @db.Date
+  fechaTerminacion  DateTime? @map("fecha_terminacion") @db.Date
+  nombreCargo       String    @map("nombre_cargo") @db.VarChar(100)
+  ubicacion         String    @db.VarChar(255)
+
+  // Relations
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@map("cargos")
+}
+
+model ExperienciaLaboralExterna {
+  id               Int       @id @default(autoincrement()) @map("experiencia_id")
+  empleadoId       Int       @map("empleado_id")
+  empresa          String    @db.VarChar(200)
+  telefonoEmpresa  String?   @map("telefono_empresa") @db.VarChar(20)
+  cargo            String    @db.VarChar(100)
+  sector           String?   @db.VarChar(100)
+  periodoInicio    DateTime  @map("periodo_inicio") @db.Date
+  periodoFin       DateTime? @map("periodo_fin") @db.Date
+  funcionesLogros  String?   @map("funciones_logros") @db.Text
+
+  // Relations
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@map("experiencias_laborales_externas")
+}
+
+model EducacionIdiomas {
+  id                 Int     @id @default(autoincrement()) @map("idioma_id")
+  empleadoId         Int     @map("empleado_id")
+  institucion        String  @db.VarChar(200)
+  nivelEscritura     String  @map("nivel_escritura") @db.VarChar(50)
+  nivelHabla         String  @map("nivel_habla") @db.VarChar(50)
+  capacidadTraducir  Boolean @map("capacidad_traducir") @default(false)
+
+  // Relations
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@map("educacion_idiomas")
+}
+
+model Vehiculo {
+  id             Int    @id @default(autoincrement()) @map("vehiculo_id")
+  empleadoId     Int    @map("empleado_id")
+  tipoVehiculo   String @map("tipo_vehiculo") @db.VarChar(50)
+  placas         String @db.VarChar(20)
+  tipoLicencia   String @map("tipo_licencia") @db.VarChar(20)
+  numeroLicencia String @map("numero_licencia") @db.VarChar(50)
+
+  // Relations
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@map("vehiculos")
+}
+
+model CertificadoAlturas {
+  id                Int      @id @default(autoincrement()) @map("cert_altura_id")
+  empleadoId        Int      @unique @map("empleado_id")
+  fechaExpedicion   DateTime @map("fecha_expedicion") @db.Date
+  fechaVencimiento  DateTime @map("fecha_vencimiento") @db.Date
+
+  // Relations
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@map("certificados_alturas")
+}
+
+model CertificadoRiesgoElectrico {
+  id                Int      @id @default(autoincrement()) @map("cert_electrico_id")
+  empleadoId        Int      @unique @map("empleado_id")
+  fechaExpedicion   DateTime @map("fecha_expedicion") @db.Date
+  fechaVencimiento  DateTime @map("fecha_vencimiento") @db.Date
+
+  // Relations
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@map("certificados_riesgo_electrico")
+}
+
+model DatosMigracion {
+  id                    Int       @id @default(autoincrement()) @map("migracion_id")
+  empleadoId            Int       @unique @map("empleado_id")
+  numeroPasaporte       String    @map("numero_pasaporte") @db.VarChar(50)
+  pasaporteExpedicion   DateTime  @map("pasaporte_expedicion") @db.Date
+  pasaporteVencimiento  DateTime  @map("pasaporte_vencimiento") @db.Date
+  numeroVisa            String?   @map("numero_visa") @db.VarChar(50)
+  visaExpedicion        DateTime? @map("visa_expedicion") @db.Date
+  visaVencimiento       DateTime? @map("visa_vencimiento") @db.Date
+
+  // Relations
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@map("datos_migracion")
+}
+
+// ========================================
+// PAYROLL MODULE
+// ========================================
+
+model Nomina {
+  id                 Int           @id @default(autoincrement()) @map("nomina_id")
+  empleadoId         Int           @map("empleado_id")
+  tipoContrato       TipoContrato  @map("tipo_contrato")
+  fechaInicio        DateTime      @map("fecha_inicio") @db.Date
+  fechaTerminacion   DateTime?     @map("fecha_terminacion") @db.Date
+  cargo              String        @db.VarChar(100)
+  salario            Decimal       @db.Decimal(15, 2)
+  fechaPago          DateTime      @map("fecha_pago") @db.Date
+  periodo            PeriodoPago   @default(MENSUAL)
+
+  // Relations
+  empleado           Empleado              @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  deducciones        DeduccionSalario[]
+  beneficios         Beneficio[]
+  comprobantesPago   ComprobantePago[]
+
+  @@index([empleadoId])
+  @@index([fechaPago])
+  @@map("nominas")
+}
+
+model DeduccionSalario {
+  id          Int             @id @default(autoincrement()) @map("deduccion_id")
+  nominaId    Int             @map("nomina_id")
+  tipo        TipoDeduccion
+  valor       Decimal         @db.Decimal(15, 2)
+  descripcion String?         @db.Text
+
+  // Relations
+  nomina Nomina @relation(fields: [nominaId], references: [id], onDelete: Cascade)
+
+  @@index([nominaId])
+  @@map("deducciones_salario")
+}
+
+model Beneficio {
+  id               Int     @id @default(autoincrement()) @map("beneficio_id")
+  nominaId         Int     @map("nomina_id")
+  nombreBeneficio  String  @map("nombre_beneficio") @db.VarChar(100)
+  valor            Decimal @db.Decimal(15, 2)
+  descripcion      String? @db.Text
+
+  // Relations
+  nomina Nomina @relation(fields: [nominaId], references: [id], onDelete: Cascade)
+
+  @@index([nominaId])
+  @@map("beneficios")
+}
+
+model ComprobantePago {
+  id                 Int      @id @default(autoincrement()) @map("comprobante_id")
+  nominaId           Int      @map("nomina_id")
+  fechaGeneracion    DateTime @default(now()) @map("fecha_generacion")
+  periodoInicio      DateTime @map("periodo_inicio") @db.Date
+  periodoFin         DateTime @map("periodo_fin") @db.Date
+  totalDevengado     Decimal  @map("total_devengado") @db.Decimal(15, 2)
+  totalDeducciones   Decimal  @map("total_deducciones") @db.Decimal(15, 2)
+  netoPagar          Decimal  @map("neto_pagar") @db.Decimal(15, 2)
+  archivoPdf         String?  @map("archivo_pdf") @db.VarChar(500)
+
+  // Relations
+  nomina Nomina @relation(fields: [nominaId], references: [id], onDelete: Cascade)
+
+  @@index([nominaId])
+  @@map("comprobantes_pago")
+}
+
+// ========================================
+// TIME MANAGEMENT MODULE
+// ========================================
+
+model GestionTiempoVacaciones {
+  id                  Int                @id @default(autoincrement()) @map("vacacion_id")
+  empleadoId          Int                @map("empleado_id")
+  fechaInicio         DateTime           @map("fecha_inicio") @db.Date
+  fechaFinalizacion   DateTime           @map("fecha_finalizacion") @db.Date
+  diasTomados         Int                @map("dias_tomados")
+  estado              EstadoSolicitud    @default(PENDIENTE)
+  fechaSolicitud      DateTime           @default(now()) @map("fecha_solicitud")
+
+  // Relations
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@index([estado])
+  @@map("gestion_tiempo_vacaciones")
+}
+
+model Ausentismo {
+  id                  Int              @id @default(autoincrement()) @map("ausentismo_id")
+  empleadoId          Int              @map("empleado_id")
+  causa               CausaAusentismo
+  tipoLicencia        TipoLicencia?    @map("tipo_licencia")
+  fechaInicio         DateTime         @map("fecha_inicio") @db.Date
+  fechaFin            DateTime         @map("fecha_fin") @db.Date
+  certificadoAdjunto  String?          @map("certificado_adjunto") @db.VarChar(500)
+  observaciones       String?          @db.Text
+
+  // Relations
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@map("ausentismos")
+}
+
+// ========================================
+// CLIENT MANAGEMENT MODULE
+// ========================================
+
+model Cliente {
+  id                      Int       @id @default(autoincrement()) @map("cliente_id")
+  nombre                  String    @db.VarChar(100)
+  tipoDocumento           TipoDocumentoCliente @map("tipo_documento")
+  numeroDocumento         String    @unique @map("numero_documento") @db.VarChar(50)
+  fechaNacimiento         DateTime  @map("fecha_nacimiento") @db.Date
+  genero                  String    @db.VarChar(20)
+  telefono                String?   @db.VarChar(20)
+  email                   String?   @db.VarChar(255)
+  fechaIngreso            DateTime  @default(now()) @map("fecha_ingreso")
+  estado                  EstadoCliente @default(ACTIVO)
+  notas                   String?   @db.Text
+  informacionSeguro       String?   @map("informacion_seguro") @db.Text
+  observacionesEspeciales String?   @map("observaciones_especiales") @db.Text
+
+  // Relations
+  contactosEmergencia     ContactoEmergenciaCliente[]
+  registrosFichas         RegistroFichaCompletada[]
+  notasCliente            NotaCliente[]
+  prefacturas             Prefactura[]
+
+  @@index([numeroDocumento])
+  @@index([estado])
+  @@map("clientes")
+}
+
+model ContactoEmergenciaCliente {
+  id         Int    @id @default(autoincrement()) @map("contacto_id")
+  clienteId  Int    @map("cliente_id")
+  nombre     String @db.VarChar(100)
+  telefono   String @db.VarChar(20)
+  parentesco String @db.VarChar(50)
+
+  // Relations
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+  @@map("contactos_emergencia_clientes")
+}
+
+// ========================================
+// FICHAS Y DOCUMENTOS SUB-MODULE
+// ========================================
+
+model Instrumento {
+  id                  Int                   @id @default(autoincrement()) @map("instrumento_id")
+  nombreInstrumento   String                @map("nombre_instrumento") @db.VarChar(200)
+  codigo              String?               @db.VarChar(50)
+  descripcion         String?               @db.Text
+  tipo                TipoInstrumento
+  periodicidad        PeriodicidadInstrumento
+  rolesPermitidos     String                @map("roles_permitidos") @db.VarChar(255)
+  estado              EstadoInstrumento     @default(ACTIVO)
+  plantillaArchivo    String?               @map("plantilla_archivo") @db.VarChar(500)
+  fechaCreacion       DateTime              @default(now()) @map("fecha_creacion")
+  creadoPor           Int                   @map("creado_por")
+  fechaModificacion   DateTime?             @updatedAt @map("fecha_modificacion")
+  modificadoPor       Int?                  @map("modificado_por")
+  versionPlantilla    String                @map("version_plantilla") @db.VarChar(20)
+
+  // Relations
+  creador             Usuario               @relation("InstrumentoCreador", fields: [creadoPor], references: [id])
+  modificador         Usuario?              @relation("InstrumentoModificador", fields: [modificadoPor], references: [id])
+  registros           RegistroFichaCompletada[]
+
+  @@index([estado])
+  @@index([tipo])
+  @@map("instrumentos")
+}
+
+model RegistroFichaCompletada {
+  id                      Int                      @id @default(autoincrement()) @map("registro_id")
+  clienteId               Int                      @map("cliente_id")
+  instrumentoId           Int                      @map("instrumento_id")
+  estado                  EstadoRegistroFicha      @default(PENDIENTE)
+  fechaCompletado         DateTime?                @map("fecha_completado")
+  versionRegistro         String                   @map("version_registro") @db.VarChar(20)
+  responsable             Int
+  archivoCompletado       String?                  @map("archivo_completado") @db.VarChar(500)
+  notasObservaciones      String?                  @map("notas_observaciones") @db.Text
+  fechaVencimiento        DateTime?                @map("fecha_vencimiento") @db.Date
+  alertaVencimiento       String?                  @map("alerta_vencimiento") @db.VarChar(50)
+  fechaCreacionRegistro   DateTime                 @default(now()) @map("fecha_creacion_registro")
+
+  // Relations
+  cliente                 Cliente                  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  instrumento             Instrumento              @relation(fields: [instrumentoId], references: [id], onDelete: Restrict)
+  usuarioResponsable      Usuario                  @relation("RegistroResponsable", fields: [responsable], references: [id])
+  notas                   NotaCliente[]
+
+  @@index([clienteId])
+  @@index([instrumentoId])
+  @@index([estado])
+  @@index([fechaVencimiento])
+  @@map("registros_fichas_completadas")
+}
+
+model NotaCliente {
+  id              Int              @id @default(autoincrement()) @map("nota_id")
+  clienteId       Int              @map("cliente_id")
+  registroFichaId Int?             @map("registro_ficha_id")
+  tipoNota        TipoNota         @map("tipo_nota")
+  fecha           DateTime         @default(now())
+  autor           Int
+  contenido       String           @db.Text
+  prioridad       PrioridadNota    @default(MEDIA)
+  visiblePara     VisibilidadNota  @map("visible_para") @default(TODOS)
+
+  // Relations
+  cliente         Cliente          @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  registroFicha   RegistroFichaCompletada? @relation(fields: [registroFichaId], references: [id], onDelete: SetNull)
+  usuario         Usuario          @relation(fields: [autor], references: [id])
+
+  @@index([clienteId])
+  @@index([registroFichaId])
+  @@index([fecha])
+  @@map("notas_clientes")
+}
+
+// ========================================
+// FINANCE MODULE
+// ========================================
+
+model CentroCostos {
+  id          Int                @id @default(autoincrement()) @map("centro_id")
+  nombre      String             @db.VarChar(200)
+  tipo        TipoCentroCostos
+  descripcion String?            @db.Text
+
+  // Relations
+  productos   ProductoServicio[]
+  egresos     Egreso[]
+
+  @@map("centros_costos")
+}
+
+model ProductoServicio {
+  id                  Int          @id @default(autoincrement()) @map("producto_id")
+  centroCostosId      Int          @map("centro_costos_id")
+  codigoInterno       String       @map("codigo_interno") @db.VarChar(50)
+  nombre              String       @db.VarChar(200)
+  precioTotal         Decimal      @map("precio_total") @db.Decimal(15, 2)
+  nombreImpuesto      String?      @map("nombre_impuesto") @db.VarChar(100)
+  porcentajeImpuesto  Decimal?     @map("porcentaje_impuesto") @db.Decimal(5, 2)
+  precioBase          Decimal      @map("precio_base") @db.Decimal(15, 2)
+  costoUnitario       Decimal      @map("costo_unitario") @db.Decimal(15, 2)
+  cantidadInicial     Int          @map("cantidad_inicial")
+  unidadMedida        String       @map("unidad_medida") @db.VarChar(50)
+  descripcion         String?      @db.Text
+  referencia          String?      @db.VarChar(100)
+  cuentaIngresos      String?      @map("cuenta_ingresos") @db.VarChar(50)
+  cuentaInventario    String?      @map("cuenta_inventario") @db.VarChar(50)
+  cuentaCostoVenta    String?      @map("cuenta_costo_venta") @db.VarChar(50)
+  ventaNegativo       Boolean      @map("venta_negativo") @default(false)
+
+  // Relations
+  centroCostos CentroCostos @relation(fields: [centroCostosId], references: [id], onDelete: Cascade)
+  prefacturas  Prefactura[]
+
+  @@index([centroCostosId])
+  @@index([codigoInterno])
+  @@map("productos_servicios")
+}
+
+model Egreso {
+  id                 Int          @id @default(autoincrement()) @map("egreso_id")
+  centroCostosId     Int          @map("centro_costos_id")
+  codigoInterno      String       @map("codigo_interno") @db.VarChar(50)
+  item               String       @db.VarChar(200)
+  notas              String?      @db.Text
+  proveedorNombre    String       @map("proveedor_nombre") @db.VarChar(200)
+  proveedorTipoDoc   String       @map("proveedor_tipo_doc") @db.VarChar(20)
+  proveedorNumero    String       @map("proveedor_numero") @db.VarChar(50)
+  valor              Decimal      @db.Decimal(15, 2)
+  numeroFactura      String       @map("numero_factura") @db.VarChar(100)
+  fecha              DateTime     @db.Date
+
+  // Relations
+  centroCostos CentroCostos @relation(fields: [centroCostosId], references: [id], onDelete: Cascade)
+
+  @@index([centroCostosId])
+  @@index([fecha])
+  @@map("egresos")
+}
+
+model Prefactura {
+  id                  Int              @id @default(autoincrement()) @map("prefactura_id")
+  clienteId           Int              @map("cliente_id")
+  productoServicioId  Int              @map("producto_servicio_id")
+  fechaGeneracion     DateTime         @default(now()) @map("fecha_generacion")
+  subtotal            Decimal          @db.Decimal(15, 2)
+  impuestos           Decimal          @db.Decimal(15, 2)
+  total               Decimal          @db.Decimal(15, 2)
+  estado              EstadoPrefactura @default(BORRADOR)
+
+  // Relations
+  cliente         Cliente          @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  productoServicio ProductoServicio @relation(fields: [productoServicioId], references: [id], onDelete: Restrict)
+
+  @@index([clienteId])
+  @@index([estado])
+  @@index([fechaGeneracion])
+  @@map("prefacturas")
+}
+
+// ========================================
+// ENUMS
+// ========================================
+
+enum RolUsuario {
+  ADMIN
+  EMPLEADO
+  AUDITOR
+  OPERADOR
+}
+
+enum TipoDocumentoEmpleado {
+  CC
+  CE
+  PASAPORTE
+}
+
+enum TipoDocumentoFamiliar {
+  REGISTRO_CIVIL
+  TI
+  CC
+  CE
+}
+
+enum TipoDocumentoCliente {
+  CC
+  CE
+  PASAPORTE
+  REGISTRO_CIVIL
+}
+
+enum TipoVivienda {
+  CASA
+  APARTAMENTO
+  LOTE
+}
+
+enum EstadoEmpleado {
+  ACTIVO
+  INACTIVO
+}
+
+enum EstadoCliente {
+  ACTIVO
+  INACTIVO
+}
+
+enum TipoContrato {
+  OPS
+  OBRA_O_LABOR
+  TERMINO_FIJO
+  TERMINO_INDEFINIDO
+}
+
+enum PeriodoPago {
+  MENSUAL
+  QUINCENAL
+}
+
+enum TipoDeduccion {
+  SALUD
+  PENSION
+  RETENCION_FUENTE
+  SOLIDARIDAD
+}
+
+enum EstadoSolicitud {
+  APROBADO
+  PENDIENTE
+  RECHAZADO
+}
+
+enum CausaAusentismo {
+  INCAPACIDAD
+  PRORROGA
+  PERMISO
+  LICENCIA_NO_REMUNERADA
+  LICENCIA_LEGAL
+}
+
+enum TipoLicencia {
+  MATERNIDAD
+  PATERNIDAD
+  LUTO
+}
+
+enum TipoInstrumento {
+  VALORACION
+  NUTRICION
+  MATRICULA
+  ADMISION
+}
+
+enum PeriodicidadInstrumento {
+  UNICA
+  ANUAL
+  MENSUAL
+  TRIMESTRAL
+  SEMESTRAL
+}
+
+enum EstadoInstrumento {
+  ACTIVO
+  INACTIVO
+}
+
+enum EstadoRegistroFicha {
+  COMPLETADO
+  PENDIENTE
+  VENCIDO
+}
+
+enum TipoNota {
+  POSITIVA
+  NEGATIVA
+  NEUTRAL
+  ALERTA
+}
+
+enum PrioridadNota {
+  ALTA
+  MEDIA
+  BAJA
+}
+
+enum VisibilidadNota {
+  TODOS
+  SOLO_MEDICOS
+  SOLO_ADMIN
+}
+
+enum TipoCentroCostos {
+  INGRESOS
+  EGRESOS
+}
+
+enum EstadoPrefactura {
+  BORRADOR
+  ENVIADO
+  PAGADO
+}

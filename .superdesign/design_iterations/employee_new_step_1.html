@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nuevo Empleado - Mi Empresa App</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    .stepper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--spacing-3xl);
+      position: relative;
+    }
+
+    .stepper::before {
+      content: '';
+      position: absolute;
+      top: 20px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--border);
+      z-index: 0;
+    }
+
+    .step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--spacing-sm);
+      flex: 1;
+      position: relative;
+      z-index: 1;
+    }
+
+    .step-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--surface-card);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      transition: all 0.3s;
+    }
+
+    .step.active .step-circle {
+      background: var(--p-primary-500);
+      border-color: var(--p-primary-500);
+      color: white;
+      box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.2);
+    }
+
+    .step.completed .step-circle {
+      background: var(--p-primary-500);
+      border-color: var(--p-primary-500);
+      color: white;
+    }
+
+    .step-label {
+      font-size: var(--font-size-xs);
+      text-align: center;
+      max-width: 100px;
+    }
+
+    .step.active .step-label {
+      color: var(--foreground);
+      font-weight: 600;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--spacing-lg);
+    }
+
+    @media (max-width: 768px) {
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+    }
+
+    .form-label {
+      font-size: var(--font-size-sm);
+      font-weight: 500;
+    }
+
+    .required::after {
+      content: ' *';
+      color: #ef4444;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Main Content -->
+  <div style="min-height: 100vh; background: var(--background);">
+
+    <!-- Top Header -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <a href="employees_list_1.html" class="btn btn-ghost btn-icon">
+            <i data-lucide="arrow-left" class="icon"></i>
+          </a>
+          <h1 class="text-xl font-semibold">Empleados > Nuevo empleado</h1>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+          </button>
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+          <span class="text-sm font-medium">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main class="container" style="max-width: 900px; padding-top: var(--spacing-3xl); padding-bottom: var(--spacing-3xl);">
+
+      <!-- Page Title -->
+      <div class="mb-8">
+        <h2 class="text-3xl font-bold mb-2">Nuevo empleado/a</h2>
+        <p class="text-muted">Registra la información de las personas que integran tu equipo de trabajo</p>
+      </div>
+
+      <!-- Stepper -->
+      <div class="stepper">
+        <div class="step active">
+          <div class="step-circle">1</div>
+          <div class="step-label text-muted">Datos personales</div>
+        </div>
+        <div class="step">
+          <div class="step-circle">2</div>
+          <div class="step-label text-muted">Experiencia y educación</div>
+        </div>
+        <div class="step">
+          <div class="step-circle">3</div>
+          <div class="step-label text-muted">Contrato</div>
+        </div>
+        <div class="step">
+          <div class="step-circle">4</div>
+          <div class="step-label text-muted">Nómina</div>
+        </div>
+        <div class="step">
+          <div class="step-circle">5</div>
+          <div class="step-label text-muted">Documentos</div>
+        </div>
+      </div>
+
+      <!-- Form Card -->
+      <div class="card">
+
+        <div class="flex items-center justify-between mb-6">
+          <h3 class="text-lg font-semibold">Datos principales</h3>
+          <span class="text-sm text-muted">Paso 1 de 5</span>
+        </div>
+
+        <form id="employeeForm">
+
+          <div class="form-grid">
+
+            <!-- Tipo de identificación -->
+            <div class="form-group">
+              <label class="form-label required">Tipo de identificación</label>
+              <select class="form-input" required>
+                <option value="">Seleccionar</option>
+                <option value="cc">Cédula de ciudadanía</option>
+                <option value="ce">Cédula de extranjería</option>
+                <option value="pasaporte">Pasaporte</option>
+              </select>
+            </div>
+
+            <!-- Número de identificación -->
+            <div class="form-group">
+              <label class="form-label required">Número de identificación</label>
+              <input type="text" class="form-input" placeholder="1234567890" required>
+            </div>
+
+            <!-- Primer nombre -->
+            <div class="form-group">
+              <label class="form-label required">Primer nombre</label>
+              <input type="text" class="form-input" placeholder="Juan" required>
+            </div>
+
+            <!-- Segundo nombre -->
+            <div class="form-group">
+              <label class="form-label">Segundo nombre</label>
+              <input type="text" class="form-input" placeholder="Carlos">
+            </div>
+
+            <!-- Primer apellido -->
+            <div class="form-group">
+              <label class="form-label required">Primer apellido</label>
+              <input type="text" class="form-input" placeholder="Pérez" required>
+            </div>
+
+            <!-- Segundo apellido -->
+            <div class="form-group">
+              <label class="form-label">Segundo apellido</label>
+              <input type="text" class="form-input" placeholder="García">
+            </div>
+
+            <!-- Género -->
+            <div class="form-group">
+              <label class="form-label required">Género</label>
+              <select class="form-input" required>
+                <option value="">Seleccionar</option>
+                <option value="m">Masculino</option>
+                <option value="f">Femenino</option>
+                <option value="otro">Otro</option>
+                <option value="prefiero-no-decir">Prefiero no decir</option>
+              </select>
+            </div>
+
+            <!-- Fecha de nacimiento -->
+            <div class="form-group">
+              <label class="form-label required">Fecha de nacimiento</label>
+              <input type="date" class="form-input" required>
+            </div>
+
+            <!-- Estado civil -->
+            <div class="form-group">
+              <label class="form-label required">Estado civil</label>
+              <select class="form-input" required>
+                <option value="">Seleccionar</option>
+                <option value="soltero">Soltero/a</option>
+                <option value="casado">Casado/a</option>
+                <option value="union-libre">Unión libre</option>
+                <option value="divorciado">Divorciado/a</option>
+                <option value="viudo">Viudo/a</option>
+              </select>
+            </div>
+
+            <!-- Tipo de vivienda -->
+            <div class="form-group">
+              <label class="form-label required">Tipo de vivienda</label>
+              <select class="form-input" required>
+                <option value="">Seleccionar</option>
+                <option value="casa">Casa</option>
+                <option value="apartamento">Apartamento</option>
+                <option value="lote">Lote</option>
+              </select>
+            </div>
+
+          </div>
+
+          <!-- Dirección (full width) -->
+          <div class="form-group mt-4">
+            <label class="form-label required">Dirección domicilio</label>
+            <input type="text" class="form-input" placeholder="Calle 123 # 45-67, Apartamento 801" required>
+          </div>
+
+          <div class="form-grid mt-4">
+
+            <!-- Estrato -->
+            <div class="form-group">
+              <label class="form-label required">Estrato socioeconómico</label>
+              <select class="form-input" required>
+                <option value="">Seleccionar</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+              </select>
+            </div>
+
+            <!-- Permiso de trabajo -->
+            <div class="form-group">
+              <label class="form-label required">¿Necesita permiso de trabajo?</label>
+              <select class="form-input" required>
+                <option value="">Seleccionar</option>
+                <option value="si">Sí</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <!-- Teléfono -->
+            <div class="form-group">
+              <label class="form-label required">Teléfono</label>
+              <div class="flex gap-2">
+                <select class="form-input" style="width: 100px;">
+                  <option value="+57">+57 🇨🇴</option>
+                  <option value="+1">+1 🇺🇸</option>
+                </select>
+                <input type="tel" class="form-input" placeholder="321 1234567" required>
+              </div>
+            </div>
+
+            <!-- Correo electrónico -->
+            <div class="form-group">
+              <label class="form-label required">Correo electrónico</label>
+              <input type="email" class="form-input" placeholder="empleado@empresa.com" required>
+            </div>
+
+          </div>
+
+          <!-- Info Text -->
+          <div class="mt-6 p-3 rounded" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.2);">
+            <p class="text-sm" style="color: var(--p-primary-300);">
+              <i data-lucide="info" class="icon-sm inline-block" style="vertical-align: text-bottom;"></i>
+              Los campos marcados con * son obligatorios
+            </p>
+          </div>
+
+          <!-- Form Actions -->
+          <div class="flex items-center justify-end gap-3 mt-8">
+            <a href="employees_list_1.html" class="btn btn-outline">Cancelar</a>
+            <a href="employee_new_step_1_2.html" class="btn btn-primary">
+              <span>Siguiente</span>
+              <i data-lucide="arrow-right" class="icon"></i>
+            </a>
+          </div>
+
+        </form>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+  </script>
+
+</body>
+</html>

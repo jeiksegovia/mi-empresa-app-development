@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crear Instrumento - Mi Empresa App</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: -280px;
+      width: 280px;
+      height: 100vh;
+      background: var(--surface-card);
+      border-right: 1px solid var(--border);
+      transition: left 0.3s ease-out;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .sidebar.open {
+      left: 0;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+      z-index: 99;
+    }
+
+    .sidebar-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius);
+      transition: all 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--foreground);
+    }
+
+    .sidebar-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .sidebar-item.active {
+      background: var(--p-primary-500);
+      color: white;
+    }
+
+    .main-content {
+      min-height: 100vh;
+      background: var(--background);
+    }
+
+    /* File Upload Drag & Drop Area */
+    .upload-area {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: var(--spacing-3xl);
+      text-align: center;
+      background: var(--surface-hover);
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+
+    .upload-area:hover {
+      border-color: var(--p-primary-500);
+      background: rgba(139, 92, 246, 0.05);
+    }
+
+    .upload-area.dragover {
+      border-color: var(--p-primary-500);
+      background: rgba(139, 92, 246, 0.1);
+    }
+
+    /* Toggle Switch */
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 24px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--surface-hover);
+      transition: 0.3s;
+      border-radius: 24px;
+      border: 2px solid var(--border);
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .toggle-slider {
+      background-color: var(--p-primary-500);
+      border-color: var(--p-primary-500);
+    }
+
+    input:checked + .toggle-slider:before {
+      transform: translateX(24px);
+    }
+
+    /* Checkbox Group */
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-md);
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+    }
+
+    .checkbox-item input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar" id="sidebar">
+    <div style="padding: var(--spacing-xl);">
+      <!-- Logo + Company Name -->
+      <div class="flex items-center gap-3 mb-8">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: var(--p-primary-500);">
+          <i data-lucide="building-2" class="icon-lg" style="color: white;"></i>
+        </div>
+        <div>
+          <h2 class="font-semibold text-base">Mi Empresa</h2>
+          <p class="text-xs text-muted">jeik-sa</p>
+        </div>
+      </div>
+
+      <!-- Navigation Items -->
+      <nav>
+        <a href="dashboard_1.html" class="sidebar-item">
+          <i data-lucide="home" class="icon"></i>
+          <span>Inicio</span>
+        </a>
+        <a href="employees_list_1.html" class="sidebar-item">
+          <i data-lucide="users" class="icon"></i>
+          <span>Empleados</span>
+        </a>
+        <a href="patients_list_1.html" class="sidebar-item">
+          <i data-lucide="user" class="icon"></i>
+          <span>Pacientes</span>
+        </a>
+        <a href="instruments_list_1.html" class="sidebar-item active">
+          <i data-lucide="clipboard-list" class="icon"></i>
+          <span>Instrumentos</span>
+        </a>
+        <a href="certificates-v2_1.html" class="sidebar-item">
+          <i data-lucide="file-check" class="icon"></i>
+          <span>Certificados</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="wallet" class="icon"></i>
+          <span>Nómina</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="bar-chart" class="icon"></i>
+          <span>Reportes</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="settings" class="icon"></i>
+          <span>Configuración</span>
+        </a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Header Bar -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <!-- Left Section -->
+        <div class="flex items-center gap-4">
+          <button id="menuToggle" class="btn btn-ghost btn-icon">
+            <i data-lucide="menu" class="icon"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Crear Instrumento</h1>
+        </div>
+
+        <!-- Right Section -->
+        <div class="flex items-center gap-3">
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+          </button>
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+          <span class="text-sm font-medium hidden md:inline">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <div class="container" style="padding: var(--spacing-xl); max-width: 1000px; margin: 0 auto;">
+
+      <!-- Back Button -->
+      <div style="margin-bottom: var(--spacing-xl);">
+        <a href="instruments_list_1.html" class="btn btn-ghost" style="padding-left: 0;">
+          <i data-lucide="arrow-left" class="icon"></i>
+          <span>Volver a Instrumentos</span>
+        </a>
+      </div>
+
+      <!-- Page Title -->
+      <div class="mb-8">
+        <h2 class="text-3xl font-bold mb-2">Crear Nuevo Instrumento</h2>
+        <p class="text-muted">Complete los campos para crear una nueva plantilla de evaluación</p>
+      </div>
+
+      <!-- Form Card -->
+      <div class="card" style="padding: var(--spacing-2xl);">
+        <form>
+          <!-- Nombre del Instrumento -->
+          <div class="mb-6">
+            <label class="form-label">
+              Nombre del Instrumento <span style="color: #ef4444;">*</span>
+            </label>
+            <input
+              type="text"
+              class="form-input"
+              placeholder="Ej: Ficha de Valoración General"
+              required
+            >
+            <p class="text-xs text-muted mt-1">Nombre descriptivo que aparecerá en el sistema</p>
+          </div>
+
+          <!-- Código -->
+          <div class="mb-6">
+            <label class="form-label">
+              Código
+            </label>
+            <input
+              type="text"
+              class="form-input"
+              placeholder="Ej: 1.2.1"
+            >
+            <p class="text-xs text-muted mt-1">Código interno para identificación (opcional)</p>
+          </div>
+
+          <!-- Descripción -->
+          <div class="mb-6">
+            <label class="form-label">
+              Descripción
+            </label>
+            <textarea
+              class="form-input"
+              rows="3"
+              placeholder="Descripción breve del propósito del instrumento..."
+            ></textarea>
+          </div>
+
+          <!-- Tipo -->
+          <div class="mb-6">
+            <label class="form-label">
+              Tipo <span style="color: #ef4444;">*</span>
+            </label>
+            <select class="form-input" required>
+              <option value="">Seleccione un tipo</option>
+              <option value="valoracion">Valoración</option>
+              <option value="nutricion">Nutrición</option>
+              <option value="matricula">Matrícula</option>
+              <option value="admision">Admisión</option>
+            </select>
+          </div>
+
+          <!-- Periodicidad -->
+          <div class="mb-6">
+            <label class="form-label">
+              Periodicidad <span style="color: #ef4444;">*</span>
+            </label>
+            <select class="form-input" required>
+              <option value="">Seleccione periodicidad</option>
+              <option value="unica">Única</option>
+              <option value="anual">Anual</option>
+              <option value="mensual">Mensual</option>
+            </select>
+            <p class="text-xs text-muted mt-1">Frecuencia con la que se debe completar este instrumento</p>
+          </div>
+
+          <!-- Roles Permitidos -->
+          <div class="mb-6">
+            <label class="form-label mb-3">
+              Roles Permitidos <span style="color: #ef4444;">*</span>
+            </label>
+            <div class="checkbox-group">
+              <label class="checkbox-item">
+                <input type="checkbox" name="roles" value="gerontologa">
+                <span>Gerontóloga</span>
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="roles" value="nutricionista">
+                <span>Nutricionista</span>
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="roles" value="administrador">
+                <span>Administrador</span>
+              </label>
+            </div>
+            <p class="text-xs text-muted mt-2">Seleccione los roles que pueden completar este instrumento</p>
+          </div>
+
+          <!-- Plantilla Excel -->
+          <div class="mb-6">
+            <label class="form-label mb-3">
+              Plantilla Excel <span style="color: #ef4444;">*</span>
+            </label>
+            <div class="upload-area" id="uploadArea">
+              <i data-lucide="upload" class="icon-xl mb-3" style="color: var(--p-primary-500); margin: 0 auto;"></i>
+              <p class="font-semibold mb-1">Arrastra el archivo aquí o haz clic para seleccionar</p>
+              <p class="text-sm text-muted">Formatos aceptados: .xlsx, .xls (Máx. 10 MB)</p>
+              <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+            </div>
+            <div id="fileInfo" class="mt-3" style="display: none;">
+              <div class="flex items-center justify-between p-3 rounded" style="background: var(--surface-hover);">
+                <div class="flex items-center gap-3">
+                  <i data-lucide="file-spreadsheet" class="icon" style="color: var(--p-green-500);"></i>
+                  <div>
+                    <p class="font-semibold text-sm" id="fileName"></p>
+                    <p class="text-xs text-muted" id="fileSize"></p>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-ghost btn-icon btn-sm" id="removeFile">
+                  <i data-lucide="x" class="icon-sm"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Estado -->
+          <div class="mb-8">
+            <label class="form-label mb-3">Estado</label>
+            <div class="flex items-center gap-3">
+              <label class="toggle-switch">
+                <input type="checkbox" id="estadoToggle" checked>
+                <span class="toggle-slider"></span>
+              </label>
+              <span id="estadoLabel" class="font-semibold" style="color: var(--p-green-500);">Activo</span>
+            </div>
+            <p class="text-xs text-muted mt-2">Los instrumentos inactivos no estarán disponibles para completar</p>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex items-center justify-end gap-3 pt-6" style="border-top: 1px solid var(--border);">
+            <button type="button" class="btn btn-outline" onclick="window.location.href='instruments_list_1.html'">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary">
+              <i data-lucide="save" class="icon-sm"></i>
+              <span>Guardar Instrumento</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Sidebar toggle
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    menuToggle.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+      sidebarOverlay.classList.toggle('show');
+    });
+
+    sidebarOverlay.addEventListener('click', function() {
+      sidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('show');
+    });
+
+    // File upload functionality
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const removeFile = document.getElementById('removeFile');
+
+    uploadArea.addEventListener('click', function() {
+      fileInput.click();
+    });
+
+    uploadArea.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', function() {
+      uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', function(e) {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleFile(files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', function() {
+      if (fileInput.files.length > 0) {
+        handleFile(fileInput.files[0]);
+      }
+    });
+
+    removeFile.addEventListener('click', function() {
+      fileInput.value = '';
+      fileInfo.style.display = 'none';
+      uploadArea.style.display = 'block';
+    });
+
+    function handleFile(file) {
+      fileName.textContent = file.name;
+      fileSize.textContent = formatFileSize(file.size);
+      uploadArea.style.display = 'none';
+      fileInfo.style.display = 'block';
+      lucide.createIcons();
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    // Estado toggle
+    const estadoToggle = document.getElementById('estadoToggle');
+    const estadoLabel = document.getElementById('estadoLabel');
+
+    estadoToggle.addEventListener('change', function() {
+      if (estadoToggle.checked) {
+        estadoLabel.textContent = 'Activo';
+        estadoLabel.style.color = 'var(--p-green-500)';
+      } else {
+        estadoLabel.textContent = 'Inactivo';
+        estadoLabel.style.color = 'var(--p-red-500)';
+      }
+    });
+  </script>
+</body>
+</html>

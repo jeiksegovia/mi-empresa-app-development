@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Perfil del Paciente - Mi Empresa</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    /* Sidebar styles */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: -280px;
+      width: 280px;
+      height: 100vh;
+      background: var(--surface-card);
+      border-right: 1px solid var(--border);
+      transition: left 0.3s ease-out;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .sidebar.open {
+      left: 0;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+      z-index: 99;
+    }
+
+    .sidebar-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius);
+      transition: all 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--foreground);
+    }
+
+    .sidebar-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .sidebar-item.active {
+      background: var(--p-primary-500);
+      color: white;
+    }
+
+    /* Profile Header */
+    .profile-header {
+      background: linear-gradient(135deg, var(--p-primary-500) 0%, var(--p-primary-600) 100%);
+      border-radius: var(--border-radius);
+      padding: var(--spacing-2xl);
+      color: white;
+      text-align: center;
+      margin-bottom: var(--spacing-xl);
+    }
+
+    .profile-photo {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      margin: 0 auto var(--spacing-lg);
+      background: rgba(255, 255, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 4px solid white;
+    }
+
+    .profile-name {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .profile-info {
+      font-size: 1rem;
+      opacity: 0.95;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .allergy-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+      padding: var(--spacing-sm) var(--spacing-md);
+      background: rgba(239, 68, 68, 0.2);
+      border: 2px solid #ef4444;
+      border-radius: 9999px;
+      font-weight: 600;
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .profile-actions {
+      display: flex;
+      gap: var(--spacing-sm);
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-white {
+      background: white;
+      color: var(--p-primary-600);
+      border: none;
+      padding: var(--spacing-sm) var(--spacing-lg);
+      border-radius: var(--border-radius);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      text-decoration: none;
+    }
+
+    .btn-white:hover {
+      background: #f3f4f6;
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    /* Tabs */
+    .tab-list {
+      display: flex;
+      gap: var(--spacing-sm);
+      border-bottom: 2px solid var(--border);
+      margin-bottom: var(--spacing-xl);
+      flex-wrap: wrap;
+    }
+
+    .tab-button {
+      padding: var(--spacing-md) var(--spacing-lg);
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      margin-bottom: -2px;
+    }
+
+    .tab-button:hover {
+      color: var(--foreground);
+      background: var(--surface-hover);
+    }
+
+    .tab-button.active {
+      color: var(--p-primary-500);
+      border-bottom-color: var(--p-primary-500);
+      background: transparent;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Quick Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--spacing-lg);
+      margin-bottom: var(--spacing-xl);
+    }
+
+    .stat-card {
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--border-radius);
+      padding: var(--spacing-lg);
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      border-color: var(--p-primary-500);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--p-primary-500);
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--text-color-secondary);
+    }
+
+    .stat-icon {
+      width: 32px;
+      height: 32px;
+      margin: 0 auto var(--spacing-sm);
+    }
+
+    /* Info Section */
+    .info-section {
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--border-radius);
+      padding: var(--spacing-xl);
+      margin-bottom: var(--spacing-xl);
+    }
+
+    .info-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--spacing-lg);
+      padding-bottom: var(--spacing-md);
+      border-bottom: 1px solid var(--surface-border);
+    }
+
+    .info-section-title {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: var(--spacing-lg);
+    }
+
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+    }
+
+    .info-label {
+      font-size: 0.875rem;
+      color: var(--text-color-secondary);
+      font-weight: 500;
+    }
+
+    .info-value {
+      font-size: 1rem;
+      color: var(--text-color);
+    }
+
+    /* Data Table Styles */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .data-table thead {
+      background: var(--surface-hover);
+    }
+
+    .data-table th {
+      padding: var(--spacing-md) var(--spacing-lg);
+      text-align: left;
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .data-table td {
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-bottom: 1px solid var(--border);
+      font-size: var(--font-size-sm);
+    }
+
+    .data-table tbody tr {
+      transition: background 0.2s;
+    }
+
+    .data-table tbody tr:hover {
+      background: var(--surface-hover);
+    }
+
+    /* Status Icons */
+    .status-icon {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .profile-actions {
+        flex-direction: column;
+      }
+
+      .btn-white {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div style="padding: var(--spacing-xl);">
+      <!-- Logo/Brand -->
+      <div class="flex items-center gap-3 mb-8">
+        <div class="flex items-center justify-center w-10 h-10 rounded-lg"
+             style="background: var(--p-primary-500);">
+          <i data-lucide="building-2" class="icon-lg" style="color: white;"></i>
+        </div>
+        <div>
+          <h2 class="font-semibold text-base">Mi Empresa</h2>
+          <p class="text-xs text-muted">jeik-sa</p>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <nav>
+        <a href="dashboard_1.html" class="sidebar-item">
+          <i data-lucide="home" class="icon"></i>
+          <span>Inicio</span>
+        </a>
+        <a href="employees_list_1.html" class="sidebar-item">
+          <i data-lucide="users" class="icon"></i>
+          <span>Empleados</span>
+        </a>
+        <a href="patients_list_1.html" class="sidebar-item active">
+          <i data-lucide="user" class="icon"></i>
+          <span>Pacientes</span>
+        </a>
+        <a href="instruments_list_1.html" class="sidebar-item">
+          <i data-lucide="clipboard-list" class="icon"></i>
+          <span>Instrumentos</span>
+        </a>
+        <a href="certificates-v2_1.html" class="sidebar-item">
+          <i data-lucide="file-check" class="icon"></i>
+          <span>Certificados</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="wallet" class="icon"></i>
+          <span>Nómina</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="bar-chart" class="icon"></i>
+          <span>Reportes</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="settings" class="icon"></i>
+          <span>Configuración</span>
+        </a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Header -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <button id="menuToggle" class="btn btn-ghost btn-icon">
+            <i data-lucide="menu" class="icon"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Perfil del Paciente</h1>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                  style="background: #ef4444; color: white;">3</span>
+          </button>
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+          <span class="text-sm font-medium hidden md:inline">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Content Area -->
+    <div class="container" style="padding: var(--spacing-xl); max-width: 1400px; margin: 0 auto;">
+
+      <!-- Back Button -->
+      <div style="margin-bottom: var(--spacing-xl);">
+        <a href="patients_list_1.html" class="btn btn-ghost" style="padding-left: 0;">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          Volver a Pacientes
+        </a>
+      </div>
+
+      <!-- Profile Header -->
+      <div class="profile-header">
+        <div class="profile-photo">
+          <i data-lucide="user" style="width: 64px; height: 64px;"></i>
+        </div>
+        <div class="profile-name">Pedro García López</div>
+        <div class="profile-info">72 años • CC 1.234.567.890</div>
+        <div class="allergy-badge">
+          <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+          Alergia: Penicilina
+        </div>
+        <div class="profile-actions">
+          <button class="btn-white">
+            <i data-lucide="edit" class="w-4 h-4"></i>
+            Editar Perfil
+          </button>
+          <button class="btn-white">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            Nueva Nota
+          </button>
+          <button class="btn-white">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            Ver Historial
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <i data-lucide="circle-check" class="stat-icon" style="color: var(--p-green-500);"></i>
+          <div class="stat-value" style="color: var(--p-green-500);">Activo</div>
+          <div class="stat-label">Estado</div>
+        </div>
+        <div class="stat-card">
+          <i data-lucide="calendar" class="stat-icon" style="color: var(--p-primary-500);"></i>
+          <div class="stat-value">5</div>
+          <div class="stat-label">Días desde última nota</div>
+        </div>
+        <div class="stat-card">
+          <i data-lucide="smile" class="stat-icon" style="color: var(--p-green-500);"></i>
+          <div class="stat-value">18</div>
+          <div class="stat-label">Notas Positivas</div>
+        </div>
+        <div class="stat-card">
+          <i data-lucide="frown" class="stat-icon" style="color: var(--p-red-500);"></i>
+          <div class="stat-value">6</div>
+          <div class="stat-label">Notas Negativas</div>
+        </div>
+        <div class="stat-card">
+          <i data-lucide="bell" class="stat-icon" style="color: var(--p-orange-500);"></i>
+          <div class="stat-value">2</div>
+          <div class="stat-label">Alertas Activas</div>
+        </div>
+      </div>
+
+      <!-- Tabs Navigation -->
+      <div class="tab-list">
+        <button class="tab-button active" data-tab="info">
+          <i data-lucide="info" class="icon-sm"></i>
+          Información Básica
+        </button>
+        <button class="tab-button" data-tab="history">
+          <i data-lucide="activity" class="icon-sm"></i>
+          Historia Clínica
+        </button>
+        <button class="tab-button" data-tab="fichas">
+          <i data-lucide="clipboard-list" class="icon-sm"></i>
+          Fichas/Evaluaciones
+        </button>
+        <button class="tab-button" data-tab="notes">
+          <i data-lucide="file-text" class="icon-sm"></i>
+          Notas
+        </button>
+      </div>
+
+      <!-- Tab Content: Información Básica -->
+      <div id="tab-info" class="tab-content active">
+        <!-- Contact Information -->
+        <div class="info-section">
+          <div class="info-section-header">
+            <div class="info-section-title">
+              <i data-lucide="phone" class="icon-lg" style="color: var(--p-primary-500);"></i>
+              Información de Contacto
+            </div>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-item">
+              <div class="info-label">Teléfono</div>
+              <div class="info-value">+57 300 123 4567</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Email</div>
+              <div class="info-value">pedro.garcia@email.com</div>
+            </div>
+            <div class="info-item" style="grid-column: 1 / -1;">
+              <div class="info-label">Dirección</div>
+              <div class="info-value">Calle 45 #23-15, Apto 302<br>Bogotá, Cundinamarca</div>
+            </div>
+          </div>
+
+          <div style="margin-top: var(--spacing-xl); padding-top: var(--spacing-xl); border-top: 1px solid var(--surface-border);">
+            <div class="info-section-title" style="margin-bottom: var(--spacing-lg);">
+              <i data-lucide="building-2" class="icon-lg" style="color: var(--p-primary-500);"></i>
+              Información del Seguro
+            </div>
+
+            <div class="info-grid">
+              <div class="info-item">
+                <div class="info-label">EPS</div>
+                <div class="info-value">Sura</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Tipo de Afiliación</div>
+                <div class="info-value">Cotizante</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Número de Carnet</div>
+                <div class="info-value">123456789</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: var(--spacing-xl); padding-top: var(--spacing-xl); border-top: 1px solid var(--surface-border);">
+            <div class="info-section-title" style="margin-bottom: var(--spacing-lg);">
+              <i data-lucide="user-round" class="icon-lg" style="color: var(--p-primary-500);"></i>
+              Contacto de Emergencia
+            </div>
+
+            <div class="info-grid">
+              <div class="info-item">
+                <div class="info-label">Nombre</div>
+                <div class="info-value">María García (Hija)</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Teléfono</div>
+                <div class="info-value">+57 301 987 6543</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Parentesco</div>
+                <div class="info-value">Hija</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content: Historia Clínica -->
+      <div id="tab-history" class="tab-content">
+        <div class="info-section">
+          <h3 class="text-xl font-bold mb-4">Historia Clínica</h3>
+          <p class="text-muted">Información médica e historia del paciente.</p>
+        </div>
+      </div>
+
+      <!-- Tab Content: Fichas/Evaluaciones (NEW) -->
+      <div id="tab-fichas" class="tab-content">
+        <div class="info-section">
+          <div class="info-section-header">
+            <div class="info-section-title">
+              <i data-lucide="clipboard-list" class="icon-lg" style="color: var(--p-primary-500);"></i>
+              Fichas y Evaluaciones
+            </div>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Estado</th>
+                  <th>Instrumento</th>
+                  <th>Fecha</th>
+                  <th>Versión</th>
+                  <th>Responsable</th>
+                  <th style="text-align: center;">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Row 1 - Completed -->
+                <tr>
+                  <td>
+                    <span class="badge badge-success status-icon">
+                      <i data-lucide="check-circle" class="icon-sm"></i>
+                      Completado
+                    </span>
+                  </td>
+                  <td>
+                    <div class="font-medium">Ficha Valoración General</div>
+                  </td>
+                  <td>07/01/2024</td>
+                  <td>
+                    <span class="font-mono text-sm">v1</span>
+                  </td>
+                  <td>L. González</td>
+                  <td>
+                    <div class="flex items-center justify-center gap-2">
+                      <button class="btn btn-ghost btn-icon btn-sm" title="Ver">
+                        <i data-lucide="eye" class="icon-sm"></i>
+                      </button>
+                      <button class="btn btn-ghost btn-icon btn-sm" title="Descargar">
+                        <i data-lucide="download" class="icon-sm"></i>
+                      </button>
+                      <button class="btn btn-ghost btn-icon btn-sm" title="Actualizar" onclick="window.location.href='patient_complete_instrument_1.html'">
+                        <i data-lucide="refresh-cw" class="icon-sm"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Row 2 - Completed -->
+                <tr>
+                  <td>
+                    <span class="badge badge-success status-icon">
+                      <i data-lucide="check-circle" class="icon-sm"></i>
+                      Completado
+                    </span>
+                  </td>
+                  <td>
+                    <div class="font-medium">Informe Nutricional</div>
+                  </td>
+                  <td>15/01/2024</td>
+                  <td>
+                    <span class="font-mono text-sm">v1</span>
+                  </td>
+                  <td>A. Martínez</td>
+                  <td>
+                    <div class="flex items-center justify-center gap-2">
+                      <button class="btn btn-ghost btn-icon btn-sm" title="Ver">
+                        <i data-lucide="eye" class="icon-sm"></i>
+                      </button>
+                      <button class="btn btn-ghost btn-icon btn-sm" title="Descargar">
+                        <i data-lucide="download" class="icon-sm"></i>
+                      </button>
+                      <button class="btn btn-ghost btn-icon btn-sm" title="Actualizar" onclick="window.location.href='patient_complete_instrument_1.html'">
+                        <i data-lucide="refresh-cw" class="icon-sm"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Row 3 - Completed v2 -->
+                <tr>
+                  <td>
+                    <span class="badge badge-success status-icon">
+                      <i data-lucide="check-circle" class="icon-sm"></i>
+                      Completado
+                    </span>
+                  </td>
+                  <td>
+                    <div class="font-medium">Informe Nutricional</div>
+                  </td>
+                  <td>15/02/2024</td>
+                  <td>
+                    <span class="font-mono text-sm">v2</span>
+                  </td>
+                  <td>A. Martínez</td>
+                  <td>
+                    <div class="flex items-center justify-center gap-2">
+                      <button class="btn btn-ghost btn-icon btn-sm" title="Ver">
+                        <i data-lucide="eye" class="icon-sm"></i>
+                      </button>
+                      <button class="btn btn-ghost btn-icon btn-sm" title="Descargar">
+                        <i data-lucide="download" class="icon-sm"></i>
+                      </button>
+                      <button class="btn btn-ghost btn-icon btn-sm" title="Actualizar" onclick="window.location.href='patient_complete_instrument_1.html'">
+                        <i data-lucide="refresh-cw" class="icon-sm"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Row 4 - Pending -->
+                <tr>
+                  <td>
+                    <span class="badge badge-warning status-icon">
+                      <i data-lucide="clock" class="icon-sm"></i>
+                      Pendiente
+                    </span>
+                  </td>
+                  <td>
+                    <div class="font-medium">Evaluación de Ingreso</div>
+                  </td>
+                  <td>
+                    <span class="text-muted">Pendiente</span>
+                  </td>
+                  <td>
+                    <span class="text-muted">—</span>
+                  </td>
+                  <td>
+                    <span class="text-muted">—</span>
+                  </td>
+                  <td>
+                    <div class="flex items-center justify-center gap-2">
+                      <button class="btn btn-primary btn-sm" onclick="window.location.href='patient_complete_instrument_1.html'">
+                        Completar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Row 5 - Completed -->
+                <tr>
+                  <td>
+                    <span class="badge badge-success status-icon">
+                      <i data-lucide="check-circle" class="icon-sm"></i>
+                      Completado
+                    </span>
+                  </td>
+                  <td>
+                    <div class="font-medium">Matrícula</div>
+                  </td>
+                  <td>20/12/2023</td>
+                  <td>
+                    <span class="font-mono text-sm">v1</span>
+                  </td>
+                  <td>Admin</td>
+                  <td>
+                    <div class="flex items-center justify-center gap-2">
+                      <button class="btn btn-ghost btn-icon btn-sm" title="Ver">
+                        <i data-lucide="eye" class="icon-sm"></i>
+                      </button>
+                      <button class="btn btn-ghost btn-icon btn-sm" title="Descargar">
+                        <i data-lucide="download" class="icon-sm"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content: Notas -->
+      <div id="tab-notes" class="tab-content">
+        <div class="info-section">
+          <h3 class="text-xl font-bold mb-4">Notas e Incidentes</h3>
+          <p class="text-muted">Registro de notas y observaciones del paciente.</p>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Sidebar functionality
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+    const menuToggle = document.getElementById('menuToggle');
+
+    menuToggle.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+      sidebarOverlay.classList.toggle('show');
+    });
+
+    sidebarOverlay.addEventListener('click', function() {
+      sidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('show');
+    });
+
+    // Tab functionality
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const tabId = button.getAttribute('data-tab');
+
+        // Remove active class from all buttons and contents
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        tabContents.forEach(content => content.classList.remove('active'));
+
+        // Add active class to clicked button and corresponding content
+        button.classList.add('active');
+        document.getElementById(`tab-${tabId}`).classList.add('active');
+
+        // Reinitialize icons after tab switch
+        lucide.createIcons();
+      });
+    });
+
+    // Reinitialize icons
+    lucide.createIcons();
+  </script>
+</body>
+</html>

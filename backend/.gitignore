@@ -1,0 +1,64 @@
+# Backend-specific .gitignore (Express + Node.js + Prisma)
+
+# Dependencies
+node_modules/
+.pnpm-store/
+.yarn/
+.npm/
+
+# Build output
+dist/
+build/
+out/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+test-results/
+
+# Prisma
+src/generated/prisma/
+prisma/dev.db
+prisma/dev.db-journal
+prisma/*.db
+prisma/*.db-journal
+
+# TypeScript
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Database dumps
+*.sql
+*.dump
+!prisma/seed.sql
+
+# Uploads (if stored locally)
+uploads/
+public/uploads/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

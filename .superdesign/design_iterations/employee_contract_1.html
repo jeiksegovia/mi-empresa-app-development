@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Contratos - Mi Empresa</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    /* Sidebar styles */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: -280px;
+      width: 280px;
+      height: 100vh;
+      background: var(--surface-card);
+      border-right: 1px solid var(--border);
+      transition: left 0.3s ease-out;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .sidebar.open {
+      left: 0;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+      z-index: 99;
+    }
+
+    .sidebar-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius);
+      transition: all 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--foreground);
+    }
+
+    .sidebar-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .sidebar-item.active {
+      background: var(--p-primary-500);
+      color: white;
+    }
+
+    /* Timeline Styles */
+    .timeline-container {
+      position: relative;
+      padding-left: var(--spacing-xl);
+    }
+
+    .timeline-year {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-color-secondary);
+      margin: var(--spacing-xl) 0 var(--spacing-lg) 0;
+      padding-bottom: var(--spacing-sm);
+      border-bottom: 1px solid var(--surface-border);
+    }
+
+    .timeline-item {
+      position: relative;
+      padding-left: var(--spacing-2xl);
+      padding-bottom: var(--spacing-xl);
+      border-left: 2px solid var(--surface-border);
+    }
+
+    .timeline-item:last-child {
+      border-left-color: transparent;
+      padding-bottom: 0;
+    }
+
+    .timeline-marker {
+      position: absolute;
+      left: -9px;
+      top: 4px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 3px solid var(--surface-card);
+      background: var(--surface-border);
+      transition: all 0.3s ease;
+    }
+
+    .timeline-item.active .timeline-marker {
+      background: var(--p-primary-500) !important;
+      box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.2);
+    }
+
+    .timeline-content {
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--border-radius);
+      padding: var(--spacing-lg);
+      transition: all 0.3s ease;
+    }
+
+    .timeline-content:hover {
+      border-color: var(--p-primary-500);
+      transform: translateX(4px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .timeline-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .timeline-date {
+      font-weight: 600;
+      color: var(--text-color);
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .timeline-duration {
+      font-size: 0.875rem;
+      color: var(--text-color-secondary);
+    }
+
+    .timeline-details {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+      margin: var(--spacing-md) 0;
+    }
+
+    .timeline-detail-row {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      font-size: 0.875rem;
+      color: var(--text-color-secondary);
+    }
+
+    .timeline-actions {
+      display: flex;
+      gap: var(--spacing-sm);
+      margin-top: var(--spacing-md);
+      padding-top: var(--spacing-md);
+      border-top: 1px solid var(--surface-border);
+    }
+
+    /* Current Contract Card */
+    .current-contract-card {
+      background: linear-gradient(135deg, var(--p-primary-500) 0%, var(--p-primary-600) 100%);
+      border-radius: var(--border-radius);
+      padding: var(--spacing-xl);
+      color: white;
+      margin-bottom: var(--spacing-xl);
+    }
+
+    .contract-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--spacing-lg);
+      margin: var(--spacing-lg) 0;
+    }
+
+    .contract-detail {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+    }
+
+    .contract-detail-label {
+      font-size: 0.75rem;
+      opacity: 0.9;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .contract-detail-value {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .contract-actions {
+      display: flex;
+      gap: var(--spacing-sm);
+      margin-top: var(--spacing-lg);
+      flex-wrap: wrap;
+    }
+
+    .btn-white {
+      background: white;
+      color: var(--p-primary-600);
+      border: none;
+      padding: var(--spacing-sm) var(--spacing-lg);
+      border-radius: var(--border-radius);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+    }
+
+    .btn-white:hover {
+      background: #f3f4f6;
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    /* Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--spacing-lg);
+      margin-bottom: var(--spacing-xl);
+    }
+
+    .stat-card {
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--border-radius);
+      padding: var(--spacing-lg);
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      border-color: var(--p-primary-500);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--p-primary-500);
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--text-color-secondary);
+    }
+
+    /* Modifications List */
+    .modifications-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-md);
+    }
+
+    .modification-item {
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--border-radius);
+      padding: var(--spacing-lg);
+      transition: all 0.3s ease;
+    }
+
+    .modification-item:hover {
+      border-color: var(--p-primary-500);
+      box-shadow: var(--shadow-md);
+    }
+
+    .modification-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .modification-date {
+      font-size: 0.875rem;
+      color: var(--text-color-secondary);
+    }
+
+    .modification-title {
+      font-weight: 600;
+      color: var(--text-color);
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .modification-description {
+      font-size: 0.875rem;
+      color: var(--text-color-secondary);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .modification-actions {
+      display: flex;
+      gap: var(--spacing-sm);
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 9999;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 1;
+    }
+
+    .modal-content {
+      background: var(--surface-card);
+      border-radius: var(--border-radius);
+      width: 90%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
+      transform: scale(0.9);
+      transition: transform 0.3s ease;
+    }
+
+    .modal-overlay.show .modal-content {
+      transform: scale(1);
+    }
+
+    .modal-header {
+      padding: var(--spacing-xl);
+      border-bottom: 1px solid var(--surface-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-body {
+      padding: var(--spacing-xl);
+    }
+
+    .modal-footer {
+      padding: var(--spacing-xl);
+      border-top: 1px solid var(--surface-border);
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--spacing-sm);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .contract-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .timeline-item {
+        padding-left: var(--spacing-lg);
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div style="padding: var(--spacing-xl);">
+      <!-- Logo/Brand -->
+      <div class="flex items-center gap-3 mb-8">
+        <div class="flex items-center justify-center w-10 h-10 rounded-lg"
+             style="background: var(--p-primary-500);">
+          <i data-lucide="building-2" class="icon-lg" style="color: white;"></i>
+        </div>
+        <div>
+          <h2 class="font-semibold text-base">Mi Empresa</h2>
+          <p class="text-xs text-muted">jeik-sa</p>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <nav>
+        <a href="dashboard_1.html" class="sidebar-item">
+          <i data-lucide="home" class="icon"></i>
+          <span>Inicio</span>
+        </a>
+        <a href="employees_list_1.html" class="sidebar-item active">
+          <i data-lucide="users" class="icon"></i>
+          <span>Empleados</span>
+        </a>
+        <a href="patients_list_1.html" class="sidebar-item">
+          <i data-lucide="user" class="icon"></i>
+          <span>Pacientes</span>
+        </a>
+                <a href="instruments_list_1.html" class="sidebar-item">
+          <i data-lucide="clipboard-list" class="icon"></i>
+          <span>Instrumentos</span>
+        </a>
+<a href="#" class="sidebar-item">
+          <i data-lucide="file-check" class="icon"></i>
+          <span>Certificados</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="wallet" class="icon"></i>
+          <span>Nómina</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="bar-chart" class="icon"></i>
+          <span>Reportes</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="settings" class="icon"></i>
+          <span>Configuración</span>
+        </a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Header -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <button id="menuToggle" class="btn btn-ghost btn-icon">
+            <i data-lucide="menu" class="icon"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Gestión de Contratos - Juan Pérez González</h1>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                  style="background: #ef4444; color: white;">3</span>
+          </button>
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+          <span class="text-sm font-medium hidden md:inline">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Content Area -->
+    <div class="container" style="padding: var(--spacing-xl); max-width: 1400px; margin: 0 auto;">
+
+      <!-- Back Button -->
+      <div style="margin-bottom: var(--spacing-xl);">
+        <a href="employee_profile_1.html" class="btn btn-ghost" style="padding-left: 0;">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          Volver al Perfil
+        </a>
+      </div>
+
+      <!-- Current Contract Card -->
+      <div class="current-contract-card">
+        <div class="flex items-center justify-between" style="margin-bottom: var(--spacing-lg);">
+          <div class="flex items-center gap-3">
+            <i data-lucide="file-text" style="width: 32px; height: 32px;"></i>
+            <div>
+              <h2 class="text-2xl font-bold">Contrato Actual</h2>
+              <div class="flex items-center gap-2" style="margin-top: var(--spacing-xs);">
+                <span class="badge" style="background: #10b981; color: white;">
+                  <i data-lucide="circle" style="width: 8px; height: 8px; fill: white;"></i>
+                  Activo
+                </span>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-white" id="newContractBtn">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            Nuevo Contrato
+          </button>
+        </div>
+
+        <div class="contract-grid">
+          <div class="contract-detail">
+            <div class="contract-detail-label">Tipo de Contrato</div>
+            <div class="contract-detail-value">Término Indefinido</div>
+          </div>
+          <div class="contract-detail">
+            <div class="contract-detail-label">Fecha de Inicio</div>
+            <div class="contract-detail-value">15 Ene 2023</div>
+          </div>
+          <div class="contract-detail">
+            <div class="contract-detail-label">Cargo</div>
+            <div class="contract-detail-value">Desarrollador Senior</div>
+          </div>
+          <div class="contract-detail">
+            <div class="contract-detail-label">Salario</div>
+            <div class="contract-detail-value">$3,500,000</div>
+          </div>
+          <div class="contract-detail">
+            <div class="contract-detail-label">Jornada</div>
+            <div class="contract-detail-value">Tiempo Completo</div>
+          </div>
+          <div class="contract-detail">
+            <div class="contract-detail-label">Sede</div>
+            <div class="contract-detail-value">Bogotá</div>
+          </div>
+          <div class="contract-detail">
+            <div class="contract-detail-label">Área</div>
+            <div class="contract-detail-value">Tecnología</div>
+          </div>
+        </div>
+
+        <div class="contract-actions">
+          <button class="btn-white">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            Ver Documento
+          </button>
+          <button class="btn-white" id="modifyContractBtn">
+            <i data-lucide="edit" class="w-4 h-4"></i>
+            Modificar
+          </button>
+          <button class="btn-white">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            Renovar
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary Stats -->
+      <div class="card" style="margin-bottom: var(--spacing-xl); padding: var(--spacing-xl);">
+        <div class="flex items-center gap-2" style="margin-bottom: var(--spacing-lg);">
+          <i data-lucide="bar-chart-2" class="icon-lg" style="color: var(--p-primary-500);"></i>
+          <h2 class="text-xl font-semibold">Resumen de Contratos</h2>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value">3</div>
+            <div class="stat-label">Total Contratos</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">1</div>
+            <div class="stat-label">Activos</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">2</div>
+            <div class="stat-label">Finalizados</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">2</div>
+            <div class="stat-label">Años en Empresa</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Contract History Timeline -->
+      <div class="card" style="margin-bottom: var(--spacing-xl); padding: var(--spacing-xl);">
+        <div class="flex items-center justify-between" style="margin-bottom: var(--spacing-xl);">
+          <div class="flex items-center gap-2">
+            <i data-lucide="clock" class="icon-lg" style="color: var(--p-primary-500);"></i>
+            <h2 class="text-xl font-semibold">Historial de Contratos</h2>
+          </div>
+          <div class="relative">
+            <input type="text" class="form-input" placeholder="Buscar..." style="padding-right: 2.5rem; width: 250px;">
+            <i data-lucide="search" class="icon" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-color-secondary);"></i>
+          </div>
+        </div>
+
+        <div class="timeline-container">
+          <!-- 2023 -->
+          <div class="timeline-year">2023 (Actual)</div>
+
+          <div class="timeline-item active">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div>
+                  <div class="timeline-date">15 Ene 2023 - Presente</div>
+                  <div class="timeline-duration">Término Indefinido</div>
+                </div>
+                <span class="badge" style="background: #10b981; color: white;">Activo</span>
+              </div>
+
+              <div class="timeline-details">
+                <div class="timeline-detail-row">
+                  <i data-lucide="briefcase" class="icon-sm" style="color: var(--p-primary-500);"></i>
+                  <span><strong>Cargo:</strong> Desarrollador Senior</span>
+                </div>
+                <div class="timeline-detail-row">
+                  <i data-lucide="dollar-sign" class="icon-sm" style="color: var(--p-green-500);"></i>
+                  <span><strong>Salario:</strong> $3,500,000/mes</span>
+                </div>
+                <div class="timeline-detail-row">
+                  <i data-lucide="map-pin" class="icon-sm" style="color: var(--p-blue-500);"></i>
+                  <span><strong>Sede:</strong> Bogotá</span>
+                </div>
+                <div class="timeline-detail-row">
+                  <i data-lucide="building" class="icon-sm" style="color: var(--p-orange-500);"></i>
+                  <span><strong>Área:</strong> Tecnología</span>
+                </div>
+              </div>
+
+              <div class="timeline-actions">
+                <button class="btn btn-outline btn-sm">
+                  <i data-lucide="file-text" class="w-3 h-3"></i>
+                  Documento
+                </button>
+                <button class="btn btn-ghost btn-sm">
+                  <i data-lucide="eye" class="w-3 h-3"></i>
+                  Detalles
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2022 -->
+          <div class="timeline-year">2022</div>
+
+          <div class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div>
+                  <div class="timeline-date">01 Mar 2022 - 14 Ene 2023</div>
+                  <div class="timeline-duration">Término Fijo (1 año) • 10 meses</div>
+                </div>
+                <span class="badge" style="background: var(--surface-border); color: var(--text-color-secondary);">Finalizado</span>
+              </div>
+
+              <div class="timeline-details">
+                <div class="timeline-detail-row">
+                  <i data-lucide="briefcase" class="icon-sm" style="color: var(--p-primary-500);"></i>
+                  <span><strong>Cargo:</strong> Desarrollador</span>
+                </div>
+                <div class="timeline-detail-row">
+                  <i data-lucide="dollar-sign" class="icon-sm" style="color: var(--p-green-500);"></i>
+                  <span><strong>Salario:</strong> $2,800,000/mes</span>
+                </div>
+                <div class="timeline-detail-row">
+                  <i data-lucide="trending-up" class="icon-sm" style="color: var(--p-blue-500);"></i>
+                  <span><strong>Motivo:</strong> Ascenso</span>
+                </div>
+              </div>
+
+              <div class="timeline-actions">
+                <button class="btn btn-outline btn-sm">
+                  <i data-lucide="file-text" class="w-3 h-3"></i>
+                  Documento
+                </button>
+                <button class="btn btn-ghost btn-sm">
+                  <i data-lucide="eye" class="w-3 h-3"></i>
+                  Detalles
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2021 -->
+          <div class="timeline-year">2021</div>
+
+          <div class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div>
+                  <div class="timeline-date">15 Ago 2021 - 28 Feb 2022</div>
+                  <div class="timeline-duration">Término Fijo (6 meses) • 6 meses</div>
+                </div>
+                <span class="badge" style="background: var(--surface-border); color: var(--text-color-secondary);">Finalizado</span>
+              </div>
+
+              <div class="timeline-details">
+                <div class="timeline-detail-row">
+                  <i data-lucide="briefcase" class="icon-sm" style="color: var(--p-primary-500);"></i>
+                  <span><strong>Cargo:</strong> Desarrollador Junior</span>
+                </div>
+                <div class="timeline-detail-row">
+                  <i data-lucide="dollar-sign" class="icon-sm" style="color: var(--p-green-500);"></i>
+                  <span><strong>Salario:</strong> $2,200,000/mes</span>
+                </div>
+                <div class="timeline-detail-row">
+                  <i data-lucide="refresh-cw" class="icon-sm" style="color: var(--p-blue-500);"></i>
+                  <span><strong>Motivo:</strong> Renovación</span>
+                </div>
+              </div>
+
+              <div class="timeline-actions">
+                <button class="btn btn-outline btn-sm">
+                  <i data-lucide="file-text" class="w-3 h-3"></i>
+                  Documento
+                </button>
+                <button class="btn btn-ghost btn-sm">
+                  <i data-lucide="eye" class="w-3 h-3"></i>
+                  Detalles
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modifications Section -->
+      <div class="card" style="padding: var(--spacing-xl);">
+        <div class="flex items-center gap-2" style="margin-bottom: var(--spacing-xl);">
+          <i data-lucide="file-edit" class="icon-lg" style="color: var(--p-primary-500);"></i>
+          <h2 class="text-xl font-semibold">Modificaciones y Otros Sí</h2>
+        </div>
+
+        <div class="modifications-list">
+          <!-- Modification 1 -->
+          <div class="modification-item">
+            <div class="modification-header">
+              <div class="modification-date">01 Jul 2023</div>
+              <span class="badge badge-priority-low">Aumento Salarial</span>
+            </div>
+            <div class="modification-title">Aumento Salarial</div>
+            <div class="modification-description">
+              De $3,200,000 a $3,500,000
+              <span class="badge" style="background: var(--p-green-500); color: white; margin-left: var(--spacing-xs);">
+                +9.4%
+              </span>
+            </div>
+            <div class="modification-actions">
+              <button class="btn btn-outline btn-sm">
+                <i data-lucide="file-text" class="w-3 h-3"></i>
+                Otro Sí
+              </button>
+              <button class="btn btn-ghost btn-sm">
+                <i data-lucide="eye" class="w-3 h-3"></i>
+                Ver Detalles
+              </button>
+            </div>
+          </div>
+
+          <!-- Modification 2 -->
+          <div class="modification-item">
+            <div class="modification-header">
+              <div class="modification-date">15 May 2023</div>
+              <span class="badge badge-priority-medium">Cambio de Sede</span>
+            </div>
+            <div class="modification-title">Cambio de Sede</div>
+            <div class="modification-description">
+              De Medellín a Bogotá
+            </div>
+            <div class="modification-actions">
+              <button class="btn btn-outline btn-sm">
+                <i data-lucide="file-text" class="w-3 h-3"></i>
+                Otro Sí
+              </button>
+              <button class="btn btn-ghost btn-sm">
+                <i data-lucide="eye" class="w-3 h-3"></i>
+                Ver Detalles
+              </button>
+            </div>
+          </div>
+
+          <!-- Modification 3 -->
+          <div class="modification-item">
+            <div class="modification-header">
+              <div class="modification-date">15 Ene 2023</div>
+              <span class="badge badge-priority-high">Conversión de Contrato</span>
+            </div>
+            <div class="modification-title">Conversión a Término Indefinido</div>
+            <div class="modification-description">
+              De Término Fijo a Término Indefinido
+            </div>
+            <div class="modification-actions">
+              <button class="btn btn-outline btn-sm">
+                <i data-lucide="file-text" class="w-3 h-3"></i>
+                Otro Sí
+              </button>
+              <button class="btn btn-ghost btn-sm">
+                <i data-lucide="eye" class="w-3 h-3"></i>
+                Ver Detalles
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- New Contract Modal -->
+  <div class="modal-overlay" id="newContractModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="text-xl font-semibold">Crear Nuevo Contrato</h2>
+        <button class="btn btn-ghost btn-icon" id="closeNewContractModal">
+          <i data-lucide="x" class="icon"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+          <div>
+            <label class="block text-sm font-medium mb-2">Tipo de Contrato</label>
+            <select class="form-input">
+              <option>Término Indefinido</option>
+              <option>Término Fijo</option>
+              <option>Obra o Labor</option>
+              <option>Prestación de Servicios</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">Fecha de Inicio</label>
+            <input type="date" class="form-input">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">Cargo</label>
+            <input type="text" class="form-input" placeholder="Ej: Desarrollador Senior">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">Salario Mensual (COP)</label>
+            <input type="number" class="form-input" placeholder="3500000">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">Jornada Laboral</label>
+            <select class="form-input">
+              <option>Tiempo Completo</option>
+              <option>Medio Tiempo</option>
+              <option>Por Horas</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">Sede</label>
+            <select class="form-input">
+              <option>Bogotá</option>
+              <option>Medellín</option>
+              <option>Cali</option>
+              <option>Barranquilla</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="cancelNewContract">Cancelar</button>
+        <button class="btn btn-primary">Crear Contrato</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modify Contract Modal -->
+  <div class="modal-overlay" id="modifyContractModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="text-xl font-semibold">Modificar Contrato (Otro Sí)</h2>
+        <button class="btn btn-ghost btn-icon" id="closeModifyContractModal">
+          <i data-lucide="x" class="icon"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+          <div>
+            <label class="block text-sm font-medium mb-2">Tipo de Modificación</label>
+            <select class="form-input">
+              <option>Aumento Salarial</option>
+              <option>Cambio de Cargo</option>
+              <option>Cambio de Sede</option>
+              <option>Cambio de Jornada</option>
+              <option>Otro</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">Fecha de Vigencia</label>
+            <input type="date" class="form-input">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">Nuevo Salario (si aplica)</label>
+            <input type="number" class="form-input" placeholder="3500000">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">Descripción de la Modificación</label>
+            <textarea class="form-input" rows="4" placeholder="Describa los cambios realizados..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="cancelModifyContract">Cancelar</button>
+        <button class="btn btn-primary">Guardar Modificación</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Sidebar functionality
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+    const menuToggle = document.getElementById('menuToggle');
+
+    menuToggle.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+      sidebarOverlay.classList.toggle('show');
+    });
+
+    sidebarOverlay.addEventListener('click', function() {
+      sidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('show');
+    });
+
+    // New Contract Modal
+    const newContractModal = document.getElementById('newContractModal');
+    const newContractBtn = document.getElementById('newContractBtn');
+    const closeNewContractModal = document.getElementById('closeNewContractModal');
+    const cancelNewContract = document.getElementById('cancelNewContract');
+
+    newContractBtn.addEventListener('click', function() {
+      newContractModal.classList.add('show');
+      lucide.createIcons();
+    });
+
+    closeNewContractModal.addEventListener('click', function() {
+      newContractModal.classList.remove('show');
+    });
+
+    cancelNewContract.addEventListener('click', function() {
+      newContractModal.classList.remove('show');
+    });
+
+    // Modify Contract Modal
+    const modifyContractModal = document.getElementById('modifyContractModal');
+    const modifyContractBtn = document.getElementById('modifyContractBtn');
+    const closeModifyContractModal = document.getElementById('closeModifyContractModal');
+    const cancelModifyContract = document.getElementById('cancelModifyContract');
+
+    modifyContractBtn.addEventListener('click', function() {
+      modifyContractModal.classList.add('show');
+      lucide.createIcons();
+    });
+
+    closeModifyContractModal.addEventListener('click', function() {
+      modifyContractModal.classList.remove('show');
+    });
+
+    cancelModifyContract.addEventListener('click', function() {
+      modifyContractModal.classList.remove('show');
+    });
+
+    // Close modals on overlay click
+    newContractModal.addEventListener('click', function(e) {
+      if (e.target === newContractModal) {
+        newContractModal.classList.remove('show');
+      }
+    });
+
+    modifyContractModal.addEventListener('click', function(e) {
+      if (e.target === modifyContractModal) {
+        modifyContractModal.classList.remove('show');
+      }
+    });
+
+    // ESC key to close modals
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        newContractModal.classList.remove('show');
+        modifyContractModal.classList.remove('show');
+      }
+    });
+  </script>
+</body>
+</html>

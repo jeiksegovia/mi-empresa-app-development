@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pacientes - Mi Empresa App</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: -280px;
+      width: 280px;
+      height: 100vh;
+      background: var(--surface-card);
+      border-right: 1px solid var(--border);
+      transition: left 0.3s ease-out;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .sidebar.open {
+      left: 0;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+      z-index: 99;
+    }
+
+    .sidebar-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius);
+      transition: all 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--foreground);
+    }
+
+    .sidebar-item:hover {
+      background: var(--surface-hover);
+    }
+
+    .sidebar-item.active {
+      background: var(--p-primary-500);
+      color: white;
+    }
+
+    .stat-card {
+      transition: all 0.2s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .table-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1.5fr 1.5fr 0.5fr;
+      align-items: center;
+      gap: var(--spacing-lg);
+      padding: var(--spacing-lg);
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+
+    .table-row:hover {
+      background: var(--surface-hover);
+      cursor: pointer;
+    }
+
+    .table-row:last-child {
+      border-bottom: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div style="padding: var(--spacing-xl);">
+      <div class="flex items-center gap-3 mb-8">
+        <div class="flex items-center justify-center w-10 h-10 rounded-lg" style="background: var(--p-primary-500);">
+          <i data-lucide="building-2" class="icon-lg" style="color: white;"></i>
+        </div>
+        <div>
+          <h2 class="font-semibold text-base">Mi Empresa</h2>
+          <p class="text-xs text-muted">jeik-sa</p>
+        </div>
+      </div>
+      <nav>
+        <a href="dashboard_1.html" class="sidebar-item">
+          <i data-lucide="home" class="icon"></i>
+          <span>Inicio</span>
+        </a>
+        <a href="employees_list_1.html" class="sidebar-item">
+          <i data-lucide="users" class="icon"></i>
+          <span>Empleados</span>
+        </a>
+        <a href="patients_list_1.html" class="sidebar-item active">
+          <i data-lucide="user" class="icon"></i>
+          <span>Pacientes</span>
+        </a>
+                <a href="instruments_list_1.html" class="sidebar-item">
+          <i data-lucide="clipboard-list" class="icon"></i>
+          <span>Instrumentos</span>
+        </a>
+<a href="certificates_1.html" class="sidebar-item">
+          <i data-lucide="file-check" class="icon"></i>
+          <span>Certificados</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="wallet" class="icon"></i>
+          <span>Nómina</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="bar-chart" class="icon"></i>
+          <span>Reportes</span>
+        </a>
+        <a href="#" class="sidebar-item">
+          <i data-lucide="settings" class="icon"></i>
+          <span>Configuración</span>
+        </a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <div style="min-height: 100vh; background: var(--background);">
+
+    <!-- Top Header -->
+    <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <button id="menuToggle" class="btn btn-ghost btn-icon">
+            <i data-lucide="menu" class="icon"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Pacientes</h1>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="btn btn-ghost btn-icon relative">
+            <i data-lucide="bell" class="icon"></i>
+            <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+          </button>
+          <button class="btn btn-ghost btn-icon">
+            <i data-lucide="user-circle" class="icon"></i>
+          </button>
+          <span class="text-sm font-medium">jeik-sa</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main style="padding: var(--spacing-2xl) var(--spacing-xl);">
+
+      <!-- Page Title -->
+      <div class="flex items-start justify-between mb-8">
+        <div>
+          <h2 class="text-3xl font-bold mb-2">Pacientes</h2>
+          <p class="text-muted">Gestiona historias clínicas y notas médicas</p>
+        </div>
+        <button class="btn btn-primary">
+          <i data-lucide="plus" class="icon"></i>
+          <span>Nuevo paciente</span>
+        </button>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-lg mb-8">
+
+        <!-- All Patients -->
+        <div class="card stat-card">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2 mb-2">
+                <i data-lucide="clipboard-list" class="icon text-muted"></i>
+                <span class="text-sm text-muted">Todos</span>
+              </div>
+              <div class="text-2xl font-bold">120 pacientes</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active -->
+        <div class="card stat-card">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2 mb-2">
+                <i data-lucide="check-circle" class="icon" style="color: #22c55e;"></i>
+                <span class="text-sm text-muted">Activos</span>
+              </div>
+              <div class="text-2xl font-bold">95 pacientes</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Upcoming Appointments -->
+        <div class="card stat-card">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2 mb-2">
+                <i data-lucide="calendar" class="icon" style="color: var(--p-primary-400);"></i>
+                <span class="text-sm text-muted">Próximas citas</span>
+              </div>
+              <div class="text-2xl font-bold">8 citas</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Search and Filters -->
+      <div class="card mb-6" style="padding: var(--spacing-lg);">
+        <div class="flex items-center gap-4">
+          <div class="flex-1">
+            <div class="relative">
+              <i data-lucide="search" class="icon absolute left-3 top-1/2 transform -translate-y-1/2 text-muted"></i>
+              <input
+                type="text"
+                class="form-input"
+                placeholder="Buscar por nombre o ID de paciente..."
+                style="padding-left: 2.5rem;"
+              >
+            </div>
+          </div>
+          <button class="btn btn-outline">
+            <i data-lucide="filter" class="icon"></i>
+            <span>Filtrar</span>
+          </button>
+          <button class="btn btn-outline">
+            <i data-lucide="bar-chart" class="icon"></i>
+            <span>Reportes</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="card">
+
+        <!-- Table Header -->
+        <div class="table-row font-medium text-sm" style="background: var(--surface-hover); border-top-left-radius: var(--radius); border-top-right-radius: var(--radius);">
+          <div>Nombre</div>
+          <div>ID Paciente</div>
+          <div>Última nota</div>
+          <div>Próxima cita</div>
+          <div></div>
+        </div>
+
+        <!-- Table Rows -->
+        <div class="table-row">
+          <div class="font-medium">Ana María Martínez González</div>
+          <div class="text-sm">
+            <span class="badge badge-info">P-001</span>
+          </div>
+          <div class="text-sm text-muted">15 Ene 2025</div>
+          <div class="text-sm">
+            <div class="flex items-center gap-2">
+              <i data-lucide="calendar" class="icon-sm" style="color: var(--p-primary-400);"></i>
+              <span>20 Ene 2025</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="btn btn-ghost btn-icon btn-sm">
+              <i data-lucide="eye" class="icon-sm"></i>
+            </button>
+            <button class="btn btn-ghost btn-icon btn-sm">
+              <i data-lucide="more-vertical" class="icon-sm"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="table-row">
+          <div class="font-medium">Pedro Antonio Sánchez Rojas</div>
+          <div class="text-sm">
+            <span class="badge badge-info">P-002</span>
+          </div>
+          <div class="text-sm text-muted">10 Ene 2025</div>
+          <div class="text-sm text-muted">Sin cita programada</div>
+          <div class="flex items-center gap-2">
+            <button class="btn btn-ghost btn-icon btn-sm">
+              <i data-lucide="eye" class="icon-sm"></i>
+            </button>
+            <button class="btn btn-ghost btn-icon btn-sm">
+              <i data-lucide="more-vertical" class="icon-sm"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="table-row">
+          <div class="font-medium">Lucía Fernanda Torres Medina</div>
+          <div class="text-sm">
+            <span class="badge badge-info">P-003</span>
+          </div>
+          <div class="text-sm text-muted">18 Ene 2025</div>
+          <div class="text-sm">
+            <div class="flex items-center gap-2">
+              <i data-lucide="calendar" class="icon-sm" style="color: var(--p-primary-400);"></i>
+              <span>22 Ene 2025</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="btn btn-ghost btn-icon btn-sm">
+              <i data-lucide="eye" class="icon-sm"></i>
+            </button>
+            <button class="btn btn-ghost btn-icon btn-sm">
+              <i data-lucide="more-vertical" class="icon-sm"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="table-row">
+          <div class="font-medium">Roberto Carlos Díaz Hernández</div>
+          <div class="text-sm">
+            <span class="badge badge-info">P-004</span>
+          </div>
+          <div class="text-sm text-muted">12 Ene 2025</div>
+          <div class="text-sm">
+            <div class="flex items-center gap-2">
+              <i data-lucide="calendar" class="icon-sm" style="color: var(--p-primary-400);"></i>
+              <span>25 Ene 2025</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="btn btn-ghost btn-icon btn-sm">
+              <i data-lucide="eye" class="icon-sm"></i>
+            </button>
+            <button class="btn btn-ghost btn-icon btn-sm">
+              <i data-lucide="more-vertical" class="icon-sm"></i>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Pagination -->
+      <div class="flex items-center justify-between mt-6">
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-muted">Items por página:</span>
+          <select class="form-input" style="width: auto; padding: 0.375rem 2rem 0.375rem 0.75rem;">
+            <option>10</option>
+            <option>25</option>
+            <option>50</option>
+            <option>100</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-muted">1-10 de 120</span>
+          <div class="flex items-center gap-1">
+            <button class="btn btn-ghost btn-icon btn-sm" disabled>
+              <i data-lucide="chevron-left" class="icon-sm"></i>
+            </button>
+            <button class="btn btn-ghost btn-sm" style="background: var(--p-primary-500); color: white;">1</button>
+            <button class="btn btn-ghost btn-sm">2</button>
+            <button class="btn btn-ghost btn-sm">3</button>
+            <span class="text-sm text-muted">...</span>
+            <button class="btn btn-ghost btn-sm">12</button>
+            <button class="btn btn-ghost btn-icon btn-sm">
+              <i data-lucide="chevron-right" class="icon-sm"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Sidebar toggle
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    menuToggle.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+      sidebarOverlay.classList.toggle('show');
+    });
+
+    sidebarOverlay.addEventListener('click', function() {
+      sidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('show');
+    });
+  </script>
+
+</body>
+</html>

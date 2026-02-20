@@ -1,0 +1,16 @@
+{
+    "mcpServers": {
+      "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+      "@playwright/mcp@latest"
+      ],
+      "env": {
+        "PLAYWRIGHT_MCP_EXTENSION_TOKEN": "gXoG8INywG0EJQNxJzU3kzRm8XaKjnxeYCGHePmkXF8",
+        "PLAYWRIGHT_MCP_EXTENSION_TOKEN_personal": "gXoG8INywG0EJQNxJzU3kzRm8XaKjnxeYCGHePmkXF8",
+        "PLAYWRIGHT_MCP_EXTENSION_TOKEN_frontedge": "8bXEvrGh2cBgGklqkUXP1doK949MqBvOyKZdnt2U1jA"
+        }
+      }
+    }
+}

@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nuevo Empleado - Paso 3: Contrato y Familia | Mi Empresa</title>
+
+  <!-- Default Design System -->
+  <link rel="stylesheet" href="./default_ui_theme.css">
+
+  <!-- Tailwind for utilities -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    body {
+      background: var(--surface-ground) !important;
+      color: var(--text-color) !important;
+      font-family: var(--font-family) !important;
+      min-height: 100vh !important;
+    }
+
+    .wizard-container {
+      max-width: 1000px !important;
+      margin: 0 auto !important;
+      padding: var(--spacing-2xl) var(--spacing-lg) !important;
+    }
+
+    .wizard-header {
+      margin-bottom: var(--spacing-2xl) !important;
+    }
+
+    .wizard-title {
+      font-size: 2rem !important;
+      font-weight: 700 !important;
+      color: var(--text-color) !important;
+      margin-bottom: var(--spacing-xl) !important;
+    }
+
+    /* Stepper */
+    .stepper {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      margin-bottom: var(--spacing-2xl) !important;
+      position: relative !important;
+    }
+
+    .stepper::before {
+      content: '' !important;
+      position: absolute !important;
+      top: 20px !important;
+      left: 0 !important;
+      right: 0 !important;
+      height: 2px !important;
+      background: var(--surface-border) !important;
+      z-index: 0 !important;
+    }
+
+    .step {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: var(--spacing-sm) !important;
+      position: relative !important;
+      z-index: 1 !important;
+      flex: 1 !important;
+    }
+
+    .step-circle {
+      width: 40px !important;
+      height: 40px !important;
+      border-radius: 50% !important;
+      background: var(--surface-card) !important;
+      border: 2px solid var(--surface-border) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-weight: 600 !important;
+      color: var(--text-color-secondary) !important;
+      transition: all 0.3s ease !important;
+    }
+
+    .step.completed .step-circle {
+      background: var(--p-primary-500) !important;
+      border-color: var(--p-primary-500) !important;
+      color: white !important;
+    }
+
+    .step.active .step-circle {
+      background: var(--p-primary-500) !important;
+      border-color: var(--p-primary-500) !important;
+      color: white !important;
+      box-shadow: 0 0 0 4px var(--p-primary-500-alpha) !important;
+    }
+
+    .step-label {
+      font-size: 0.875rem !important;
+      color: var(--text-color-secondary) !important;
+      text-align: center !important;
+    }
+
+    .step.active .step-label,
+    .step.completed .step-label {
+      color: var(--text-color) !important;
+      font-weight: 500 !important;
+    }
+
+    /* Section Cards */
+    .section-card {
+      background: var(--surface-card) !important;
+      border: 1px solid var(--surface-border) !important;
+      border-radius: var(--border-radius) !important;
+      padding: var(--spacing-xl) !important;
+      margin-bottom: var(--spacing-xl) !important;
+    }
+
+    .section-header {
+      display: flex !important;
+      align-items: center !important;
+      gap: var(--spacing-md) !important;
+      margin-bottom: var(--spacing-xl) !important;
+    }
+
+    .section-icon {
+      width: 28px !important;
+      height: 28px !important;
+      color: var(--p-primary-500) !important;
+    }
+
+    .section-title {
+      font-size: 1.25rem !important;
+      font-weight: 600 !important;
+      color: var(--text-color) !important;
+    }
+
+    /* Form Grid */
+    .form-grid {
+      display: grid !important;
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: var(--spacing-lg) !important;
+      margin-bottom: var(--spacing-lg) !important;
+    }
+
+    .form-group {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: var(--spacing-xs) !important;
+    }
+
+    .form-label {
+      font-size: 0.875rem !important;
+      font-weight: 500 !important;
+      color: var(--text-color) !important;
+    }
+
+    .form-label .required {
+      color: var(--p-red-500) !important;
+    }
+
+    /* Entry Cards for Family Members */
+    .entry-card {
+      background: var(--surface-ground) !important;
+      border: 1px solid var(--surface-border) !important;
+      border-radius: var(--border-radius) !important;
+      padding: var(--spacing-lg) !important;
+      margin-bottom: var(--spacing-lg) !important;
+      position: relative !important;
+    }
+
+    .entry-header {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      margin-bottom: var(--spacing-lg) !important;
+    }
+
+    .entry-number {
+      font-size: 0.875rem !important;
+      font-weight: 600 !important;
+      color: var(--text-color-secondary) !important;
+    }
+
+    .delete-btn {
+      background: transparent !important;
+      border: none !important;
+      color: var(--p-red-500) !important;
+      cursor: pointer !important;
+      padding: var(--spacing-xs) !important;
+      border-radius: var(--border-radius) !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: var(--spacing-xs) !important;
+      transition: all 0.2s ease !important;
+    }
+
+    .delete-btn:hover {
+      background: var(--p-red-500-alpha) !important;
+    }
+
+    .delete-btn i {
+      width: 18px !important;
+      height: 18px !important;
+    }
+
+    /* Add Button */
+    .add-btn {
+      background: transparent !important;
+      border: 2px dashed var(--surface-border) !important;
+      color: var(--p-primary-500) !important;
+      padding: var(--spacing-md) var(--spacing-lg) !important;
+      border-radius: var(--border-radius) !important;
+      cursor: pointer !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: var(--spacing-sm) !important;
+      font-weight: 500 !important;
+      transition: all 0.2s ease !important;
+      width: 100% !important;
+    }
+
+    .add-btn:hover {
+      background: var(--p-primary-500-alpha) !important;
+      border-color: var(--p-primary-500) !important;
+    }
+
+    .add-btn i {
+      width: 20px !important;
+      height: 20px !important;
+    }
+
+    /* Navigation Buttons */
+    .nav-buttons {
+      display: flex !important;
+      justify-content: space-between !important;
+      margin-top: var(--spacing-2xl) !important;
+      gap: var(--spacing-lg) !important;
+    }
+
+    /* Currency Input */
+    .currency-input-wrapper {
+      position: relative !important;
+    }
+
+    .currency-symbol {
+      position: absolute !important;
+      left: 12px !important;
+      top: 50% !important;
+      transform: translateY(-50%) !important;
+      color: var(--text-color-secondary) !important;
+      font-weight: 500 !important;
+    }
+
+    .currency-input {
+      padding-left: 32px !important;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .form-grid {
+        grid-template-columns: 1fr !important;
+      }
+
+      .wizard-container {
+        padding: var(--spacing-lg) var(--spacing-md) !important;
+      }
+
+      .stepper {
+        flex-wrap: wrap !important;
+      }
+
+      .step {
+        flex: 0 0 20% !important;
+      }
+
+      .step-label {
+        font-size: 0.75rem !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Header -->
+  <header class="card" style="border-radius: 0; border-left: none; border-right: none; border-top: none; padding: var(--spacing-lg) var(--spacing-xl);">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <a href="employees_list_1.html" class="btn btn-ghost btn-icon">
+          <i data-lucide="arrow-left" class="icon"></i>
+        </a>
+        <h1 class="text-xl font-semibold">Empleados > Nuevo empleado</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <button class="btn btn-ghost btn-icon relative">
+          <i data-lucide="bell" class="icon"></i>
+          <span class="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style="background: #ef4444; color: white;">3</span>
+        </button>
+        <button class="btn btn-ghost btn-icon">
+          <i data-lucide="user-circle" class="icon"></i>
+        </button>
+        <span class="text-sm font-medium hidden md:inline">jeik-sa</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="wizard-container">
+    <!-- Header -->
+    <div class="wizard-header">
+      <h1 class="wizard-title">Nuevo Empleado</h1>
+
+      <!-- Stepper -->
+      <div class="stepper">
+        <div class="step completed">
+          <div class="step-circle">
+            <i data-lucide="check" style="width: 20px; height: 20px;"></i>
+          </div>
+          <span class="step-label">Datos Personales</span>
+        </div>
+        <div class="step completed">
+          <div class="step-circle">
+            <i data-lucide="check" style="width: 20px; height: 20px;"></i>
+          </div>
+          <span class="step-label">Formación</span>
+        </div>
+        <div class="step active">
+          <div class="step-circle">3</div>
+          <span class="step-label">Contrato y Familia</span>
+        </div>
+        <div class="step">
+          <div class="step-circle">4</div>
+          <span class="step-label">Nómina</span>
+        </div>
+        <div class="step">
+          <div class="step-circle">5</div>
+          <span class="step-label">Documentos</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contract Information Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <i data-lucide="file-text" class="section-icon"></i>
+        <h2 class="section-title">Información de Contrato</h2>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Tipo de Contrato <span class="required">*</span></label>
+          <select class="form-input" id="contractType" required>
+            <option value="">Seleccionar...</option>
+            <option value="indefinido">Indefinido</option>
+            <option value="fijo">Término Fijo</option>
+            <option value="obra">Obra o Labor</option>
+            <option value="servicios">Prestación de Servicios</option>
+            <option value="aprendizaje">Aprendizaje</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Modalidad <span class="required">*</span></label>
+          <select class="form-input" id="modality" required>
+            <option value="">Seleccionar...</option>
+            <option value="presencial">Presencial</option>
+            <option value="remoto">Remoto</option>
+            <option value="hibrido">Híbrido</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Fecha de Inicio <span class="required">*</span></label>
+          <input type="date" class="form-input" id="startDate" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Fecha de Fin</label>
+          <input type="date" class="form-input" id="endDate">
+          <span style="font-size: 0.75rem; color: var(--text-color-secondary);">Solo para contratos a término fijo</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Cargo <span class="required">*</span></label>
+          <input type="text" class="form-input" id="position" placeholder="Ej: Desarrollador Senior" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Departamento <span class="required">*</span></label>
+          <select class="form-input" id="department" required>
+            <option value="">Seleccionar...</option>
+            <option value="tecnologia">Tecnología</option>
+            <option value="rrhh">Recursos Humanos</option>
+            <option value="ventas">Ventas</option>
+            <option value="marketing">Marketing</option>
+            <option value="operaciones">Operaciones</option>
+            <option value="finanzas">Finanzas</option>
+            <option value="administracion">Administración</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Ubicación/Sede <span class="required">*</span></label>
+          <select class="form-input" id="location" required>
+            <option value="">Seleccionar...</option>
+            <option value="bogota">Bogotá - Oficina Principal</option>
+            <option value="medellin">Medellín - Sede Norte</option>
+            <option value="cali">Cali - Sede Sur</option>
+            <option value="barranquilla">Barranquilla - Sede Caribe</option>
+            <option value="remoto">Remoto</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Jefe Directo <span class="required">*</span></label>
+          <select class="form-input" id="manager" required>
+            <option value="">Seleccionar...</option>
+            <option value="mgr1">María González - Gerente de Tecnología</option>
+            <option value="mgr2">Carlos Rodríguez - Director de RRHH</option>
+            <option value="mgr3">Ana Martínez - Gerente de Operaciones</option>
+            <option value="mgr4">Luis Hernández - Director Comercial</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Salario Base <span class="required">*</span></label>
+          <div class="currency-input-wrapper">
+            <span class="currency-symbol">$</span>
+            <input type="text" class="form-input currency-input" id="baseSalary" placeholder="0" required>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--text-color-secondary);">Salario mensual en COP</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Período de Prueba (meses)</label>
+          <input type="number" class="form-input" id="probationPeriod" min="0" max="6" placeholder="Ej: 3">
+          <span style="font-size: 0.75rem; color: var(--text-color-secondary);">Máximo 6 meses según ley colombiana</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Family Members Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <i data-lucide="users" class="section-icon"></i>
+        <h2 class="section-title">Núcleo Familiar</h2>
+      </div>
+
+      <p style="color: var(--text-color-secondary); margin-bottom: var(--spacing-xl); font-size: 0.875rem;">
+        Esta información es opcional pero nos ayuda a conocer mejor la situación familiar del empleado.
+      </p>
+
+      <div id="familyMembersContainer">
+        <!-- Family member entries will be added here -->
+      </div>
+
+      <button class="add-btn" id="addFamilyMember">
+        <i data-lucide="plus"></i>
+        <span>Agregar familiar</span>
+      </button>
+    </div>
+
+    <!-- Emergency Contact Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <i data-lucide="phone" class="section-icon"></i>
+        <h2 class="section-title">Contacto de Emergencia</h2>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Nombre Completo <span class="required">*</span></label>
+          <input type="text" class="form-input" id="emergencyName" placeholder="Nombre completo del contacto" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Relación <span class="required">*</span></label>
+          <input type="text" class="form-input" id="emergencyRelation" placeholder="Ej: Esposa, Hermano, Padre" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Teléfono Principal <span class="required">*</span></label>
+          <input type="tel" class="form-input" id="emergencyPhone" placeholder="+57 300 123 4567" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Teléfono Alternativo</label>
+          <input type="tel" class="form-input" id="emergencyPhone2" placeholder="+57 300 123 4567">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-input" id="emergencyEmail" placeholder="contacto@ejemplo.com">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Dirección</label>
+          <input type="text" class="form-input" id="emergencyAddress" placeholder="Dirección completa">
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Buttons -->
+    <div class="nav-buttons">
+      <button class="btn btn-outline" onclick="window.location.href='employee_new_step_1_2.html'">
+        <i data-lucide="arrow-left" style="width: 18px; height: 18px;"></i>
+        <span>Atrás</span>
+      </button>
+      <a href="employee_new_step_1_2_3_4.html" class="btn btn-primary">
+        <span>Siguiente</span>
+        <i data-lucide="arrow-right" style="width: 18px; height: 18px;"></i>
+      </a>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    let familyCounter = 0;
+
+    // Create family member entry HTML
+    function createFamilyMemberEntry(id) {
+      return `
+        <div class="entry-card" data-entry="family-${id}">
+          <div class="entry-header">
+            <span class="entry-number">Familiar ${id}</span>
+            <button class="delete-btn delete-entry" data-target="family-${id}">
+              <i data-lucide="trash-2"></i>
+              <span>Eliminar</span>
+            </button>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">Nombre Completo <span class="required">*</span></label>
+              <input type="text" class="form-input" placeholder="Nombre completo" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Parentesco <span class="required">*</span></label>
+              <select class="form-input" required>
+                <option value="">Seleccionar...</option>
+                <option value="conyuge">Cónyuge</option>
+                <option value="hijo">Hijo/a</option>
+                <option value="padre">Padre</option>
+                <option value="madre">Madre</option>
+                <option value="hermano">Hermano/a</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Fecha de Nacimiento</label>
+              <input type="date" class="form-input">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Género</label>
+              <select class="form-input">
+                <option value="">Seleccionar...</option>
+                <option value="masculino">Masculino</option>
+                <option value="femenino">Femenino</option>
+                <option value="otro">Otro</option>
+                <option value="prefiero-no-decir">Prefiero no decir</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Identificación</label>
+              <input type="text" class="form-input" placeholder="Número de identificación">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ocupación</label>
+              <input type="text" class="form-input" placeholder="Ocupación o profesión">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Teléfono</label>
+              <input type="tel" class="form-input" placeholder="+57 300 123 4567">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-input" placeholder="correo@ejemplo.com">
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Add family member
+    document.getElementById('addFamilyMember').addEventListener('click', function() {
+      familyCounter++;
+      const container = document.getElementById('familyMembersContainer');
+      const newEntry = createFamilyMemberEntry(familyCounter);
+      container.insertAdjacentHTML('beforeend', newEntry);
+      lucide.createIcons();
+      attachDeleteHandlers();
+    });
+
+    // Delete entry handler
+    function attachDeleteHandlers() {
+      document.querySelectorAll('.delete-entry').forEach(btn => {
+        btn.removeEventListener('click', handleDelete);
+        btn.addEventListener('click', handleDelete);
+      });
+    }
+
+    function handleDelete(e) {
+      const target = e.currentTarget.getAttribute('data-target');
+      const entry = document.querySelector(`[data-entry="${target}"]`);
+      if (entry) {
+        entry.style.opacity = '0';
+        entry.style.transform = 'translateX(-20px)';
+        setTimeout(() => entry.remove(), 200);
+      }
+    }
+
+    // Currency formatting
+    const salaryInput = document.getElementById('baseSalary');
+    salaryInput.addEventListener('input', function(e) {
+      let value = e.target.value.replace(/\D/g, '');
+      if (value) {
+        value = parseInt(value).toLocaleString('es-CO');
+      }
+      e.target.value = value;
+    });
+
+    // Phone formatting for Colombian numbers
+    function formatColombianPhone(input) {
+      input.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length > 0) {
+          if (value.startsWith('57')) {
+            value = '+' + value;
+          } else if (!value.startsWith('+')) {
+            value = '+57 ' + value;
+          }
+        }
+        e.target.value = value;
+      });
+    }
+
+    formatColombianPhone(document.getElementById('emergencyPhone'));
+    formatColombianPhone(document.getElementById('emergencyPhone2'));
+
+    // Form validation removed - using direct link navigation
+
+    // Contract type change handler
+    document.getElementById('contractType').addEventListener('change', function(e) {
+      const endDateGroup = document.getElementById('endDate').closest('.form-group');
+      if (e.target.value === 'fijo') {
+        endDateGroup.querySelector('label .required').style.display = 'inline';
+        document.getElementById('endDate').required = true;
+      } else {
+        if (endDateGroup.querySelector('label .required')) {
+          endDateGroup.querySelector('label .required').style.display = 'none';
+        }
+        document.getElementById('endDate').required = false;
+      }
+    });
+  </script>
+</body>
+</html>

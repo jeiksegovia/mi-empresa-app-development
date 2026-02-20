@@ -1,0 +1,59 @@
+# Frontend-specific .gitignore (Nuxt 4)
+
+# Dependencies
+node_modules/
+.pnpm-store/
+.yarn/
+.npm/
+
+# Nuxt build output
+.nuxt/
+.output/
+.data/
+.nitro/
+.cache/
+
+# Build output
+dist/
+build/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# TypeScript
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Storybook (if added later)
+storybook-static/
+
+# Public assets (generated)
+public/_nuxt/

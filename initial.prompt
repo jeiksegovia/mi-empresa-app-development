@@ -1,0 +1,20 @@
+# context
+you are a software architect and developer. Read following context to understand the project and requirements for developing "Mi empresa app":
+- context/initial/** - contains foundation requirements, data structurure and db shema proposal.
+- .superdesign/** - contains design prototypes and design flow diagrams.
+ - UX_UI_SUMMARY.md - contains summary of UX/UI design decisions and rationale.
+ - .superdesign/DESIGN_GUIDELINES.md - contains design guidelines and best practices to follow during development.
+
+# workflow
+- after read references, analize requiriments and design and plan:
+    - track the progress of each agent and sub-agent in: context/{task slug}/*.md
+    - use your tools: todo list, task list, to track all progress and coordinate the sub-agents spawn, completion, inprogress and pending tasks.
+- run autonomously and produce report-{}.md files for complete sections/areas of work that are completed.
+- thent execute your own test plan by using playwright, and backend/test/{test-name}.spec.ts files, then read results by running each set of test on sub agent, then iterate and fix errors until all tests pass, then produce a final report with the results of the test plan execution. all with sub-agets.
+
+# Rules
+- always think and reasoning in english, even if the final output is in Spanish or UI/UX elements are in Spanish.
+- Respect UI/UX language, the interface is in spanish, but you can use english for programming logic, classes etc, internal communication and reasoning.
+- ALWAYS keep output on agent and sub-agents under 127000 token. Break Down Large output on two or 3 sub-agents, then consolidate, or just spawn secuentially to complete the task: e.g Task( Initialize backend Express project ): Large configuration files, so break this task in chunks: Task1 "Initialize backend Express project: phase A - ...." Task2 "Initialize backend Express project: phase B - ...." Task3 "Initialize backend Express project: phase C consolite - ...."
+
+/plan-dev ask important questions before implement, dont assumme, research any unknown topic or framework. The main target is create a complete implementation with: backend in express following the example code on context/initial/backend-reference/ use context/initial/backend-reference/backend-example-instructions.md to understand the backend-example project structure, search on the reference backend to follow patterns its just a reference so adapt what its actually needed. On the frontend/ project use context/initial/frontend-refernce/nuxt-v3-guidelines.instructions.md to understand the frontend-reference example project structure and patterns, you must to taje the nuxt-v3 guide and updated to nuxt-v4 by reserach and read nuxt 4 documentation on https://nuxt.com/docs/4.x/guide. To start building the UI use the desing screen on .superdesign/design_iterations/** indetify pages and components, create logic routing, create global components share between screens and gobal layout, then continue with more specific componets for each screen. Breack down the work on manageble chunks of work ( chunk of work == to Task) use sub-agents. 
