@@ -43,7 +43,7 @@ const handleLogout = async () => {
     :style="{ width: `${sidebarWidth}px` }"
   >
     <!-- User Info Section -->
-    <div class="p-4 border-b border-[var(--surface-border)]">
+    <div class="p-4">
       <div class="flex items-center gap-3">
         <Avatar
           :label="userInitials"
@@ -86,7 +86,7 @@ const handleLogout = async () => {
     </nav>
 
     <!-- Logout Button -->
-    <div class="p-4 border-t border-[var(--surface-border)]">
+    <div class="p-4">
       <Button
         label="Cerrar Sesión"
         icon="pi pi-sign-out"

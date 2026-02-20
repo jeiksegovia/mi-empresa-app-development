@@ -15,45 +15,38 @@ test.describe('Dashboard Page', () => {
     await login(page)
   })
 
-  test('should display dashboard page with page header', async ({ page }) => {
-    await expect(page.locator('h1, h2').filter({ hasText: 'Dashboard' })).toBeVisible()
+  test('should display welcome title', async ({ page }) => {
+    await expect(page.locator('h2').filter({ hasText: 'Bienvenido a Mi Empresa App' })).toBeVisible()
   })
 
-  test('should display 4 stats cards', async ({ page }) => {
-    const statsGrid = page.locator('.grid').first()
-    await expect(statsGrid.getByText('Empleados')).toBeVisible()
-    await expect(statsGrid.getByText('Pacientes')).toBeVisible()
-    await expect(statsGrid.getByText('Instrumentos')).toBeVisible()
-    await expect(statsGrid.getByText('Certificados')).toBeVisible()
+  test('should display 4 module cards', async ({ page }) => {
+    const grid = page.locator('.grid').first()
+    await expect(grid.getByText('Certificación Empresarial')).toBeVisible()
+    await expect(grid.getByText('Gestión de Personal')).toBeVisible()
+    await expect(grid.getByText('Gestión de Clientes')).toBeVisible()
+    await expect(grid.getByText('Nómina y Finanzas')).toBeVisible()
   })
 
-  test('should display numeric values in stats cards (from API)', async ({ page }) => {
-    // Wait for API response - stats should load
-    await page.waitForTimeout(2000)
-    const statsGrid = page.locator('.grid').first()
-    // Check that a number is displayed (any number >= 0)
-    const allText = await statsGrid.textContent()
-    expect(allText).toMatch(/\d+/)
+  test('should display Ir al modulo links in each card', async ({ page }) => {
+    const links = page.getByText('Ir al módulo')
+    await expect(links).toHaveCount(4)
   })
 
-  test('should navigate to empleados when clicking stats card', async ({ page }) => {
-    const statsGrid = page.locator('.grid').first()
-    await statsGrid.getByText('Empleados').click()
+  test('should navigate to empleados when clicking Gestion de Personal card', async ({ page }) => {
+    await page.getByText('Gestión de Personal').click()
     await expect(page).toHaveURL('/empleados')
   })
 
-  test('should navigate to pacientes when clicking stats card', async ({ page }) => {
-    const statsGrid = page.locator('.grid').first()
-    await statsGrid.getByText('Pacientes').click()
+  test('should navigate to pacientes when clicking Gestion de Clientes card', async ({ page }) => {
+    await page.getByText('Gestión de Clientes').click()
     await expect(page).toHaveURL('/pacientes')
   })
 
-  test('should display quick access cards section', async ({ page }) => {
-    // Second grid has quick-access cards with module descriptions
-    const quickCards = page.locator('.grid').nth(1)
-    await expect(quickCards.getByText('Gestión de personal y nómina')).toBeVisible()
-    await expect(quickCards.getByText('Gestión de pacientes y fichas')).toBeVisible()
-    await expect(quickCards.getByText('Plantillas de evaluación')).toBeVisible()
-    await expect(quickCards.getByText('Certificaciones y vencimientos')).toBeVisible()
+  test('should display recent activity section', async ({ page }) => {
+    await expect(page.getByText('Actividad Reciente')).toBeVisible()
+    await expect(page.getByText('Nuevo empleado registrado')).toBeVisible()
+    await expect(page.getByText('Certificado próximo a vencer')).toBeVisible()
+    await expect(page.getByText('Contrato renovado exitosamente')).toBeVisible()
+    await expect(page.getByText('Nueva nota agregada a cliente')).toBeVisible()
   })
 })

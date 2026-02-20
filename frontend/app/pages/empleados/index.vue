@@ -186,7 +186,7 @@ onMounted(async () => {
             <InputText
               v-model="search"
               placeholder="Buscar por nombre, apellido o documento..."
-              class="w-full pl-9"
+              class="w-full pl-10"
               @input="onSearchInput"
             />
           </div>

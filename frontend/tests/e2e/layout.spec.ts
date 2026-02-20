@@ -102,16 +102,16 @@ test.describe('Layout Components', () => {
     await expect(page).toHaveURL('/')
   })
 
-  // ─── TEST 5: Dashboard stats cards render ────────────────────────────────────
-  test('should display stats cards on dashboard', async ({ page }) => {
+  // ─── TEST 5: Dashboard module cards render ───────────────────────────────────
+  test('should display module cards on dashboard', async ({ page }) => {
     // Already on dashboard from beforeEach
-    // AppStatsCard titles are inside the stats grid; scope to avoid nav link clash
-    const statsGrid = page.locator('.grid').first()
+    // New dashboard has 4 module cards; scope to first grid to avoid nav link clash
+    const moduleGrid = page.locator('.grid').first()
 
-    await expect(statsGrid.getByText('Empleados')).toBeVisible()
-    await expect(statsGrid.getByText('Pacientes')).toBeVisible()
-    await expect(statsGrid.getByText('Instrumentos')).toBeVisible()
-    await expect(statsGrid.getByText('Certificados')).toBeVisible()
+    await expect(moduleGrid.getByText('Certificación Empresarial')).toBeVisible()
+    await expect(moduleGrid.getByText('Gestión de Personal')).toBeVisible()
+    await expect(moduleGrid.getByText('Gestión de Clientes')).toBeVisible()
+    await expect(moduleGrid.getByText('Nómina y Finanzas')).toBeVisible()
   })
 
   // ─── TEST 6: Mobile sidebar toggle ───────────────────────────────────────────

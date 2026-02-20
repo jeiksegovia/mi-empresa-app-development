@@ -17,8 +17,25 @@
   /* Surface colors - Light mode */
   --surface-ground: #f8fafc;
   --surface-card: #ffffff;
+  --surface-section: #ffffff;
   --surface-hover: #f1f5f9;
   --surface-border: #e2e8f0;
+
+  /* Text colors */
+  --text-color: #1e293b;
+  --text-color-secondary: #64748b;
+  --muted-foreground: #64748b;
+
+  /* Design tokens */
+  --radius: 0.625rem;
+  --border: #e2e8f0;
+
+  /* PrimeVue component border-radius overrides */
+  --p-card-border-radius: calc(var(--radius) + 4px);
+  --p-button-border-radius: var(--radius);
+  --p-inputtext-border-radius: var(--radius);
+  --p-select-border-radius: var(--radius);
+  --p-datatable-border-radius: calc(var(--radius) + 4px);
 
   /* Spacing */
   --spacing-xs: 0.25rem;
@@ -40,8 +57,13 @@
 .dark {
   --surface-ground: #0f172a;
   --surface-card: #1e293b;
+  --surface-section: #1e293b;
   --surface-hover: #334155;
   --surface-border: #334155;
+  --text-color: #f1f5f9;
+  --text-color-secondary: #94a3b8;
+  --muted-foreground: #94a3b8;
+  --border: #334155;
 }
 
 body {

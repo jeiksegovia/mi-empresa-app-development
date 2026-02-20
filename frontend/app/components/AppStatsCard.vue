@@ -21,15 +21,19 @@ const emit = defineEmits<{
 }>()
 
 const severityColors = {
-  primary: 'bg-violet-500',
-  success: 'bg-green-500',
-  info: 'bg-blue-500',
-  warn: 'bg-orange-500',
-  danger: 'bg-red-500',
-  secondary: 'bg-gray-500',
+  primary: { bg: 'rgba(139, 92, 246, 0.1)', text: 'text-violet-500' },
+  success: { bg: 'rgba(34, 197, 94, 0.1)', text: 'text-green-500' },
+  info: { bg: 'rgba(59, 130, 246, 0.1)', text: 'text-blue-500' },
+  warn: { bg: 'rgba(251, 146, 60, 0.1)', text: 'text-orange-500' },
+  danger: { bg: 'rgba(239, 68, 68, 0.1)', text: 'text-red-500' },
+  secondary: { bg: 'rgba(107, 114, 128, 0.15)', text: 'text-gray-500' },
 }
 
-const iconBgColor = computed(() => severityColors[props.severity])
+const iconBgStyle = computed(() => ({
+  backgroundColor: severityColors[props.severity]?.bg || 'rgba(139, 92, 246, 0.1)',
+}))
+
+const iconTextClass = computed(() => severityColors[props.severity]?.text || 'text-violet-500')
 
 const handleClick = () => {
   if (props.clickable) {
@@ -55,7 +59,7 @@ const handleClick = () => {
           <p class="text-3xl font-bold text-[var(--text-color)] mb-2">
             {{ value }}
           </p>
-          
+
           <!-- Trend Indicator -->
           <div
             v-if="trend"
@@ -74,13 +78,10 @@ const handleClick = () => {
 
         <!-- Icon -->
         <div
-          :class="[
-            'flex items-center justify-center w-12 h-12 rounded-lg',
-            iconBgColor,
-            'bg-opacity-10'
-          ]"
+          class="flex items-center justify-center w-12 h-12 rounded-lg"
+          :style="iconBgStyle"
         >
-          <i :class="[icon, 'text-2xl', iconBgColor.replace('bg-', 'text-')]" />
+          <i :class="[icon, 'text-2xl', iconTextClass]" />
         </div>
       </div>
     </template>
