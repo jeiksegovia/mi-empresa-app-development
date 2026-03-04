@@ -1,5 +1,7 @@
 import dotenv from 'dotenv'
-dotenv.config()
+if (!process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  dotenv.config()
+}
 
 export const config = {
   port: parseInt(process.env.PORT || '3001', 10),

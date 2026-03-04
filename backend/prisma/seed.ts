@@ -3,10 +3,14 @@
  * Populates database with sample data for development
  */
 
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/index.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
+import 'dotenv/config';
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL!;
+const adapter = new PrismaPg({ connectionString });
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log('🌱 Starting database seed...');
@@ -604,6 +608,23 @@ async function main() {
   });
 
   console.log(`✅ Created time management records`);
+
+  // ========================================
+  // LINK USUARIO TO EMPLEADO
+  // ========================================
+
+  // Link the empleado@miempresa.com user to the first employee (Carlos Rodríguez)
+  const empleadoUser = await prisma.usuario.findUnique({
+    where: { email: 'empleado@miempresa.com' },
+  });
+
+  if (empleadoUser && empleado1) {
+    await prisma.usuario.update({
+      where: { id: empleadoUser.id },
+      data: { empleadoId: empleado1.id },
+    });
+    console.log(`✅ Linked empleado@miempresa.com → Employee #${empleado1.id} (${empleado1.nombre} ${empleado1.apellido})`);
+  }
 
   console.log('✨ Database seed completed successfully!');
   console.log('\n📊 Summary:');

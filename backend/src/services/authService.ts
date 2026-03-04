@@ -1,4 +1,4 @@
-import bcrypt from 'bcrypt'
+import bcrypt from 'bcryptjs'
 import { getPrisma } from '../config/database.js'
 import { signJwt } from '../utils/jwt.js'
 import { UserTokenPayload } from '../types/common.js'
@@ -12,6 +12,7 @@ export interface LoginResult {
     rol: string
     nombre: string
     apellido: string
+    empleadoId?: number
   }
   sessionToken: string
 }
@@ -23,6 +24,7 @@ export interface CurrentUserResult {
   nombre: string
   apellido: string
   activo: boolean
+  empleadoId?: number
 }
 
 /**
@@ -39,6 +41,7 @@ export async function loginUser(
   // Find user by email
   const usuario = await prisma.usuario.findUnique({
     where: { email },
+    include: { empleado: true },
   })
 
   if (!usuario) {
@@ -101,6 +104,7 @@ export async function loginUser(
       rol: usuario.rol,
       nombre: usuario.nombre,
       apellido: usuario.apellido,
+      empleadoId: usuario.empleadoId || undefined,
     },
     sessionToken,
   }
@@ -138,6 +142,7 @@ export async function getCurrentUser(userId: number): Promise<CurrentUserResult>
       nombre: true,
       apellido: true,
       activo: true,
+      empleadoId: true,
     },
   })
 
@@ -145,7 +150,10 @@ export async function getCurrentUser(userId: number): Promise<CurrentUserResult>
     throw new Error('Usuario no encontrado')
   }
 
-  return usuario
+  return {
+    ...usuario,
+    empleadoId: usuario.empleadoId || undefined,
+  }
 }
 
 /**

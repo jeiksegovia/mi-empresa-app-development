@@ -3,8 +3,9 @@
 // Generator and Datasource
 
 generator client {
-  provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  provider   = "prisma-client-js"
+  output     = "../src/generated/prisma"
+  engineType = "client"
 }
 
 datasource db {
@@ -24,10 +25,12 @@ model Usuario {
   nombre    String   @db.VarChar(100)
   apellido  String   @db.VarChar(100)
   activo    Boolean  @default(true)
+  empleadoId Int?    @map("empleado_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
+  empleado                  Empleado?  @relation(fields: [empleadoId], references: [id], onDelete: SetNull)
   sesiones                  Sesion[]
   instrumentosCreados       Instrumento[]  @relation("InstrumentoCreador")
   instrumentosModificados   Instrumento[]  @relation("InstrumentoModificador")
@@ -79,6 +82,7 @@ model Empleado {
   fechaRegistro        DateTime  @default(now()) @map("fecha_registro")
 
   // Relations
+  usuarios                     Usuario[]
   nucleoFamiliar               NucleoFamiliar[]
   contactosEmergencia          ContactoEmergenciaEmpleado[]
   cargos                       Cargo[]
