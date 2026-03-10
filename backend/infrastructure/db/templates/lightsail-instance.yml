@@ -1,0 +1,50 @@
+# ============================================================================
+# Lightsail Instance Template for Mi Empresa Backend
+# ============================================================================
+# This template is used by create-instance.sh to provision Lightsail instances
+# Variables are substituted using envsubst before AWS CLI execution
+#
+# Required environment variables:
+#   - INSTANCE_NAME: Name of the Lightsail instance (e.g., miempresa-db-dev-1)
+#   - REGION: AWS region (e.g., us-east-1)
+#   - BUNDLE: Instance bundle ID (e.g., micro_2_0, small_2_0)
+#   - STAGE: Environment stage (dev, prod)
+#   - USER_DATA_SCRIPT: Path to user-data-postgresql.sh
+# ============================================================================
+
+instanceNames:
+  - ${INSTANCE_NAME}
+
+availabilityZone: ${REGION}a
+
+blueprintId: amazon_linux_2023
+
+bundleId: ${BUNDLE}
+
+# User data script will be base64 encoded and injected by create-instance.sh
+# The script performs:
+#   - PostgreSQL 15 installation and configuration
+#   - CodeDeploy agent setup
+#   - Node.js 20.x and PM2 installation
+#   - AWS CLI v2 installation
+#   - Application directory structure creation
+userData: |
+  ${USER_DATA_CONTENT}
+
+tags:
+  - key: Environment
+    value: ${STAGE}
+  - key: Application
+    value: MiEmpresa
+  - key: ManagedBy
+    value: Infrastructure-as-Code
+  - key: Project
+    value: mi-empresa-app
+  - key: Component
+    value: Backend
+
+# IPv4 addressing
+ipAddressType: ipv4
+
+# Key pair will be created automatically by Lightsail
+# Download with: aws lightsail download-default-key-pair

@@ -96,3 +96,4 @@ samconfig.toml
 # Build artifacts
 *.tsbuildinfo
 tsconfig.tsbuildinfo
+test-results/.last-run.json

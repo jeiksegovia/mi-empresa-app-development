@@ -1,0 +1,411 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: mi-empresa-backend — Express + Prisma TypeScript API on AWS Lambda
+
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    AllowedValues: [db.t3.micro, db.t3.small, db.t3.medium]
+
+  DBName:
+    Type: String
+    Default: miempresa
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures: [arm64]
+    Timeout: 29
+    MemorySize: 512
+    Tracing: Active
+    Environment:
+      Variables:
+        NODE_ENV: production
+        AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+
+Conditions:
+  IsProd: !Equals [!Ref Stage, prod]
+
+Resources:
+
+  # ====================== NETWORKING ======================
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags: [{Key: Name, Value: !Sub "mi-empresa-vpc-${Stage}"}]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.11.0/24"
+      AvailabilityZone: !Select [0, !GetAZs ""]
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.12.0/24"
+      AvailabilityZone: !Select [1, !GetAZs ""]
+
+  NatEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties: {Domain: vpc}
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+
+  PublicRT:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref VPC}
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRT
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  PubSub1RTA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PublicSubnet1, RouteTableId: !Ref PublicRT}
+
+  PubSub2RTA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PublicSubnet2, RouteTableId: !Ref PublicRT}
+
+  PrivateRT:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref VPC}
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRT
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGateway
+
+  PriSub1RTA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PrivateSubnet1, RouteTableId: !Ref PrivateRT}
+
+  PriSub2RTA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PrivateSubnet2, RouteTableId: !Ref PrivateRT}
+
+  # ====================== SECURITY GROUPS ======================
+
+  LambdaSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Lambda security group
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - {IpProtocol: tcp, FromPort: 5432, ToPort: 5432, DestinationSecurityGroupId: !Ref ProxySG}
+        - {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: "0.0.0.0/0"}
+
+  ProxySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS Proxy security group
+      VpcId: !Ref VPC
+
+  RDSSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS security group
+      VpcId: !Ref VPC
+
+  ProxySGIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ProxySG
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref LambdaSG
+
+  RDSSGIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RDSSG
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref ProxySG
+
+  # ====================== DATABASE ======================
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Mi Empresa DB Subnets
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+
+  RDSSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "/mi-empresa/${Stage}/rds-credentials"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"miempresa_user"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: !If [IsProd, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProd, Retain, Delete]
+    Properties:
+      DBInstanceIdentifier: !Sub "mi-empresa-${Stage}"
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: postgres
+      EngineVersion: "15.4"
+      DBName: !Ref DBName
+      MasterUsername: !Sub "{{resolve:secretsmanager:${RDSSecret}:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}"
+      MultiAZ: !If [IsProd, true, false]
+      StorageType: gp3
+      AllocatedStorage: "20"
+      MaxAllocatedStorage: 100
+      StorageEncrypted: true
+      BackupRetentionPeriod: !If [IsProd, 7, 1]
+      DeletionProtection: !If [IsProd, true, false]
+      PubliclyAccessible: false
+      VPCSecurityGroups: [!Ref RDSSG]
+      DBSubnetGroupName: !Ref DBSubnetGroup
+
+  RDSProxyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: {Service: rds.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ProxySecretsAccess
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: [secretsmanager:GetSecretValue]
+                Resource: !Ref RDSSecret
+
+  RDSProxy:
+    Type: AWS::RDS::DBProxy
+    DependsOn: RDSInstance
+    Properties:
+      DBProxyName: !Sub "mi-empresa-proxy-${Stage}"
+      EngineFamily: POSTGRESQL
+      RoleArn: !GetAtt RDSProxyRole.Arn
+      Auth:
+        - AuthScheme: SECRETS
+          SecretArn: !Ref RDSSecret
+          IAMAuth: DISABLED
+      VpcSubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      VpcSecurityGroupIds: [!Ref ProxySG]
+      RequireTLS: true
+      IdleClientTimeout: 1800
+
+  RDSProxyTargetGroup:
+    Type: AWS::RDS::DBProxyTargetGroup
+    Properties:
+      DBProxyName: !Ref RDSProxy
+      DBInstanceIdentifiers: [!Ref RDSInstance]
+      TargetGroupName: default
+      ConnectionPoolConfigurationInfo:
+        MaxConnectionsPercent: 80
+        MaxIdleConnectionsPercent: 10
+        ConnectionBorrowTimeout: 120
+
+  # ====================== IAM ======================
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "mi-empresa-lambda-role-${Stage}"
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: MiEmpresaPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/mi-empresa-*"
+              - Effect: Allow
+                Action: [ssm:GetParameter, ssm:GetParameters]
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${Stage}/mi-empresa/*"
+              - Effect: Allow
+                Action: [secretsmanager:GetSecretValue]
+                Resource: !Ref RDSSecret
+
+  # ====================== API GATEWAY ======================
+
+  MiEmpresaApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Stage
+      CorsConfiguration:
+        AllowOrigins: ["*"]
+        AllowHeaders: ["Content-Type", "Authorization", "Cookie"]
+        AllowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+        MaxAge: 300
+
+  # ====================== LAMBDA FUNCTIONS ======================
+
+  AppFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "mi-empresa-${Stage}-app"
+      CodeUri: .
+      Handler: src/lambda.apiHandler
+      Role: !GetAtt LambdaRole.Arn
+      ReservedConcurrentExecutions: !If [IsProd, 100, 20]
+      VpcConfig:
+        SecurityGroupIds: [!Ref LambdaSG]
+        SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      Environment:
+        Variables:
+          STAGE: !Ref Stage
+          DATABASE_URL: !Sub
+            - "postgresql://{{resolve:secretsmanager:${Secret}:SecretString:username}}:{{resolve:secretsmanager:${Secret}:SecretString:password}}@${Proxy}:5432/${DB}?sslmode=require"
+            - Secret: !Ref RDSSecret
+              Proxy: !GetAtt RDSProxy.Endpoint
+              DB: !Ref DBName
+          JWT_SECRET: !Sub "{{resolve:ssm:/${Stage}/mi-empresa/JWT_SECRET}}"
+          JWT_EXPIRATION: "24h"
+          CORS_ORIGIN: !Sub "{{resolve:ssm:/${Stage}/mi-empresa/CORS_ORIGIN}}"
+          LOG_LEVEL: info
+      Events:
+        ApiProxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref MiEmpresaApi
+            Path: /{proxy+}
+            Method: ANY
+        ApiRoot:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref MiEmpresaApi
+            Path: /
+            Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Minify: true
+        Target: "node22"
+        Sourcemap: false
+        EntryPoints:
+          - src/lambda.ts
+        External:
+          - "@prisma/engines"
+
+  MigrationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "mi-empresa-${Stage}-migration"
+      CodeUri: .
+      Handler: src/migrate.lambda.handler
+      MemorySize: 256
+      Timeout: 300
+      Role: !GetAtt LambdaRole.Arn
+      VpcConfig:
+        SecurityGroupIds: [!Ref LambdaSG]
+        SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      Environment:
+        Variables:
+          STAGE: !Ref Stage
+          DATABASE_URL: !Sub
+            - "postgresql://{{resolve:secretsmanager:${Secret}:SecretString:username}}:{{resolve:secretsmanager:${Secret}:SecretString:password}}@${Proxy}:5432/${DB}"
+            - Secret: !Ref RDSSecret
+              Proxy: !GetAtt RDSProxy.Endpoint
+              DB: !Ref DBName
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Minify: false
+        Target: "node22"
+        EntryPoints:
+          - src/migrate.lambda.ts
+
+  # ====================== MONITORING ======================
+
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProd
+    Properties:
+      AlarmName: !Sub "mi-empresa-${Stage}-lambda-errors"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AppFunction
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${MiEmpresaApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+    Export:
+      Name: !Sub "MiEmpresaApiUrl-${Stage}"
+
+  RDSProxyEndpoint:
+    Description: RDS Proxy endpoint (use in DATABASE_URL)
+    Value: !GetAtt RDSProxy.Endpoint
+
+  MigrationFunctionName:
+    Description: Migration Lambda function name
+    Value: !Ref MigrationFunction

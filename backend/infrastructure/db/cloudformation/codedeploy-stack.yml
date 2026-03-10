@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Mi Empresa Backend Infrastructure - CodeDeploy Application and Deployment Groups'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: miempresa
+    Description: Project name for resource naming
+
+Resources:
+  # ============================================================================
+  # CodeDeploy Application
+  # ============================================================================
+  CodeDeployApplication:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: !Sub '${ProjectName}-app'
+      ComputePlatform: Server
+
+  # ============================================================================
+  # CodeDeploy Deployment Group - Dev Environment
+  # ============================================================================
+  DevDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentGroupName: !Sub '${ProjectName}-dev'
+      ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
+      DeploymentConfigName: CodeDeployDefault.OneAtATime
+      OnPremisesInstanceTagFilters:
+        - Key: Environment
+          Value: dev
+          Type: KEY_AND_VALUE
+        - Key: Application
+          Value: !Ref ProjectName
+          Type: KEY_AND_VALUE
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events:
+          - DEPLOYMENT_FAILURE
+          - DEPLOYMENT_STOP_ON_REQUEST
+
+  # ============================================================================
+  # CodeDeploy Deployment Group - Prod Environment
+  # ============================================================================
+  ProdDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentGroupName: !Sub '${ProjectName}-prod'
+      ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
+      DeploymentConfigName: CodeDeployDefault.OneAtATime
+      OnPremisesInstanceTagFilters:
+        - Key: Environment
+          Value: prod
+          Type: KEY_AND_VALUE
+        - Key: Application
+          Value: !Ref ProjectName
+          Type: KEY_AND_VALUE
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events:
+          - DEPLOYMENT_FAILURE
+          - DEPLOYMENT_STOP_ON_REQUEST
+
+  # ============================================================================
+  # IAM Role for CodeDeploy Service
+  # ============================================================================
+  CodeDeployServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-CodeDeployServiceRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSCodeDeployRole
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+Outputs:
+  CodeDeployApplicationName:
+    Description: CodeDeploy application name
+    Value: !Ref CodeDeployApplication
+    Export:
+      Name: !Sub '${AWS::StackName}-ApplicationName'
+
+  DevDeploymentGroupName:
+    Description: Dev deployment group name
+    Value: !Ref DevDeploymentGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-DevDeploymentGroup'
+
+  ProdDeploymentGroupName:
+    Description: Prod deployment group name
+    Value: !Ref ProdDeploymentGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ProdDeploymentGroup'
+
+  CodeDeployServiceRoleArn:
+    Description: CodeDeploy service role ARN
+    Value: !GetAtt CodeDeployServiceRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ServiceRoleArn'

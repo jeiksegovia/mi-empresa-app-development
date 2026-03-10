@@ -1,0 +1,160 @@
+# ============================================================================
+# AWS CodeDeploy Application Specification File
+# ============================================================================
+# This file defines the deployment lifecycle for Mi Empresa backend application.
+#
+# Deployment phases:
+#   1. BeforeInstall  - Stop services, clean deployment directory
+#   2. Install        - Copy application files (automatic)
+#   3. AfterInstall   - Build, migrate database, generate environment
+#   4. ApplicationStart - Start PM2 process
+#   5. ValidateService  - Health check verification
+#
+# Reference: https://docs.aws.amazon.com/codedeploy/latest/userguide/reference-appspec-file.html
+# ============================================================================
+
+version: 0.0
+os: linux
+
+# ============================================================================
+# File Mappings
+# ============================================================================
+# Copy all application files to deployment directory
+files:
+  - source: /
+    destination: /opt/miempresa/app
+
+# ============================================================================
+# File Permissions
+# ============================================================================
+permissions:
+  # Directory permissions
+  - object: /opt/miempresa/app
+    pattern: "**"
+    owner: ec2-user
+    group: ec2-user
+    mode: 755
+    type:
+      - directory
+
+  # Regular file permissions
+  - object: /opt/miempresa/app
+    pattern: "**"
+    owner: ec2-user
+    group: ec2-user
+    mode: 644
+    type:
+      - file
+
+  # Executable permissions for shell scripts
+  - object: /opt/miempresa/app/infrastructure/db/scripts
+    pattern: "*.sh"
+    owner: root
+    group: root
+    mode: 755
+    type:
+      - file
+
+  - object: /opt/miempresa/app/infrastructure/db/utilities
+    pattern: "*.sh"
+    owner: root
+    group: root
+    mode: 755
+    type:
+      - file
+
+  # Protect sensitive files
+  - object: /opt/miempresa/app
+    pattern: ".env"
+    owner: ec2-user
+    group: ec2-user
+    mode: 600
+    type:
+      - file
+
+# ============================================================================
+# Deployment Lifecycle Hooks
+# ============================================================================
+hooks:
+  # ============================================================================
+  # ApplicationStop
+  # ============================================================================
+  # Runs on the instance during a deployment before the application files
+  # are copied. Use this hook to gracefully stop the application.
+  ApplicationStop:
+    - location: infrastructure/db/scripts/stop-service.sh
+      timeout: 300
+      runas: root
+
+  # ============================================================================
+  # BeforeInstall
+  # ============================================================================
+  # Runs after ApplicationStop and before the application files are copied.
+  # Use this hook to prepare the environment for deployment.
+  BeforeInstall:
+    - location: infrastructure/db/scripts/before-install.sh
+      timeout: 300
+      runas: root
+
+  # ============================================================================
+  # AfterInstall
+  # ============================================================================
+  # Runs after application files are copied. Use this hook to install
+  # dependencies, build application, and run database migrations.
+  AfterInstall:
+    - location: infrastructure/db/scripts/after-install.sh
+      timeout: 900
+      runas: root
+
+  # ============================================================================
+  # ApplicationStart
+  # ============================================================================
+  # Runs after AfterInstall. Use this hook to start the application.
+  ApplicationStart:
+    - location: infrastructure/db/scripts/start-service.sh
+      timeout: 300
+      runas: root
+
+  # ============================================================================
+  # ValidateService
+  # ============================================================================
+  # Runs after ApplicationStart. Use this hook to verify the deployment
+  # was successful by performing health checks.
+  ValidateService:
+    - location: infrastructure/db/scripts/validate.sh
+      timeout: 300
+      runas: root
+
+# ============================================================================
+# Deployment Configuration Notes
+# ============================================================================
+#
+# Timeout values:
+#   - BeforeInstall:  5 minutes  (cleanup)
+#   - AfterInstall:   15 minutes (npm install, build, migrations)
+#   - ApplicationStart: 5 minutes  (start PM2)
+#   - ValidateService: 5 minutes  (health checks with retries)
+#
+# User context:
+#   - All hooks run as root for full system access
+#   - Application files are owned by ec2-user
+#   - Scripts change ownership appropriately
+#
+# Environment variables available in hooks:
+#   - DEPLOYMENT_GROUP_NAME - Used to determine stage (dev/prod)
+#   - AWS_REGION - AWS region for API calls
+#   - APPLICATION_NAME - CodeDeploy application name
+#   - DEPLOYMENT_ID - Unique deployment identifier
+#   - LIFECYCLE_EVENT - Current hook phase
+#
+# Logging:
+#   - Hook output: /opt/codedeploy-agent/deployment-root/deployment-logs/
+#   - Application logs: /opt/miempresa/logs/
+#   - Each script also writes to its own log file
+#
+# Rollback:
+#   - CodeDeploy automatically rolls back on hook failures
+#   - Failed deployments restore previous revision
+#   - Monitor deployments in AWS Console or CLI
+#
+# ============================================================================

@@ -1,0 +1,173 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Mi Empresa Backend Infrastructure - IAM Roles and Policies'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: miempresa
+    Description: Project name for resource naming
+
+Resources:
+  # ============================================================================
+  # IAM Role for Lightsail Instances
+  # ============================================================================
+  CodeDeployInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CodeDeployInstanceRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: sts:AssumeRole
+      Description: Role for Lightsail instances to access AWS services
+      MaxSessionDuration: 3600
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # ============================================================================
+  # IAM Policy for Instance Permissions
+  # ============================================================================
+  CodeDeployInstancePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: CodeDeployInstancePolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # S3 Access for CodeDeploy artifacts and backups
+          - Sid: S3Access
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:ListBucket
+            Resource:
+              - !Sub 'arn:aws:s3:::codedeploy-artifacts-*'
+              - !Sub 'arn:aws:s3:::codedeploy-artifacts-*/*'
+              - !Sub 'arn:aws:s3:::${ProjectName}-backups-*'
+              - !Sub 'arn:aws:s3:::${ProjectName}-backups-*/*'
+              - !Sub 'arn:aws:s3:::aws-codedeploy-${AWS::Region}'
+              - !Sub 'arn:aws:s3:::aws-codedeploy-${AWS::Region}/*'
+
+          # SSM Parameter Store Access
+          - Sid: SSMParameterAccess
+            Effect: Allow
+            Action:
+              - ssm:GetParameter
+              - ssm:GetParameters
+              - ssm:GetParametersByPath
+            Resource:
+              - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/*'
+
+          # CloudWatch Logs Access
+          - Sid: CloudWatchLogsAccess
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - logs:DescribeLogStreams
+            Resource:
+              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/${ProjectName}/*'
+
+          # KMS Decryption for Encrypted Parameters
+          - Sid: KMSDecryptAccess
+            Effect: Allow
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+            Resource:
+              - !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
+
+          # CodeDeploy Access
+          - Sid: CodeDeployAccess
+            Effect: Allow
+            Action:
+              - codedeploy:GetDeployment
+              - codedeploy:GetDeploymentConfig
+              - codedeploy:GetApplicationRevision
+            Resource: '*'
+
+      Roles:
+        - !Ref CodeDeployInstanceRole
+
+  # ============================================================================
+  # Bootstrap IAM User for STS AssumeRole
+  # ============================================================================
+  BootstrapUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub '${ProjectName}-bootstrap'
+      Tags:
+        - Key: Purpose
+          Value: STS-AssumeRole
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Bootstrap User Policy - Only AssumeRole Permission
+  BootstrapUserPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: AssumeCodeDeployInstanceRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Resource: !GetAtt CodeDeployInstanceRole.Arn
+      Users:
+        - !Ref BootstrapUser
+
+  # ============================================================================
+  # Access Key for Bootstrap User (Manual rotation recommended)
+  # ============================================================================
+  BootstrapUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref BootstrapUser
+
+  # ============================================================================
+  # Store Bootstrap Credentials in SSM
+  # ============================================================================
+  BootstrapAccessKeyIdParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${ProjectName}/bootstrap/access-key-id'
+      Description: Bootstrap IAM user access key ID
+      Type: String
+      Value: !Ref BootstrapUserAccessKey
+
+  BootstrapSecretAccessKeyParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${ProjectName}/bootstrap/secret-access-key'
+      Description: Bootstrap IAM user secret access key
+      Type: String
+      Value: !GetAtt BootstrapUserAccessKey.SecretAccessKey
+
+Outputs:
+  CodeDeployInstanceRoleArn:
+    Description: ARN of the CodeDeploy instance role
+    Value: !GetAtt CodeDeployInstanceRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeDeployInstanceRoleArn'
+
+  BootstrapUserName:
+    Description: Name of the bootstrap IAM user
+    Value: !Ref BootstrapUser
+    Export:
+      Name: !Sub '${AWS::StackName}-BootstrapUserName'
+
+  BootstrapAccessKeyId:
+    Description: Access key ID for bootstrap user
+    Value: !Ref BootstrapUserAccessKey
+
+  BootstrapSecretAccessKey:
+    Description: Secret access key for bootstrap user (SENSITIVE - store securely)
+    Value: !GetAtt BootstrapUserAccessKey.SecretAccessKey
