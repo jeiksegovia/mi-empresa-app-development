@@ -133,6 +133,7 @@ onMounted(async () => {
         <Button
           label="Nuevo Paciente"
           icon="pi pi-plus"
+          @click="navigateTo('/pacientes/crear')"
         />
       </template>
     </AppPageHeader>

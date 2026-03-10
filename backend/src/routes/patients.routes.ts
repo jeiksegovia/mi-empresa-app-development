@@ -38,6 +38,12 @@ const updatePatientSchema = createPatientSchema
   .partial()
   .omit({ contactosEmergencia: true })
 
+const createNoteSchema = z.object({
+  tipo: z.enum(['POSITIVA', 'NEGATIVA', 'NEUTRAL', 'ALERTA']),
+  prioridad: z.enum(['ALTA', 'MEDIA', 'BAJA']),
+  contenido: z.string().min(1),
+})
+
 // GET /patients - list with pagination/search/filter
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -130,6 +136,29 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
       return
     }
     res.status(500).json({ success: false, message: 'Error deleting patient' })
+  }
+})
+
+// POST /patients/:id/notes - Create note for patient
+router.post('/:id/notes', validate(createNoteSchema), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const patientId = parseInt(req.params.id)
+    if (isNaN(patientId)) {
+      res.status(400).json({ success: false, message: 'Invalid patient ID' })
+      return
+    }
+
+    const userId = req.user!.id
+
+    const note = await patientService.createNote(patientId, userId, req.body)
+    res.status(201).json({ success: true, data: note })
+  } catch (error: any) {
+    logger.error('Create note error:', error)
+    if (error.message === 'Patient not found') {
+      res.status(404).json({ success: false, message: 'Patient not found' })
+      return
+    }
+    res.status(500).json({ success: false, message: 'Error creating note' })
   }
 })
 

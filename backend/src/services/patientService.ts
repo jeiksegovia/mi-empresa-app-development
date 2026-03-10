@@ -369,3 +369,33 @@ export async function deletePatient(id: number): Promise<void> {
     data: { estado: 'INACTIVO' },
   })
 }
+
+export interface CreateNoteInput {
+  tipo: 'POSITIVA' | 'NEGATIVA' | 'NEUTRAL' | 'ALERTA'
+  prioridad: 'ALTA' | 'MEDIA' | 'BAJA'
+  contenido: string
+}
+
+export async function createNote(
+  clienteId: number,
+  usuarioId: number,
+  input: CreateNoteInput
+) {
+  const prisma = getPrisma()
+
+  // Verify patient exists
+  const patient = await prisma.cliente.findUnique({ where: { id: clienteId } })
+  if (!patient) {
+    throw new Error('Patient not found')
+  }
+
+  return await prisma.notaCliente.create({
+    data: {
+      clienteId,
+      autor: usuarioId,
+      tipoNota: input.tipo,
+      prioridad: input.prioridad,
+      contenido: input.contenido,
+    },
+  })
+}

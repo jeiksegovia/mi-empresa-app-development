@@ -24,12 +24,24 @@ export const useAuthStore = defineStore('auth', () => {
 
   const role = computed(() => user.value?.rol || '')
 
+  // Role-based helpers
+  const isAdmin = computed(() => role.value === 'ADMIN')
+  const isEmpleado = computed(() => role.value === 'EMPLEADO')
+  const isAuditor = computed(() => role.value === 'AUDITOR')
+  const isOperador = computed(() => role.value === 'OPERADOR')
+
   async function fetchEmpresa() {
     try {
-      const { apiFetch } = useApi()
-      const response = await apiFetch<{ success: boolean; data: EmpresaData }>('/empresa')
+      const config = useRuntimeConfig()
+      const baseURL = config.public.apiBase
+
+      // Use plain $fetch without error interceptor to avoid redirect loops
+      const response = await $fetch<{ success: boolean; data: EmpresaData }>(`${baseURL}/empresa`, {
+        credentials: 'include',
+      })
       empresa.value = response.data
     } catch {
+      // Silently fail - empresa data is optional and shouldn't affect login flow
       empresa.value = null
     }
   }
@@ -47,6 +59,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = response.user
       isAuthenticated.value = true
       await fetchEmpresa()
+
       return { success: true }
     } catch (err: any) {
       error.value = err?.data?.message || 'Error al iniciar sesión. Por favor, intenta nuevamente.'
@@ -103,6 +116,10 @@ export const useAuthStore = defineStore('auth', () => {
     empresa,
     fullName,
     role,
+    isAdmin,
+    isEmpleado,
+    isAuditor,
+    isOperador,
     login,
     logout,
     fetchUser,

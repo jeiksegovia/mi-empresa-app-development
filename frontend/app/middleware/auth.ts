@@ -9,21 +9,19 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return
   }
 
-  // If not authenticated, try to fetch user data
-  if (!authStore.isAuthenticated) {
-    const result = await authStore.fetchUser()
-    
-    // If fetch failed, redirect to login
-    if (!result.success) {
-      return navigateTo('/login')
-    }
-  }
-
-  // If authenticated, allow access
+  // If authenticated, allow access (no need to fetch again)
   if (authStore.isAuthenticated) {
     return
   }
 
-  // Fallback: redirect to login
+  // Not authenticated - try to fetch user data from session
+  const result = await authStore.fetchUser()
+
+  // If fetch succeeded, allow access
+  if (result.success) {
+    return
+  }
+
+  // No valid session - redirect to login
   return navigateTo('/login')
 })

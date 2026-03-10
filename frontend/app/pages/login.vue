@@ -69,7 +69,7 @@ const errorMessage = ref('')
 
 const handleLogin = async () => {
   errorMessage.value = ''
-  
+
   // Basic validation
   if (!email.value || !password.value) {
     errorMessage.value = 'Por favor, completa todos los campos.'
@@ -77,10 +77,10 @@ const handleLogin = async () => {
   }
 
   const result = await authStore.login(email.value, password.value)
-  
+
   if (result.success) {
-    // Redirect to dashboard on success
-    await navigateTo('/')
+    // Redirect to dashboard on success (replace to prevent back button issues)
+    await navigateTo('/', { replace: true })
   } else {
     // Display error message
     errorMessage.value = result.error || 'Error al iniciar sesión. Por favor, intenta nuevamente.'

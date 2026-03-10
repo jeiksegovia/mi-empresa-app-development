@@ -14,6 +14,17 @@ const emit = defineEmits<{
 const sidebarWidth = computed(() => appConfig.sidebar.width)
 const menuItems = computed(() => appConfig.sidebar.items)
 
+// Filter menu items based on user role
+const filteredMenuItems = computed(() => {
+  return menuItems.value.filter(item => {
+    // Hide "Empresa" menu item for non-admin users
+    if (item.to === '/empresa' && !authStore.isAdmin) {
+      return false
+    }
+    return true
+  })
+})
+
 const userInitials = computed(() => {
   return authStore.fullName
     .split(' ')
@@ -65,7 +76,7 @@ const handleLogout = async () => {
     <!-- Navigation Menu -->
     <nav class="flex-1 overflow-y-auto p-2">
       <ul class="space-y-1">
-        <li v-for="item in menuItems" :key="item.to">
+        <li v-for="item in filteredMenuItems" :key="item.to">
           <NuxtLink
             :to="item.disabled ? '#' : item.to"
             :class="[
