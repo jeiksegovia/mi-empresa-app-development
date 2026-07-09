@@ -52,7 +52,6 @@ const toggleUserMenu = (event: Event) => {
           text
           rounded
           @click="emit('toggleSidebar')"
-          class="md:hidden"
           aria-label="Toggle menu"
         />
         

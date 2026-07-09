@@ -4,6 +4,7 @@ import { validate } from '../middleware/validate.js'
 import { z } from 'zod'
 import * as patientService from '../services/patientService.js'
 import { logger } from '../config/logger.js'
+import { getPrisma } from '../config/database.js'
 
 const router = Router()
 
@@ -42,6 +43,14 @@ const createNoteSchema = z.object({
   tipo: z.enum(['POSITIVA', 'NEGATIVA', 'NEUTRAL', 'ALERTA']),
   prioridad: z.enum(['ALTA', 'MEDIA', 'BAJA']),
   contenido: z.string().min(1),
+})
+
+// PATCH /patients/:id/fichas/:fichaId/status — body shape
+const updateFichaStatusSchema = z.object({
+  estado: z.enum(['PENDIENTE', 'COMPLETADO', 'VENCIDO']),
+  archivoCompletado: z.string().min(1).optional(),
+  notasObservaciones: z.string().optional(),
+  fechaVencimiento: z.string().optional(),
 })
 
 // GET /patients - list with pagination/search/filter
@@ -142,7 +151,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
 // POST /patients/:id/notes - Create note for patient
 router.post('/:id/notes', validate(createNoteSchema), async (req: Request, res: Response): Promise<void> => {
   try {
-    const patientId = parseInt(req.params.id)
+    const patientId = parseInt(req.params.id as string)
     if (isNaN(patientId)) {
       res.status(400).json({ success: false, message: 'Invalid patient ID' })
       return
@@ -159,6 +168,147 @@ router.post('/:id/notes', validate(createNoteSchema), async (req: Request, res: 
       return
     }
     res.status(500).json({ success: false, message: 'Error creating note' })
+  }
+})
+
+// POST /patients/:id/fichas — assign instrument to patient
+router.post('/:id/fichas', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const patientId = parseInt(req.params.id as string)
+    if (isNaN(patientId)) { res.status(400).json({ success: false, message: 'Invalid patient ID' }); return }
+
+    const { instrumentoId, versionRegistro, notasObservaciones } = req.body
+    if (!instrumentoId || !versionRegistro) {
+      res.status(400).json({ success: false, message: 'instrumentoId and versionRegistro are required' })
+      return
+    }
+
+    const prisma = getPrisma()
+
+    // Verify patient exists
+    const patient = await prisma.cliente.findUnique({ where: { id: patientId } })
+    if (!patient) { res.status(404).json({ success: false, message: 'Patient not found' }); return }
+
+    // Verify instrument exists
+    const instrument = await prisma.instrumento.findUnique({ where: { id: parseInt(instrumentoId) } })
+    if (!instrument) { res.status(404).json({ success: false, message: 'Instrument not found' }); return }
+
+    const ficha = await prisma.registroFichaCompletada.create({
+      data: {
+        clienteId: patientId,
+        instrumentoId: parseInt(instrumentoId),
+        estado: 'PENDIENTE',
+        versionRegistro,
+        responsable: req.user!.id,
+        notasObservaciones: notasObservaciones || null,
+      },
+      include: {
+        instrumento: { select: { id: true, nombreInstrumento: true, tipo: true } },
+      },
+    })
+    res.status(201).json({ success: true, data: ficha })
+  } catch (error: any) {
+    logger.error('Create patient ficha error:', error)
+    res.status(500).json({ success: false, message: 'Error creating ficha' })
+  }
+})
+
+// DELETE /patients/:id/fichas/:fichaId — remove assignment (only if PENDIENTE)
+router.delete('/:id/fichas/:fichaId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const patientId = parseInt(req.params.id as string)
+    const fichaId = parseInt(req.params.fichaId as string)
+    if (isNaN(patientId) || isNaN(fichaId)) {
+      res.status(400).json({ success: false, message: 'Invalid IDs' })
+      return
+    }
+
+    const prisma = getPrisma()
+
+    const ficha = await prisma.registroFichaCompletada.findFirst({
+      where: { id: fichaId, clienteId: patientId },
+    })
+    if (!ficha) { res.status(404).json({ success: false, message: 'Ficha not found' }); return }
+    if (ficha.estado !== 'PENDIENTE') {
+      res.status(400).json({ success: false, message: 'Solo se pueden eliminar fichas en estado PENDIENTE' })
+      return
+    }
+
+    await prisma.registroFichaCompletada.delete({ where: { id: fichaId } })
+    res.json({ success: true, message: 'Ficha removed successfully' })
+  } catch (error: any) {
+    logger.error('Delete patient ficha error:', error)
+    res.status(500).json({ success: false, message: 'Error deleting ficha' })
+  }
+})
+
+// PATCH /patients/:id/fichas/:fichaId/status — update status with transition validation
+router.patch('/:id/fichas/:fichaId/status', validate(updateFichaStatusSchema), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const patientId = parseInt(req.params.id as string)
+    const fichaId = parseInt(req.params.fichaId as string)
+    if (isNaN(patientId) || isNaN(fichaId)) {
+      res.status(400).json({ success: false, message: 'Invalid IDs' })
+      return
+    }
+
+    const { estado, archivoCompletado, notasObservaciones, fechaVencimiento } = req.body as {
+      estado: string
+      archivoCompletado?: string
+      notasObservaciones?: string
+      fechaVencimiento?: string
+    }
+
+    const prisma = getPrisma()
+
+    const ficha = await prisma.registroFichaCompletada.findFirst({
+      where: { id: fichaId, clienteId: patientId },
+    })
+    if (!ficha) { res.status(404).json({ success: false, message: 'Ficha not found' }); return }
+
+    // Validate transition. Per D3 — VENCIDO → COMPLETADO is allowed (admin override).
+    // VENCIDO is reached automatically by cron-style expiration, and the user
+    // can upload the late file and mark it complete.
+    const validTransitions: Record<string, string[]> = {
+      PENDIENTE: ['COMPLETADO', 'VENCIDO'],
+      COMPLETADO: ['VENCIDO'],
+      VENCIDO: ['COMPLETADO'],
+    }
+    const allowed = validTransitions[ficha.estado] ?? []
+    if (!allowed.includes(estado)) {
+      res.status(400).json({ success: false, message: `Cannot transition from ${ficha.estado} to ${estado}` })
+      return
+    }
+
+    // COMPLETADO requires archivoCompletado in the payload
+    if (estado === 'COMPLETADO' && !archivoCompletado) {
+      res.status(400).json({ success: false, message: 'archivoCompletado is required when transitioning to COMPLETADO' })
+      return
+    }
+
+    const updateData: any = {
+      estado,
+      ...(estado === 'COMPLETADO' && { fechaCompletado: new Date() }),
+      ...(archivoCompletado && { archivoCompletado }),
+      ...(notasObservaciones && { notasObservaciones }),
+      ...(fechaVencimiento && { fechaVencimiento: new Date(fechaVencimiento) }),
+    }
+
+    const updated = await prisma.registroFichaCompletada.update({
+      where: { id: fichaId },
+      data: updateData,
+      include: {
+        instrumento: { select: { id: true, nombreInstrumento: true, tipo: true } },
+      },
+    })
+    res.json({ success: true, data: updated })
+  } catch (error: any) {
+    logger.error('Update patient ficha status error:', error)
+    if (error.name === 'ZodError') {
+      res.status(400).json({ success: false, message: 'Validation failed', errors: error.errors })
+      return
+    }
+    res.status(500).json({ success: false, message: 'Error updating ficha status' })
   }
 })
 

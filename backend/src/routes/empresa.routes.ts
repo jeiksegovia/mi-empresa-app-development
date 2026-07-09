@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express'
-import { authMiddleware } from '../middleware/auth.js'
+import { authMiddleware, requireRole } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
 import { z } from 'zod'
 import * as empresaService from '../services/empresaService.js'
@@ -17,8 +17,8 @@ const updateEmpresaSchema = z.object({
   email: z.string().email().optional().or(z.literal('')),
 })
 
-// GET /empresa - get current empresa
-router.get('/', async (_req: Request, res: Response): Promise<void> => {
+// GET /empresa - get current empresa (admin only)
+router.get('/', requireRole('ADMIN'), async (_req: Request, res: Response): Promise<void> => {
   try {
     const empresa = await empresaService.getEmpresa()
     if (!empresa) {
@@ -33,13 +33,8 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
 })
 
 // PUT /empresa/:id - update empresa (admin only)
-router.put('/:id', validate(updateEmpresaSchema), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id', requireRole('ADMIN'), validate(updateEmpresaSchema), async (req: Request, res: Response): Promise<void> => {
   try {
-    const user = (req as any).user
-    if (user?.rol !== 'ADMIN') {
-      res.status(403).json({ success: false, message: 'Forbidden: admin only' })
-      return
-    }
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) {
       res.status(400).json({ success: false, message: 'Invalid empresa ID' })

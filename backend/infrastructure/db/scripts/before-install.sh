@@ -35,10 +35,10 @@ echo ""
 echo "[1/4] Stopping PM2 processes..."
 
 if command -v pm2 &> /dev/null; then
-    if pm2 list 2>/dev/null | grep -q "miempresa-api"; then
+    if sudo -u ec2-user pm2 list 2>/dev/null | grep -q "miempresa-api"; then
         echo "  Stopping miempresa-api process..."
-        pm2 stop miempresa-api || true
-        pm2 delete miempresa-api || true
+        sudo -u ec2-user pm2 stop miempresa-api || true
+        sudo -u ec2-user pm2 delete miempresa-api || true
         echo "  ✓ PM2 process stopped"
     else
         echo "  ○ No PM2 process running"

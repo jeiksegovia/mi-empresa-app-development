@@ -14,6 +14,17 @@ const isDev = config.nodeEnv !== 'production'
 
 // Security
 app.use(helmet({ contentSecurityPolicy: false }))
+
+// CloudFront origin verification: the instance port is world-reachable (plain
+// HTTP origin), so only requests carrying the CloudFront-injected secret pass.
+// /api/v1/health stays open — CodeDeploy's validate.sh probes it via localhost.
+if (config.originVerifySecret) {
+  app.use((req, res, next) => {
+    if (req.path === '/api/v1/health') return next()
+    if (req.get('x-origin-verify') === config.originVerifySecret) return next()
+    res.status(403).json({ error: 'Forbidden' })
+  })
+}
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (server-to-server, curl)

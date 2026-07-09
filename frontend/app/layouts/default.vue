@@ -26,7 +26,7 @@ watch(() => route.path, () => {
     />
 
     <!-- Main Content Wrapper -->
-    <div class="flex flex-col min-h-screen transition-all duration-300 md:ml-[280px]">
+    <div class="flex flex-col min-h-screen transition-all duration-300">
       <!-- Header -->
       <AppHeader @toggle-sidebar="toggleSidebar" />
 

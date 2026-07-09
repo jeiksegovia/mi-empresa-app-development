@@ -29,6 +29,8 @@
     "deploy:prod": "sam deploy --config-env prod"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1005.0",
+    "@aws-sdk/s3-request-presigner": "^3.1005.0",
     "@prisma/adapter-pg": "^6.19.2",
     "@prisma/client": "^6.19.2",
     "bcryptjs": "^2.4.3",

@@ -9,8 +9,8 @@
 #   ./get-instance-ip.sh <instance-name> [region]
 #
 # Examples:
-#   ./get-instance-ip.sh miempresa-db-dev-1
-#   ./get-instance-ip.sh miempresa-db-prod-1 us-east-1
+#   ./get-instance-ip.sh miempresa-backend-staging
+#   ./get-instance-ip.sh miempresa-backend-prod us-east-1
 # ============================================================================
 
 INSTANCE_NAME="${1}"
@@ -20,14 +20,14 @@ if [ -z "$INSTANCE_NAME" ]; then
     echo "Usage: $0 <instance-name> [region]" >&2
     echo "" >&2
     echo "Examples:" >&2
-    echo "  $0 miempresa-db-dev-1" >&2
-    echo "  $0 miempresa-db-prod-1 us-east-1" >&2
+    echo "  $0 miempresa-backend-staging" >&2
+    echo "  $0 miempresa-backend-prod us-east-1" >&2
     exit 1
 fi
 
 # Extract stage from instance name
-if [[ "$INSTANCE_NAME" == *"dev"* ]]; then
-    STAGE="dev"
+if [[ "$INSTANCE_NAME" == *"staging"* ]]; then
+    STAGE="staging"
 elif [[ "$INSTANCE_NAME" == *"prod"* ]]; then
     STAGE="prod"
 else

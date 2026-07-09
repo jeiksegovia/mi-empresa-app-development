@@ -1,25 +1,38 @@
 {
   "env": {
     "CLAUDE_CODE_ENABLE_TELEMETRY": "0",
-    "ANTHROPIC_BASE_URL": "http://localhost:4141",
-    "ANTHROPIC_AUTH_TOKEN": "dummy",
-    "ANTHROPIC_MODEL": "claude-sonnet-4.5",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4.6",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4.5",
-    "ANTHROPIC_SMALL_FAST_MODEL": "gpt-5-mini",
     "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "128000",
-    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "80",
     "DISABLE_TELEMETRY": "1",
     "DISABLE_ERROR_REPORTING": "1",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-    "BASH_DEFAULT_TIMEOUT_MS": "900000",
-    "BASH_MAX_TIMEOUT_MS": "900000",
-    "ANTHROPIC_TIMEOUT": "600000",
-    "CLAUDE_CODE_ATTRIBUTION_HEADER": "0"
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "92",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_CODE_TEAMMATE_COMMAND": "/Users/jeik/.local/bin/claude-minimax-wrapper"
+  },
+  "teammateMode": "tmux",
+  "hooks": {
+    "TaskCompleted": [
+      {
+        "hooks": [
+          { "type": "command", "command": ".claude/hooks/pt-validate-completion.sh" }
+        ]
+      }
+    ]
   },
   "permissions": {
     "allow": [
+      "Edit", "Read", "Glob", "Grep", "Bash",
+      "Edit(./.superdesign/**)", "Read(./.superdesign/**)",
+      "Edit(./batches/**)", "Read(./batches/**)",
+      "Edit(./development/**)","Read(./development/**)",
+      "Edit(./meetings/**)","Read(./meetings/**)",
+      "Edit(./transcripts/**)","Read(./transcripts/**)",
+      "Edit(./research/**)","Read(./research/**)",
+      "Edit(./scripts/**)", "Read(./scripts/**)",
+      "Edit(./plans/**)", "Read(./plans/**)",
+      "Edit(./development/*/context/**)", "Read(./development/*/context/**)",
+      "Edit(./orchestration-ctx/**)", "Read(./orchestration-ctx/**)",
       "Edit", "Read", "Glob", "Grep", "Bash",
       "Edit(./.superdesign/**)", "Read(./.superdesign/**)",
       "Edit(./batches/**)", "Read(./batches/**)",
@@ -29,6 +42,7 @@
       "Edit(./backend/**)", "Read(./backend/**)",
       "Edit(./frontend/**)", "Read(./frontend/**)",
       "Edit(./context/**)", "Read(./context/**)",
+      "Edit(./frontend/infrastructure/**)", "Read(./frontend/infrastructure/**)",
       "mcp__browsermcp__browser_snapshot",
       "mcp__browsermcp__browser_screenshot",
       "mcp__browsermcp__browser_click",
@@ -36,11 +50,25 @@
       "mcp__browsermcp__browser_type",
       "mcp__browsermcp__browser_navigate",
       "mcp__browsermcp__browser_wait",
-      "WebFetch(domain:code.claude.com)"
+      "WebFetch(domain:code.claude.com)",
+      "Edit(./tasks/**)", "Read(./tasks/**)",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_screenshot",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_press_key",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_wait",
+      "WebFetch(domain:code.claude.com)",
+      "WebFetch(domain:claude.com)",
+      "WebFetch(domain:api.anthropic.com)",
+      "WebFetch(domain:aws.amazon.com)",
+      "mcp__google-search__search",
+      "mcp__google-search__read_webpage"
     ]
   },
-  "plansDirectory": "./context/plans",
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": ["playwright", "google-search"],
-  "alwaysThinkingEnabled": true
+  "alwaysThinkingEnabled": true,
+  "plansDirectory": "./plans"
 }

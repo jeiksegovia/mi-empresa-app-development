@@ -55,15 +55,15 @@
 
 /* Dark mode */
 .dark {
-  --surface-ground: #0f172a;
-  --surface-card: #1e293b;
-  --surface-section: #1e293b;
-  --surface-hover: #334155;
-  --surface-border: #334155;
+  --surface-ground: #1a1625;
+  --surface-card: #241f31;
+  --surface-section: #241f31;
+  --surface-hover: #352f44;
+  --surface-border: #3d3550;
   --text-color: #f1f5f9;
-  --text-color-secondary: #94a3b8;
-  --muted-foreground: #94a3b8;
-  --border: #334155;
+  --text-color-secondary: #c4b5fd;
+  --muted-foreground: #c4b5fd;
+  --border: #3d3550;
 }
 
 body {

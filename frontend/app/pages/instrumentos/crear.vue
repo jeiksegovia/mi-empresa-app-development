@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useFileStash, useFileStashTitleGuard } from '~/composables/useFileStash'
+
 definePageMeta({
   middleware: 'auth',
   layout: 'default',
@@ -6,6 +8,18 @@ definePageMeta({
 
 const { apiFetch } = useApi()
 const toast = useToast()
+const { uploadFile } = useFileUpload()
+const { stash: stashFile, restore: restoreFile, clear: clearFile } = useFileStash()
+
+// W7: stash key + title guard for the plantilla
+const plantillaGuard = useFileStashTitleGuard('Adjuntar plantilla del instrumento')
+const INST_CREAR_DRAFT_KEY = 'instrumento-crear:draft'
+
+// ─── Roles (MultiSelect) ──────────────────────────────────────────────────────
+// Backend still accepts/returns comma-separated string per D6; the MultiSelect
+// value array is joined to a string on submit.
+const ROLES_OPTIONS = ['ADMIN', 'EMPLEADO', 'AUDITOR', 'OPERADOR']
+const rolesArray = ref<string[]>([])
 
 // ─── Form state ──────────────────────────────────────────────────────────────
 const form = reactive({
@@ -14,12 +28,58 @@ const form = reactive({
   descripcion: '',
   tipo: '',
   periodicidad: '',
-  rolesPermitidos: '',
   versionPlantilla: '',
+  plantillaArchivo: '' as string,
 })
 
 const errors = reactive<Record<string, string>>({})
 const saving = ref(false)
+
+// ─── Plantilla upload state ──────────────────────────────────────────────────
+const selectedPlantilla = ref<File | null>(null)
+const plantillaInputRef = ref<HTMLInputElement | null>(null)
+const uploadingPlantilla = ref(false)
+const plantillaProgress = ref<'idle' | 'uploading' | 'done' | 'error'>('idle')
+
+async function onPlantillaChange(event: Event) {
+  plantillaGuard.disarm()
+  const input = event.target as HTMLInputElement
+  if (input.files && input.files[0]) {
+    selectedPlantilla.value = input.files[0]
+    form.plantillaArchivo = ''
+    plantillaProgress.value = 'idle'
+    await stashFile('instrumento-crear:plantilla', input.files[0])
+  }
+}
+
+function clearPlantilla() {
+  selectedPlantilla.value = null
+  form.plantillaArchivo = ''
+  plantillaProgress.value = 'idle'
+  if (plantillaInputRef.value) plantillaInputRef.value.value = ''
+  clearFile('instrumento-crear:plantilla').catch(() => { /* noop */ })
+}
+
+async function uploadSelectedPlantilla(): Promise<string | null> {
+  if (!selectedPlantilla.value) return null
+  plantillaProgress.value = 'uploading'
+  uploadingPlantilla.value = true
+  try {
+    const key = await uploadFile(selectedPlantilla.value, 'instrumentos')
+    if (!key) {
+      plantillaProgress.value = 'error'
+      return null
+    }
+    form.plantillaArchivo = key
+    plantillaProgress.value = 'done'
+    return key
+  } catch {
+    plantillaProgress.value = 'error'
+    return null
+  } finally {
+    uploadingPlantilla.value = false
+  }
+}
 
 // ─── Select options ───────────────────────────────────────────────────────────
 const tipoOptions = [
@@ -47,8 +107,8 @@ function validate(): boolean {
     errors.tipo = 'El tipo es requerido'
   if (!form.periodicidad)
     errors.periodicidad = 'La periodicidad es requerida'
-  if (!form.rolesPermitidos.trim())
-    errors.rolesPermitidos = 'Los roles permitidos son requeridos'
+  if (rolesArray.value.length === 0)
+    errors.rolesPermitidos = 'Selecciona al menos un rol permitido'
   if (!form.versionPlantilla.trim())
     errors.versionPlantilla = 'La versión de la plantilla es requerida'
 
@@ -61,15 +121,25 @@ async function onSubmit() {
 
   saving.value = true
   try {
-    const payload: Record<string, string> = {
+    // Upload plantilla first if one was selected but not yet uploaded
+    if (selectedPlantilla.value && !form.plantillaArchivo) {
+      const key = await uploadSelectedPlantilla()
+      if (plantillaProgress.value === 'error' || !key) {
+        saving.value = false
+        return
+      }
+    }
+
+    const payload: Record<string, unknown> = {
       nombreInstrumento: form.nombreInstrumento.trim(),
       tipo: form.tipo,
       periodicidad: form.periodicidad,
-      rolesPermitidos: form.rolesPermitidos.trim(),
+      rolesPermitidos: rolesArray.value.join(','),
       versionPlantilla: form.versionPlantilla.trim(),
     }
     if (form.codigo.trim()) payload.codigo = form.codigo.trim()
     if (form.descripcion.trim()) payload.descripcion = form.descripcion.trim()
+    if (form.plantillaArchivo) payload.plantillaArchivo = form.plantillaArchivo
 
     const res = await apiFetch<{ success: boolean; data: { id: number } }>('/instruments', {
       method: 'POST',
@@ -82,6 +152,10 @@ async function onSubmit() {
       detail: 'El instrumento fue creado exitosamente.',
       life: 3500,
     })
+
+    // W7: clear draft + IDB stash on successful submit
+    clearInstCrearDraft()
+    await clearFile('instrumento-crear:plantilla')
 
     await navigateTo(`/instrumentos/${res.data.id}`)
   } catch (e: any) {
@@ -97,6 +171,86 @@ async function onSubmit() {
     saving.value = false
   }
 }
+
+// ─── W7: sessionStorage metadata draft persistence ───────────────────────────
+function readInstCrearDraft(): {
+  nombreInstrumento?: string
+  codigo?: string
+  descripcion?: string
+  tipo?: string
+  periodicidad?: string
+  versionPlantilla?: string
+  roles?: string[]
+  ts?: number
+} | null {
+  if (!import.meta.client) return null
+  try {
+    const raw = sessionStorage.getItem(INST_CREAR_DRAFT_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+function writeInstCrearDraft() {
+  if (!import.meta.client) return
+  try {
+    sessionStorage.setItem(
+      INST_CREAR_DRAFT_KEY,
+      JSON.stringify({
+        nombreInstrumento: form.nombreInstrumento,
+        codigo: form.codigo,
+        descripcion: form.descripcion,
+        tipo: form.tipo,
+        periodicidad: form.periodicidad,
+        versionPlantilla: form.versionPlantilla,
+        roles: rolesArray.value,
+        ts: Date.now(),
+      })
+    )
+  } catch { /* noop */ }
+}
+
+function clearInstCrearDraft() {
+  if (!import.meta.client) return
+  try { sessionStorage.removeItem(INST_CREAR_DRAFT_KEY) } catch { /* noop */ }
+}
+
+async function restoreInstCrearDraft() {
+  if (!import.meta.client) return
+  const draft = readInstCrearDraft()
+  if (!draft) return
+  form.nombreInstrumento = draft.nombreInstrumento ?? ''
+  form.codigo = draft.codigo ?? ''
+  form.descripcion = draft.descripcion ?? ''
+  form.tipo = draft.tipo ?? ''
+  form.periodicidad = draft.periodicidad ?? ''
+  form.versionPlantilla = draft.versionPlantilla ?? ''
+  rolesArray.value = Array.isArray(draft.roles) ? draft.roles : []
+
+  const restoredPlantilla = await restoreFile('instrumento-crear:plantilla')
+  if (restoredPlantilla) selectedPlantilla.value = restoredPlantilla
+
+  if (restoredPlantilla || draft.nombreInstrumento) {
+    toast.add({
+      severity: 'info',
+      summary: 'Borrador restaurado',
+      detail: 'Se recuperaron los datos y archivos de tu sesión anterior.',
+      life: 4000,
+    })
+  }
+}
+
+watch(
+  () => [form.nombreInstrumento, form.codigo, form.descripcion, form.tipo, form.periodicidad, form.versionPlantilla, rolesArray.value],
+  () => writeInstCrearDraft(),
+  { deep: true }
+)
+
+onMounted(async () => {
+  await restoreInstCrearDraft()
+})
 </script>
 
 <template>
@@ -194,22 +348,25 @@ async function onSubmit() {
               </div>
             </div>
 
-            <!-- Roles Permitidos -->
+            <!-- Roles Permitidos (D6: MultiSelect, comma-joined on submit) -->
             <div>
               <label class="block text-sm font-medium text-[var(--text-color)] mb-1">
                 Roles Permitidos <span class="text-red-500">*</span>
               </label>
-              <InputText
-                v-model="form.rolesPermitidos"
-                placeholder="Ej: ADMIN,EMPLEADO"
+              <MultiSelect
+                v-model="rolesArray"
+                :options="ROLES_OPTIONS"
+                placeholder="Selecciona roles"
                 class="w-full"
+                display="chip"
                 :invalid="!!errors.rolesPermitidos"
+                data-testid="instrument-roles-multiselect"
               />
               <p v-if="errors.rolesPermitidos" class="mt-1 text-xs text-red-500">
                 {{ errors.rolesPermitidos }}
               </p>
               <p class="mt-1 text-xs text-[var(--text-color-secondary)]">
-                Ingrese los roles separados por coma (sin espacios).
+                Roles que podrán diligenciar este instrumento.
               </p>
             </div>
 
@@ -242,6 +399,70 @@ async function onSubmit() {
               />
             </div>
 
+            <!-- Plantilla archivo upload -->
+            <div>
+              <label class="block text-sm font-medium text-[var(--text-color)] mb-1">
+                Plantilla (archivo) <span class="text-xs text-[var(--text-color-secondary)]">(opcional)</span>
+              </label>
+
+              <div
+                v-if="!selectedPlantilla && !form.plantillaArchivo"
+                class="border-2 border-dashed border-[var(--surface-border)] rounded-lg p-6 text-center cursor-pointer hover:border-violet-400 transition-colors"
+                @click="() => { plantillaGuard.arm(); plantillaInputRef?.click() }"
+                data-testid="instrument-plantilla-dropzone"
+              >
+                <i class="pi pi-file-pdf text-3xl text-[var(--text-color-secondary)] mb-2 block" />
+                <p class="text-sm text-[var(--text-color-secondary)]">
+                  Haz clic para seleccionar una plantilla
+                </p>
+                <p class="text-xs text-[var(--text-color-secondary)] mt-1">
+                  PDF, DOCX u otro documento de referencia
+                </p>
+              </div>
+
+              <div
+                v-else
+                class="flex items-center gap-3 px-4 py-3 border border-[var(--surface-border)] rounded-lg bg-[var(--surface-ground)]"
+              >
+                <i class="pi pi-file text-violet-500 text-xl flex-shrink-0" />
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-[var(--text-color)] truncate">
+                    {{ selectedPlantilla?.name || filenameFromKey(form.plantillaArchivo) }}
+                  </p>
+                  <p v-if="selectedPlantilla" class="text-xs text-[var(--text-color-secondary)]">
+                    {{ (selectedPlantilla.size / 1024).toFixed(1) }} KB
+                  </p>
+                </div>
+                <div v-if="plantillaProgress === 'uploading'" class="flex-shrink-0">
+                  <i class="pi pi-spin pi-spinner text-violet-500" />
+                </div>
+                <div v-else-if="plantillaProgress === 'done'" class="flex-shrink-0">
+                  <i class="pi pi-check-circle text-green-500" />
+                </div>
+                <div v-else-if="plantillaProgress === 'error'" class="flex-shrink-0">
+                  <i class="pi pi-times-circle text-red-500" />
+                </div>
+                <Button
+                  v-if="plantillaProgress !== 'uploading'"
+                  icon="pi pi-times"
+                  size="small"
+                  severity="secondary"
+                  text
+                  rounded
+                  v-tooltip.top="'Quitar plantilla'"
+                  @click="clearPlantilla"
+                />
+              </div>
+
+              <input
+                ref="plantillaInputRef"
+                type="file"
+                class="hidden"
+                accept="*/*"
+                @change="onPlantillaChange"
+              />
+            </div>
+
             <Divider />
 
             <!-- Actions -->
@@ -258,7 +479,7 @@ async function onSubmit() {
                 type="submit"
                 label="Crear Instrumento"
                 icon="pi pi-check"
-                :loading="saving"
+                :loading="saving || uploadingPlantilla"
               />
             </div>
 

@@ -11,19 +11,49 @@ router.use(authMiddleware())
 
 // --- Schemas ---
 
-const createInstrumentSchema = z.object({
+// Mirrors the RolUsuario enum from schema.prisma verbatim.
+// Update both together. Allowed values: ADMIN, EMPLEADO, AUDITOR, OPERADOR.
+const ROL_USUARIO_VALUES = ['ADMIN', 'EMPLEADO', 'AUDITOR', 'OPERADOR'] as const
+
+function refineRolesPermitidos(val: unknown): val is string {
+  if (typeof val !== 'string' || val.length === 0) return false
+  const parts = val.split(',').map((s) => s.trim()).filter(Boolean)
+  return parts.every((p) => (ROL_USUARIO_VALUES as readonly string[]).includes(p))
+}
+
+const baseInstrumentFields = {
   nombreInstrumento: z.string().min(1).max(200),
   codigo: z.string().max(50).optional(),
   descripcion: z.string().optional(),
   tipo: z.enum(['VALORACION', 'NUTRICION', 'MATRICULA', 'ADMISION']),
   periodicidad: z.enum(['UNICA', 'ANUAL', 'MENSUAL', 'TRIMESTRAL', 'SEMESTRAL']),
-  rolesPermitidos: z.string().min(1),
+  rolesPermitidos: z.string().min(1).refine(refineRolesPermitidos, {
+    message: 'rolesPermitidos must be a comma-separated list of valid RolUsuario values (ADMIN, EMPLEADO, AUDITOR, OPERADOR)',
+  }),
   plantillaArchivo: z.string().optional(),
   versionPlantilla: z.string().min(1).max(20),
   estado: z.enum(['ACTIVO', 'INACTIVO']).optional(),
-})
+}
 
-const updateInstrumentSchema = createInstrumentSchema.partial()
+const createInstrumentSchema = z.object(baseInstrumentFields)
+
+const updateInstrumentSchema = z.object({
+  nombreInstrumento: z.string().min(1).max(200).optional(),
+  codigo: z.string().max(50).optional(),
+  descripcion: z.string().optional(),
+  tipo: z.enum(['VALORACION', 'NUTRICION', 'MATRICULA', 'ADMISION']).optional(),
+  periodicidad: z.enum(['UNICA', 'ANUAL', 'MENSUAL', 'TRIMESTRAL', 'SEMESTRAL']).optional(),
+  rolesPermitidos: z
+    .string()
+    .min(1)
+    .refine(refineRolesPermitidos, {
+      message: 'rolesPermitidos must be a comma-separated list of valid RolUsuario values (ADMIN, EMPLEADO, AUDITOR, OPERADOR)',
+    })
+    .optional(),
+  plantillaArchivo: z.string().optional(),
+  versionPlantilla: z.string().min(1).max(20).optional(),
+  estado: z.enum(['ACTIVO', 'INACTIVO']).optional(),
+})
 
 const createRecordSchema = z.object({
   clienteId: z.number().int().positive(),

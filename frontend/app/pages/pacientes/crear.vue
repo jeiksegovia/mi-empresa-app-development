@@ -14,7 +14,6 @@ const form = reactive({
   tipoDocumento: 'CC' as 'CC' | 'CE' | 'PASAPORTE' | 'REGISTRO_CIVIL',
   numeroDocumento: '',
   fechaNacimiento: '',
-  genero: '',
   telefono: '',
   email: '',
   direccion: '',
@@ -23,6 +22,10 @@ const form = reactive({
   estado: 'ACTIVO' as 'ACTIVO' | 'INACTIVO',
 })
 
+// Género uses Select + inline "OTRO" custom text input (P0 jul4)
+const generoSelect = ref<'' | 'MASCULINO' | 'FEMENINO' | 'OTRO'>('')
+const generoCustom = ref('')
+
 const formErrors = reactive<Record<string, string>>({})
 
 // Emergency contacts
@@ -30,6 +33,8 @@ interface EmergencyContact {
   nombre: string
   telefono: string
   parentesco: string
+  parentescoSelect: '' | 'PADRE' | 'MADRE' | 'HIJO' | 'OTRO'
+  parentescoCustom: string
 }
 
 const emergencyContacts = ref<EmergencyContact[]>([])
@@ -39,6 +44,8 @@ function addEmergencyContact() {
     nombre: '',
     telefono: '',
     parentesco: '',
+    parentescoSelect: '',
+    parentescoCustom: '',
   })
 }
 
@@ -53,7 +60,9 @@ function validateForm() {
   if (!form.nombre.trim()) formErrors.nombre = 'Requerido'
   if (!form.numeroDocumento.trim()) formErrors.numeroDocumento = 'Requerido'
   if (!form.fechaNacimiento) formErrors.fechaNacimiento = 'Requerido'
-  if (!form.genero) formErrors.genero = 'Requerido'
+  if (!generoSelect.value) formErrors.genero = 'Requerido'
+  else if (generoSelect.value === 'OTRO' && !generoCustom.value.trim())
+    formErrors.genero = 'Requerido'
 
   return Object.keys(formErrors).length === 0
 }
@@ -72,12 +81,14 @@ async function handleSubmit() {
 
   saving.value = true
   try {
+    const generoResolved =
+      generoSelect.value === 'OTRO' ? generoCustom.value.trim() : generoSelect.value
     const payload: Record<string, unknown> = {
       nombre: form.nombre.trim(),
       tipoDocumento: form.tipoDocumento,
       numeroDocumento: form.numeroDocumento.trim(),
       fechaNacimiento: form.fechaNacimiento,
-      genero: form.genero,
+      genero: generoResolved,
       estado: form.estado,
     }
 
@@ -88,14 +99,25 @@ async function handleSubmit() {
     if (form.observacionesEspeciales.trim()) payload.observacionesEspeciales = form.observacionesEspeciales.trim()
 
     // Add emergency contacts
-    const validContacts = emergencyContacts.value.filter(
-      (c) => c.nombre.trim() && c.telefono.trim() && c.parentesco.trim()
-    )
+    const validContacts = emergencyContacts.value
+      .map((c) => ({
+        ...c,
+        parentescoResolved:
+          c.parentescoSelect === 'OTRO'
+            ? c.parentescoCustom.trim()
+            : c.parentescoSelect,
+      }))
+      .filter(
+        (c) =>
+          c.nombre.trim() &&
+          c.telefono.trim() &&
+          (c.parentescoResolved ?? '').length > 0
+      )
     if (validContacts.length) {
       payload.contactosEmergencia = validContacts.map((c) => ({
         nombre: c.nombre.trim(),
         telefono: c.telefono.trim(),
-        parentesco: c.parentesco.trim(),
+        parentesco: c.parentescoResolved,
       }))
     }
 
@@ -134,6 +156,19 @@ const tipoDocumentoOptions = [
 const estadoOptions = [
   { label: 'Activo', value: 'ACTIVO' },
   { label: 'Inactivo', value: 'INACTIVO' },
+]
+
+const generoOptions = [
+  { label: 'Masculino', value: 'MASCULINO' },
+  { label: 'Femenino', value: 'FEMENINO' },
+  { label: 'Otro', value: 'OTRO' },
+]
+
+const parentescoOptions = [
+  { label: 'Padre', value: 'PADRE' },
+  { label: 'Madre', value: 'MADRE' },
+  { label: 'Hijo/a', value: 'HIJO' },
+  { label: 'Otro', value: 'OTRO' },
 ]
 </script>
 
@@ -216,11 +251,22 @@ const estadoOptions = [
                 <label class="block text-sm font-medium mb-2">
                   Género <span class="text-red-500">*</span>
                 </label>
-                <InputText
-                  v-model="form.genero"
+                <Select
+                  v-model="generoSelect"
+                  :options="generoOptions"
+                  option-label="label"
+                  option-value="value"
                   class="w-full"
                   :class="{ 'p-invalid': formErrors.genero }"
-                  placeholder="Masculino, Femenino, Otro"
+                  placeholder="Seleccionar"
+                  show-clear
+                />
+                <InputText
+                  v-if="generoSelect === 'OTRO'"
+                  v-model="generoCustom"
+                  class="w-full mt-2"
+                  placeholder="¿Cuál?"
+                  maxlength="20"
                 />
                 <small v-if="formErrors.genero" class="text-red-500">{{ formErrors.genero }}</small>
               </div>
@@ -309,7 +355,21 @@ const estadoOptions = [
                     <div class="flex items-end gap-2">
                       <div class="flex-1">
                         <label class="block text-sm font-medium mb-2">Parentesco</label>
-                        <InputText v-model="contact.parentesco" class="w-full" placeholder="Padre, Madre, etc." />
+                        <Select
+                          v-model="contact.parentescoSelect"
+                          :options="parentescoOptions"
+                          option-label="label"
+                          option-value="value"
+                          class="w-full"
+                          placeholder="Seleccionar"
+                          show-clear
+                        />
+                        <InputText
+                          v-if="contact.parentescoSelect === 'OTRO'"
+                          v-model="contact.parentescoCustom"
+                          class="w-full mt-2"
+                          placeholder="¿Cuál?"
+                        />
                       </div>
                       <Button
                         icon="pi pi-trash"

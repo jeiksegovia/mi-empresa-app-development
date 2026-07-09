@@ -153,3 +153,82 @@ test.describe('Employee History Page', () => {
     await expect(page.getByRole('button', { name: /editar/i })).toBeVisible()
   })
 })
+
+// ─── Appended: 5-tab edit describe block ─────────────────────────────────────
+// Tab labels from /app/pages/empleados/[id]/editar.vue:
+//   Tab 0: 'Datos Personales'
+//   Tab 1: 'Núcleo Familiar'
+//   Tab 2: 'Info. Laboral'
+//   Tab 3: 'Educación'
+//   Tab 4: 'Certificados'
+
+test.describe('5-tab edit', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.context().clearCookies()
+    await login(page)
+  })
+
+  test('all 5 tab buttons are visible on edit page', async ({ page }) => {
+    await goToEdit(page)
+
+    // Tab labels rendered as button text by the tab-switching loop in the template
+    await expect(page.getByRole('button', { name: 'Datos Personales' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Núcleo Familiar' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Info. Laboral' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Educación' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Certificados' })).toBeVisible()
+  })
+
+  test('clicking second tab (Núcleo Familiar) switches visible content', async ({ page }) => {
+    await goToEdit(page)
+
+    // First tab (Datos Personales) is active by default — Nombres input visible
+    const nombreInput = page.getByPlaceholder('Nombres')
+    await expect(nombreInput).toBeVisible()
+
+    // Click second tab: Núcleo Familiar
+    await page.getByRole('button', { name: 'Núcleo Familiar' }).click()
+    await page.waitForTimeout(300)
+
+    // Datos Personales section should now be hidden
+    // Núcleo Familiar section has "Agregar Miembro" or shows family form
+    // Check that the first tab content is no longer the focused section
+    // and that the second tab-specific UI is present
+    const addFamilyBtn = page.getByRole('button', { name: /agregar miembro/i })
+    await expect(addFamilyBtn).toBeVisible({ timeout: 5000 })
+  })
+
+  test('first tab (Datos Personales) has a save button', async ({ page }) => {
+    await goToEdit(page)
+    // Tab 1 save action: "Guardar Cambios" button
+    await expect(page.getByRole('button', { name: /guardar cambios/i }).first()).toBeVisible()
+  })
+
+  test('second tab (Núcleo Familiar) has a save button', async ({ page }) => {
+    await goToEdit(page)
+    await page.getByRole('button', { name: 'Núcleo Familiar' }).click()
+    await page.waitForTimeout(300)
+    await expect(page.getByRole('button', { name: /guardar/i }).first()).toBeVisible()
+  })
+
+  test('third tab (Info. Laboral) has a save button', async ({ page }) => {
+    await goToEdit(page)
+    await page.getByRole('button', { name: 'Info. Laboral' }).click()
+    await page.waitForTimeout(300)
+    await expect(page.getByRole('button', { name: /guardar/i }).first()).toBeVisible()
+  })
+
+  test('fourth tab (Educación) has a save button', async ({ page }) => {
+    await goToEdit(page)
+    await page.getByRole('button', { name: 'Educación' }).click()
+    await page.waitForTimeout(300)
+    await expect(page.getByRole('button', { name: /guardar/i }).first()).toBeVisible()
+  })
+
+  test('fifth tab (Certificados) has a save button', async ({ page }) => {
+    await goToEdit(page)
+    await page.getByRole('button', { name: 'Certificados' }).click()
+    await page.waitForTimeout(300)
+    await expect(page.getByRole('button', { name: /guardar/i }).first()).toBeVisible()
+  })
+})

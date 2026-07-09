@@ -18,18 +18,18 @@ Resources:
       ComputePlatform: Server
 
   # ============================================================================
-  # CodeDeploy Deployment Group - Dev Environment
+  # CodeDeploy Deployment Group - Staging Environment
   # ============================================================================
-  DevDeploymentGroup:
+  StagingDeploymentGroup:
     Type: AWS::CodeDeploy::DeploymentGroup
     Properties:
       ApplicationName: !Ref CodeDeployApplication
-      DeploymentGroupName: !Sub '${ProjectName}-dev'
+      DeploymentGroupName: !Sub '${ProjectName}-staging'
       ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
       DeploymentConfigName: CodeDeployDefault.OneAtATime
       OnPremisesInstanceTagFilters:
         - Key: Environment
-          Value: dev
+          Value: staging
           Type: KEY_AND_VALUE
         - Key: Application
           Value: !Ref ProjectName
@@ -78,7 +78,9 @@ Resources:
               Service: codedeploy.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AWSCodeDeployRole
+        # NOTE: this managed policy lives under the service-role/ path —
+        # arn:aws:iam::aws:policy/AWSCodeDeployRole does not exist (404)
+        - arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -90,11 +92,11 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-ApplicationName'
 
-  DevDeploymentGroupName:
-    Description: Dev deployment group name
-    Value: !Ref DevDeploymentGroup
+  StagingDeploymentGroupName:
+    Description: Staging deployment group name
+    Value: !Ref StagingDeploymentGroup
     Export:
-      Name: !Sub '${AWS::StackName}-DevDeploymentGroup'
+      Name: !Sub '${AWS::StackName}-StagingDeploymentGroup'
 
   ProdDeploymentGroupName:
     Description: Prod deployment group name

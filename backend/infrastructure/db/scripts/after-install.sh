@@ -3,24 +3,23 @@ set -e
 set -o pipefail
 
 # ============================================================================
-# CodeDeploy AfterInstall Hook
+# CodeDeploy AfterInstall Hook (v2)
 # ============================================================================
-# This script runs after the application files are copied.
-# It performs:
-#   - Dependency installation
-#   - Prisma client generation
-#   - Database migrations
-#   - TypeScript build
-#   - Environment variable loading
+# The deployment artifact is PREBUILT in CI (GitHub Actions runs npm ci,
+# prisma generate and tsc, and ships dist/). On-instance work is limited to:
+#   - Production dependency installation
+#   - Prisma client generation (engineType "client": pure JS, cheap)
+#   - Environment variable loading (SSM -> .env)
+#   - Database migrations (prisma migrate deploy)
+#
+# Fallback: if dist/server.js is missing (manual zip without build), the
+# script builds on-instance — viable only because user-data adds 2 GB swap.
 # ============================================================================
 
 LOG_FILE="/opt/miempresa/logs/after-install.log"
 APP_DIR="/opt/miempresa/app"
 
-# Ensure log directory exists
 mkdir -p /opt/miempresa/logs
-
-# Redirect all output to log file
 exec >> "$LOG_FILE" 2>&1
 
 echo "=========================================="
@@ -33,226 +32,131 @@ echo ""
 # Determine Environment
 # ============================================================================
 
-echo "[0/6] Determining environment..."
+echo "[1/6] Determining environment..."
 
-# Extract stage from CodeDeploy deployment group name
-# Expected format: miempresa-dev or miempresa-prod
-DEPLOYMENT_GROUP_NAME="${DEPLOYMENT_GROUP_NAME:-dev}"
-
-if [[ "$DEPLOYMENT_GROUP_NAME" == *"prod"* ]]; then
-    export STAGE="prod"
-elif [[ "$DEPLOYMENT_GROUP_NAME" == *"dev"* ]]; then
-    export STAGE="dev"
+# Prefer the stage recorded at instance creation; fall back to the
+# CodeDeploy deployment group name (miempresa-staging / miempresa-prod)
+if [ -f /etc/miempresa-stage ]; then
+    STAGE=$(cat /etc/miempresa-stage)
+elif [[ "${DEPLOYMENT_GROUP_NAME:-}" == *"prod"* ]]; then
+    STAGE="prod"
 else
-    # Default to dev if can't determine
-    export STAGE="dev"
+    STAGE="staging"
 fi
-
+export STAGE
 export AWS_REGION="${AWS_REGION:-us-east-1}"
 
 echo "  Stage: ${STAGE}"
 echo "  Region: ${AWS_REGION}"
-echo "  Deployment Group: ${DEPLOYMENT_GROUP_NAME}"
+echo "  Deployment Group: ${DEPLOYMENT_GROUP_NAME:-n/a}"
 echo ""
 
 # ============================================================================
-# Change to Application Directory
+# Application Directory
 # ============================================================================
 
-echo "[1/6] Changing to application directory..."
-
-if [ ! -d "$APP_DIR" ]; then
-    echo "  ✗ Application directory not found: ${APP_DIR}"
-    exit 1
-fi
-
+echo "[2/6] Changing to application directory..."
 cd "$APP_DIR"
 echo "  ✓ Working directory: $(pwd)"
 echo ""
 
 # ============================================================================
-# Install Dependencies
+# Install Production Dependencies
 # ============================================================================
 
-echo "[2/6] Installing dependencies..."
+echo "[3/6] Installing production dependencies..."
 
-# Use npm ci for reproducible builds
 if [ -f "package-lock.json" ]; then
-    echo "  Running npm ci..."
-    npm ci --production
-    echo "  ✓ Production dependencies installed"
+    npm ci --omit=dev
 else
     echo "  WARNING: package-lock.json not found, using npm install..."
-    npm install --production
-    echo "  ✓ Dependencies installed"
+    npm install --omit=dev
 fi
-
+echo "  ✓ Production dependencies installed"
 echo ""
 
 # ============================================================================
-# Generate Prisma Client
+# Prisma Client + Build Artifacts
 # ============================================================================
 
-echo "[3/6] Generating Prisma client..."
+echo "[4/6] Preparing Prisma client and build artifacts..."
 
-if [ -f "prisma/schema.prisma" ]; then
-    echo "  Running prisma generate..."
-    npx prisma generate
-    echo "  ✓ Prisma client generated"
-else
+if [ ! -f "prisma/schema.prisma" ]; then
     echo "  ✗ Prisma schema not found: prisma/schema.prisma"
     exit 1
 fi
 
-echo ""
+# Generates JS client into src/generated/prisma (per schema output path)
+npx prisma generate
+echo "  ✓ Prisma client generated"
 
-# ============================================================================
-# Build TypeScript Application
-# ============================================================================
-
-echo "[4/6] Building TypeScript application..."
-
-# Install dev dependencies temporarily for build
-echo "  Installing dev dependencies for build..."
-npm install --only=dev
-
-# Run build
-if [ -f "tsconfig.json" ]; then
-    echo "  Running npm run build..."
+if [ ! -f "dist/server.js" ]; then
+    echo "  dist/server.js missing — falling back to on-instance build..."
+    npm install --include=dev
     npm run build
-    echo "  ✓ TypeScript build completed"
-else
-    echo "  ✗ tsconfig.json not found"
-    exit 1
+    npm prune --omit=dev
+    echo "  ✓ On-instance build completed"
 fi
 
-# Copy generated Prisma client to dist directory
-if [ -d "src/generated" ]; then
-    echo "  Copying Prisma client to dist..."
-    mkdir -p dist/src
-    cp -R src/generated dist/src/
-    echo "  ✓ Prisma client copied to dist"
-fi
-
-# Remove dev dependencies after build
-echo "  Removing dev dependencies..."
-npm prune --production
-
+# tsconfig rootDir=src -> compiled code at dist/ imports '../generated/prisma',
+# which resolves to dist/generated/prisma. tsc does not copy the generated JS
+# client, so place it there explicitly.
+rm -rf dist/generated
+cp -R src/generated dist/generated
+echo "  ✓ Prisma client available at dist/generated"
 echo ""
 
 # ============================================================================
-# Run Database Migrations
+# Environment Variables + Database Migrations
 # ============================================================================
 
-echo "[5/6] Running database migrations..."
+echo "[5/6] Loading environment and running migrations..."
 
-# First, load environment variables to get DATABASE_URL
-export STAGE
-export AWS_REGION
-
-# Run env.sh to generate .env file
-if [ -f "infrastructure/db/scripts/env.sh" ]; then
-    echo "  Loading environment variables..."
-    bash infrastructure/db/scripts/env.sh
-    echo "  ✓ Environment variables loaded"
-else
+if [ ! -f "infrastructure/db/scripts/env.sh" ]; then
     echo "  ✗ env.sh script not found"
     exit 1
 fi
 
-# Source .env file
-if [ -f ".env" ]; then
-    set -a
-    source .env
-    set +a
-    echo "  ✓ .env file sourced"
-else
-    echo "  ✗ .env file not found"
-    exit 1
-fi
+bash infrastructure/db/scripts/env.sh
+set -a
+source .env
+set +a
+echo "  ✓ Environment loaded from SSM (stage: ${STAGE})"
 
-# Run Prisma migrations
-echo "  Running prisma migrate deploy..."
 npx prisma migrate deploy
-
-MIGRATION_STATUS=$?
-if [ $MIGRATION_STATUS -eq 0 ]; then
-    echo "  ✓ Database migrations applied successfully"
-else
-    echo "  ✗ Database migrations failed with status: ${MIGRATION_STATUS}"
-    exit $MIGRATION_STATUS
-fi
-
+echo "  ✓ Database migrations applied"
 echo ""
 
 # ============================================================================
-# Post-Build Verification
+# Verification + Permissions
 # ============================================================================
 
-echo "[6/6] Verifying build artifacts..."
+echo "[6/6] Verifying artifacts and setting permissions..."
 
-# Check dist directory exists
-if [ -d "dist" ]; then
-    echo "  ✓ dist directory exists"
-else
-    echo "  ✗ dist directory not found"
+for CHECK in "dist/server.js" ".env"; do
+    if [ ! -e "$CHECK" ]; then
+        echo "  ✗ Missing: ${CHECK}"
+        exit 1
+    fi
+done
+if [ ! -d "dist/generated/prisma" ]; then
+    echo "  ✗ Missing: dist/generated/prisma"
     exit 1
 fi
-
-# Check server.js exists
-if [ -f "dist/server.js" ]; then
-    echo "  ✓ dist/server.js exists"
-else
-    echo "  ✗ dist/server.js not found"
-    exit 1
-fi
-
-# Check Prisma client in dist
-if [ -d "dist/src/generated" ]; then
-    echo "  ✓ Prisma client in dist"
-else
-    echo "  ✗ Prisma client not found in dist"
-    exit 1
-fi
-
-# Check .env file
-if [ -f ".env" ]; then
-    echo "  ✓ .env file present"
-    chmod 600 .env
-else
-    echo "  ✗ .env file missing"
-    exit 1
-fi
-
-echo ""
-
-# ============================================================================
-# Set Permissions
-# ============================================================================
-
-echo "Setting final permissions..."
+echo "  ✓ All artifacts present"
 
 chown -R ec2-user:ec2-user "$APP_DIR"
-chmod -R 755 "$APP_DIR"
 chmod 600 .env
-
-echo "  ✓ Permissions set"
+echo "  ✓ Permissions set (app owned by ec2-user, .env 600)"
 echo ""
-
-# ============================================================================
-# Completion
-# ============================================================================
 
 echo "=========================================="
 echo "AfterInstall completed successfully"
 echo "=========================================="
 echo "Completed: $(date)"
-echo ""
-echo "Build summary:"
-echo "  Application directory: ${APP_DIR}"
 echo "  Stage: ${STAGE}"
-echo "  Node modules: $(du -sh node_modules 2>/dev/null || echo 'N/A')"
-echo "  Dist size: $(du -sh dist 2>/dev/null || echo 'N/A')"
+echo "  node_modules: $(du -sh node_modules 2>/dev/null | cut -f1 || echo 'N/A')"
+echo "  dist: $(du -sh dist 2>/dev/null | cut -f1 || echo 'N/A')"
 echo ""
 
 exit 0

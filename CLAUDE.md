@@ -28,3 +28,9 @@
     - High-level overview
     - Key decisions, issues resolved from Tasks reports
     - optimize for regrex grep searchability
+
+# local development
+backend: http://localhost:3101
+frontend: http://localhost:3100
+db: localhost:15432 (docker)
+Make sure the frontend url: external IP vs localhost, and CORs configuration across IaC and env vars

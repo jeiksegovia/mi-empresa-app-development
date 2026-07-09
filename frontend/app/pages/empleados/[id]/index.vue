@@ -26,8 +26,13 @@ interface EducacionIdioma {
 interface Vehiculo {
   id: number; tipoVehiculo: string; placas: string; tipoLicencia: string; numeroLicencia: string
 }
-interface CertificadoFecha {
-  id: number; fechaExpedicion: string; fechaVencimiento: string
+interface Certificado {
+  id: number
+  tipo: 'ALTURAS' | 'RIESGO_ELECTRICO' | 'MANIPULACION_ALIMENTOS' | 'OTRO'
+  nombre: string | null
+  fechaExpedicion: string
+  fechaVencimiento: string
+  archivoUrl: string | null
 }
 interface DatosMigracion {
   id: number; numeroPasaporte: string; pasaporteExpedicion: string; pasaporteVencimiento: string
@@ -46,13 +51,15 @@ interface EmployeeDetail {
   experienciasLaborales: ExperienciaLaboral[]
   educacionIdiomas: EducacionIdioma[]
   vehiculos: Vehiculo[]
-  certificadoAlturas: CertificadoFecha | null
-  certificadoRiesgoElectrico: CertificadoFecha | null
+  certificados: Certificado[]
   datosMigracion: DatosMigracion | null
 }
 
 const route = useRoute()
 const { apiFetch } = useApi()
+const toast = useToast()
+const authStore = useAuthStore()
+const { downloadFile, uploadFile } = useFileUpload()
 
 const employee = ref<EmployeeDetail | null>(null)
 const loading = ref(true)
@@ -63,6 +70,10 @@ const tabs = [
   { label: 'Información Personal', icon: 'pi pi-user' },
   { label: 'Experiencia & Educación', icon: 'pi pi-briefcase' },
   { label: 'Certificados & Documentos', icon: 'pi pi-file' },
+
+  { label: 'Pendientes', icon: 'pi pi-exclamation-circle' },
+
+  { label: 'Novedades', icon: 'pi pi-bell' },
 ]
 
 async function fetchEmployee() {
@@ -84,18 +95,8 @@ async function fetchEmployee() {
   }
 }
 
-function formatDate(dateStr: string | null | undefined) {
-  if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString('es-CO', {
-    year: 'numeric', month: 'long', day: 'numeric',
-  })
-}
-
 function formatShortDate(dateStr: string | null | undefined) {
-  if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString('es-CO', {
-    year: 'numeric', month: 'short', day: 'numeric',
-  })
+  return formatDate(dateStr, 'short')
 }
 
 function isCertExpired(vencimiento: string) {
@@ -104,7 +105,14 @@ function isCertExpired(vencimiento: string) {
 
 function isCertExpiringSoon(vencimiento: string) {
   const diff = new Date(vencimiento).getTime() - Date.now()
-  return diff > 0 && diff < 60 * 24 * 60 * 60 * 1000 // 60 days
+  return diff > 0 && diff < CERT_POR_VENCER_DAYS * 24 * 60 * 60 * 1000
+}
+
+const certTipoLabels: Record<string, string> = {
+  ALTURAS: 'Trabajo en Alturas',
+  RIESGO_ELECTRICO: 'Riesgo Eléctrico',
+  MANIPULACION_ALIMENTOS: 'Manipulación de Alimentos',
+  OTRO: 'Otro',
 }
 
 const initials = computed(() => {
@@ -119,7 +127,209 @@ const currentCargo = computed(() => {
   )[0]
 })
 
-onMounted(fetchEmployee)
+onMounted(async () => {
+  await fetchEmployee()
+  await Promise.all([fetchPendientes(), fetchNovedades()])
+})
+
+// ─── 
+interface PendienteManual {
+  id: number
+  descripcion: string
+  estado: 'PENDIENTE' | 'RESUELTO'
+  creadoPor: number
+  createdAt: string
+  fechaResuelto: string | null
+}
+interface PendienteDerivado {
+  id: string
+  tipo: 'CERT_VENCIDO' | 'CERT_POR_VENCER' | 'HOJA_VIDA_FALTANTE' | 'SIN_CONTRATO_ACTIVO'
+  descripcion: string
+  severity: 'danger' | 'warn' | 'info'
+  derived: true
+}
+
+const pendientesManuales = ref<PendienteManual[]>([])
+const pendientesDerivados = ref<PendienteDerivado[]>([])
+const pendientesLoading = ref(false)
+const pendienteDialogOpen = ref(false)
+const pendienteNewDescripcion = ref('')
+
+async function fetchPendientes() {
+  pendientesLoading.value = true
+  try {
+    const res = await apiFetch<{ success: boolean; manuales: PendienteManual[]; derivados: PendienteDerivado[] }>(
+      `/employees/${route.params.id}/pendientes`
+    )
+    pendientesManuales.value = res.manuales ?? []
+    pendientesDerivados.value = res.derivados ?? []
+  } catch (e) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo cargar la información.', life: 5000 })
+  } finally {
+    pendientesLoading.value = false
+  }
+}
+
+const pendientesOpenCount = computed(() => {
+  const abiertos = pendientesManuales.value.filter((m) => m.estado === 'PENDIENTE').length
+  const derivadosGraves = pendientesDerivados.value.filter((d) => d.tipo !== 'CERT_POR_VENCER').length
+  return abiertos + derivadosGraves
+})
+
+function severityIcon(tipo: PendienteDerivado['tipo']) {
+  if (tipo === 'CERT_VENCIDO') return 'pi pi-times-circle text-red-500'
+  if (tipo === 'CERT_POR_VENCER') return 'pi pi-clock text-amber-500'
+  if (tipo === 'HOJA_VIDA_FALTANTE') return 'pi pi-file-pdf text-blue-500'
+  return 'pi pi-briefcase text-amber-500'
+}
+
+async function addPendiente() {
+  if (!pendienteNewDescripcion.value.trim()) return
+  try {
+    await apiFetch(`/employees/${route.params.id}/pendientes`, {
+      method: 'POST',
+      body: { descripcion: pendienteNewDescripcion.value.trim() },
+    })
+    pendienteNewDescripcion.value = ''
+    pendienteDialogOpen.value = false
+    await fetchPendientes()
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e?.data?.message || 'No se pudo crear' })
+  }
+}
+
+async function resolvePendiente(pid: number) {
+  try {
+    await apiFetch(`/employees/${route.params.id}/pendientes/${pid}`, {
+      method: 'PATCH',
+      body: { estado: 'RESUELTO' },
+    })
+    await fetchPendientes()
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e?.data?.message || 'No se pudo resolver' })
+  }
+}
+
+async function deletePendiente(pid: number) {
+  try {
+    await apiFetch(`/employees/${route.params.id}/pendientes/${pid}`, { method: 'DELETE' })
+    await fetchPendientes()
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e?.data?.message || 'No se pudo eliminar' })
+  }
+}
+
+
+// ─── 
+interface NovedadArchivo { nombre: string; url: string }
+interface Novedad {
+  id: number
+  tipo: 'LLAMADO_ATENCION' | 'MEMORANDO' | 'PERMISO' | 'VACACIONES' | 'OTRA'
+  titulo: string
+  descripcion: string | null
+  fechaInicio: string
+  fechaFin: string | null
+  archivos: NovedadArchivo[]
+  createdAt: string
+}
+
+const novedades = ref<Novedad[]>([])
+const novedadesLoading = ref(false)
+const novedadDialogOpen = ref(false)
+const novedadForm = reactive({
+  tipo: 'MEMORANDO' as Novedad['tipo'],
+  titulo: '',
+  descripcion: '',
+  fechaInicio: new Date().toISOString().slice(0, 10),
+  fechaFin: '',
+  archivos: [] as Array<{ nombre: string; url: string }>,
+})
+const uploadingNovedadArchivo = ref(false)
+
+async function fetchNovedades() {
+  novedadesLoading.value = true
+  try {
+    const res = await apiFetch<{ success: boolean; data: Novedad[] }>(
+      `/employees/${route.params.id}/novedades`
+    )
+    novedades.value = res.data ?? []
+  } catch (e) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo cargar la información.', life: 5000 })
+  } finally {
+    novedadesLoading.value = false
+  }
+}
+
+const novedadTipoLabels: Record<Novedad['tipo'], string> = {
+  LLAMADO_ATENCION: 'Llamado de atención',
+  MEMORANDO: 'Memorando',
+  PERMISO: 'Permiso',
+  VACACIONES: 'Vacaciones',
+  OTRA: 'Otra',
+}
+const novedadTipoSeverity: Record<Novedad['tipo'], 'danger' | 'warn' | 'info' | 'success' | 'secondary'> = {
+  LLAMADO_ATENCION: 'danger',
+  MEMORANDO: 'warn',
+  PERMISO: 'info',
+  VACACIONES: 'success',
+  OTRA: 'secondary',
+}
+
+function resetNovedadForm() {
+  novedadForm.tipo = 'MEMORANDO'
+  novedadForm.titulo = ''
+  novedadForm.descripcion = ''
+  novedadForm.fechaInicio = new Date().toISOString().slice(0, 10)
+  novedadForm.fechaFin = ''
+  novedadForm.archivos = []
+}
+
+async function saveNovedad() {
+  if (!novedadForm.titulo.trim()) return
+  try {
+    await apiFetch(`/employees/${route.params.id}/novedades`, {
+      method: 'POST',
+      body: {
+        tipo: novedadForm.tipo,
+        titulo: novedadForm.titulo.trim(),
+        descripcion: novedadForm.descripcion.trim() || undefined,
+        fechaInicio: novedadForm.fechaInicio,
+        fechaFin: novedadForm.fechaFin || undefined,
+        archivos: novedadForm.archivos.length ? novedadForm.archivos : undefined,
+      },
+    })
+    novedadDialogOpen.value = false
+    resetNovedadForm()
+    await fetchNovedades()
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e?.data?.message || 'No se pudo guardar' })
+  }
+}
+
+async function onNovedadArchivoChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files || !input.files[0]) return
+  uploadingNovedadArchivo.value = true
+  const key = await uploadFile(input.files[0], 'novedades')
+  if (key) {
+    novedadForm.archivos.push({ nombre: input.files[0].name, url: key })
+  }
+  uploadingNovedadArchivo.value = false
+  input.value = ''
+}
+
+function removeNovedadArchivo(i: number) {
+  novedadForm.archivos.splice(i, 1)
+}
+
+async function deleteNovedad(nid: number) {
+  try {
+    await apiFetch(`/employees/${route.params.id}/novedades/${nid}`, { method: 'DELETE' })
+    await fetchNovedades()
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e?.data?.message || 'No se pudo eliminar' })
+  }
+}
 </script>
 
 <template>
@@ -414,70 +624,40 @@ onMounted(fetchEmployee)
 
       <!-- TAB 2: Certificados & Documentos -->
       <div v-show="activeTab === 2" class="space-y-4">
-        <!-- Cert Alturas -->
+        <!-- Certificados (unified) -->
         <Card>
           <template #header>
             <div class="px-6 pt-5 pb-0">
               <h3 class="text-base font-semibold text-[var(--text-color)] flex items-center gap-2">
-                <i class="pi pi-shield text-violet-500" /> Certificado de Alturas
+                <i class="pi pi-shield text-violet-500" /> Certificados
               </h3>
             </div>
           </template>
           <template #content>
-            <div v-if="!employee.certificadoAlturas"
-              class="text-center py-6 text-[var(--text-color-secondary)] text-sm">
-              No tiene certificado de alturas registrado
+            <div v-if="!employee.certificados?.length"
+              class="text-sm text-[var(--text-color-secondary)]">
+              No tiene certificados registrados.
             </div>
-            <div v-else class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div><p class="text-xs text-[var(--text-color-secondary)] mb-1">Fecha Expedición</p>
-                <p class="font-medium">{{ formatDate(employee.certificadoAlturas.fechaExpedicion) }}</p></div>
-              <div><p class="text-xs text-[var(--text-color-secondary)] mb-1">Vencimiento</p>
-                <p :class="[
-                  'font-medium',
-                  isCertExpired(employee.certificadoAlturas.fechaVencimiento) ? 'text-red-600' :
-                  isCertExpiringSoon(employee.certificadoAlturas.fechaVencimiento) ? 'text-orange-500' : 'text-green-600'
-                ]">{{ formatDate(employee.certificadoAlturas.fechaVencimiento) }}</p></div>
-              <div><p class="text-xs text-[var(--text-color-secondary)] mb-1">Estado</p>
-                <Tag
-                  :value="isCertExpired(employee.certificadoAlturas.fechaVencimiento) ? 'Vencido' :
-                    isCertExpiringSoon(employee.certificadoAlturas.fechaVencimiento) ? 'Por vencer' : 'Vigente'"
-                  :severity="isCertExpired(employee.certificadoAlturas.fechaVencimiento) ? 'danger' :
-                    isCertExpiringSoon(employee.certificadoAlturas.fechaVencimiento) ? 'warn' : 'success'"
-                />
+            <div v-for="cert in employee.certificados" :key="cert.id"
+              class="border border-[var(--surface-border)] rounded-lg p-4 mb-3 flex items-center justify-between">
+              <div>
+                <p class="font-medium">
+                  {{ certTipoLabels[cert.tipo] }}<span v-if="cert.tipo === 'OTRO' && cert.nombre"> — {{ cert.nombre }}</span>
+                </p>
+                <p class="text-sm text-[var(--text-color-secondary)]">
+                  {{ formatShortDate(cert.fechaExpedicion) }} → {{ formatShortDate(cert.fechaVencimiento) }}
+                </p>
               </div>
-            </div>
-          </template>
-        </Card>
-
-        <!-- Cert Riesgo Electrico -->
-        <Card>
-          <template #header>
-            <div class="px-6 pt-5 pb-0">
-              <h3 class="text-base font-semibold text-[var(--text-color)] flex items-center gap-2">
-                <i class="pi pi-bolt text-violet-500" /> Certificado Riesgo Eléctrico
-              </h3>
-            </div>
-          </template>
-          <template #content>
-            <div v-if="!employee.certificadoRiesgoElectrico"
-              class="text-center py-6 text-[var(--text-color-secondary)] text-sm">
-              No tiene certificado de riesgo eléctrico registrado
-            </div>
-            <div v-else class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div><p class="text-xs text-[var(--text-color-secondary)] mb-1">Fecha Expedición</p>
-                <p class="font-medium">{{ formatDate(employee.certificadoRiesgoElectrico.fechaExpedicion) }}</p></div>
-              <div><p class="text-xs text-[var(--text-color-secondary)] mb-1">Vencimiento</p>
-                <p :class="[
-                  'font-medium',
-                  isCertExpired(employee.certificadoRiesgoElectrico.fechaVencimiento) ? 'text-red-600' :
-                  isCertExpiringSoon(employee.certificadoRiesgoElectrico.fechaVencimiento) ? 'text-orange-500' : 'text-green-600'
-                ]">{{ formatDate(employee.certificadoRiesgoElectrico.fechaVencimiento) }}</p></div>
-              <div><p class="text-xs text-[var(--text-color-secondary)] mb-1">Estado</p>
-                <Tag
-                  :value="isCertExpired(employee.certificadoRiesgoElectrico.fechaVencimiento) ? 'Vencido' :
-                    isCertExpiringSoon(employee.certificadoRiesgoElectrico.fechaVencimiento) ? 'Por vencer' : 'Vigente'"
-                  :severity="isCertExpired(employee.certificadoRiesgoElectrico.fechaVencimiento) ? 'danger' :
-                    isCertExpiringSoon(employee.certificadoRiesgoElectrico.fechaVencimiento) ? 'warn' : 'success'"
+              <div class="flex items-center gap-2">
+                <Tag v-if="isCertExpired(cert.fechaVencimiento)" severity="danger" value="VENCIDO" />
+                <Tag v-else-if="isCertExpiringSoon(cert.fechaVencimiento)" severity="warn" value="POR VENCER" />
+                <Button
+                  v-if="cert.archivoUrl"
+                  icon="pi pi-download"
+                  text
+                  rounded
+                  size="small"
+                  @click="downloadFile(cert.archivoUrl)"
                 />
               </div>
             </div>
@@ -516,6 +696,260 @@ onMounted(fetchEmployee)
             </div>
           </template>
         </Card>
+      </div>
+
+      <!-- TAB: Pendientes -->
+      <div v-show="activeTab === 3" class="space-y-4" data-testid="pendientes-tab">
+        <Card>
+          <template #header>
+            <div class="px-6 pt-5 pb-0 flex items-center justify-between">
+              <h3 class="text-base font-semibold flex items-center gap-2 text-[var(--text-color)]">
+                <i class="pi pi-exclamation-circle text-violet-500" /> Pendientes
+                <span v-if="pendientesOpenCount > 0" class="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                  {{ pendientesOpenCount }}
+                </span>
+              </h3>
+              <Button
+                v-if="authStore.isAdmin"
+                label="Agregar pendiente"
+                icon="pi pi-plus"
+                size="small"
+                severity="secondary"
+                outlined
+                data-testid="pendiente-add-btn"
+                @click="pendienteDialogOpen = true"
+              />
+            </div>
+          </template>
+          <template #content>
+            <div v-if="pendientesLoading" class="flex items-center justify-center py-8">
+              <i class="pi pi-spin pi-spinner text-3xl text-violet-500" />
+            </div>
+            <div v-else-if="pendientesManuales.length === 0 && pendientesDerivados.length === 0" class="text-center py-6 text-[var(--text-color-secondary)]">
+              Sin pendientes.
+            </div>
+            <div v-else class="space-y-2">
+              <!-- Derivados (read-only, computed) -->
+              <div
+                v-for="d in pendientesDerivados"
+                :key="d.id"
+                class="flex items-center gap-3 px-4 py-3 border border-[var(--surface-border)] rounded-lg bg-[var(--surface-ground)]"
+                data-testid="pendiente-derivado"
+              >
+                <i :class="severityIcon(d.tipo)" />
+                <span class="flex-1 text-sm">{{ d.descripcion }}</span>
+                <span class="text-xs text-[var(--text-color-secondary)]">Auto</span>
+              </div>
+              <!-- Manuales -->
+              <div
+                v-for="m in pendientesManuales"
+                :key="m.id"
+                class="flex items-center gap-3 px-4 py-3 border border-[var(--surface-border)] rounded-lg"
+                :class="m.estado === 'RESUELTO' ? 'opacity-60 line-through' : ''"
+                data-testid="pendiente-manual"
+              >
+                <i class="pi pi-list text-violet-500" />
+                <span class="flex-1 text-sm">{{ m.descripcion }}</span>
+                <Tag v-if="m.estado === 'RESUELTO'" value="Resuelto" severity="success" />
+                <Button
+                  v-else-if="authStore.isAdmin"
+                  icon="pi pi-check"
+                  size="small"
+                  severity="success"
+                  text
+                  rounded
+                  v-tooltip.top="'Resolver'"
+                  :data-testid="`pendiente-resolve-${m.id}`"
+                  @click="resolvePendiente(m.id)"
+                />
+                <Button
+                  v-if="authStore.isAdmin"
+                  icon="pi pi-trash"
+                  size="small"
+                  severity="danger"
+                  text
+                  rounded
+                  v-tooltip.top="'Eliminar'"
+                  @click="deletePendiente(m.id)"
+                />
+              </div>
+            </div>
+          </template>
+        </Card>
+
+        <!-- Add pendiente dialog -->
+        <Dialog
+          v-model:visible="pendienteDialogOpen"
+          header="Nuevo pendiente"
+          :modal="true"
+          :style="{ width: '32rem' }"
+        >
+          <div class="space-y-3">
+            <label class="block text-sm font-medium">Descripción</label>
+            <Textarea
+              v-model="pendienteNewDescripcion"
+              rows="3"
+              class="w-full"
+              placeholder="Describe la acción pendiente"
+              data-testid="pendiente-new-descripcion"
+            />
+          </div>
+          <template #footer>
+            <Button
+              label="Cancelar"
+              severity="secondary"
+              outlined
+              @click="pendienteDialogOpen = false"
+            />
+            <Button
+              label="Guardar"
+              icon="pi pi-check"
+              :disabled="!pendienteNewDescripcion.trim()"
+              data-testid="pendiente-save"
+              @click="addPendiente"
+            />
+          </template>
+        </Dialog>
+      </div>
+      <!-- TAB: Pendientes -->
+      <div v-show="activeTab === 4" class="space-y-4" data-testid="novedades-tab">
+        <Card>
+          <template #header>
+            <div class="px-6 pt-5 pb-0 flex items-center justify-between">
+              <h3 class="text-base font-semibold flex items-center gap-2 text-[var(--text-color)]">
+                <i class="pi pi-bell text-violet-500" /> Novedades
+              </h3>
+              <Button
+                v-if="authStore.isAdmin"
+                label="Nueva novedad"
+                icon="pi pi-plus"
+                size="small"
+                severity="secondary"
+                outlined
+                data-testid="novedad-add-btn"
+                @click="novedadDialogOpen = true"
+              />
+            </div>
+          </template>
+          <template #content>
+            <div v-if="novedadesLoading" class="flex items-center justify-center py-6">
+              <i class="pi pi-spin pi-spinner text-3xl text-violet-500" />
+            </div>
+            <div v-else-if="novedades.length === 0" class="text-center py-6 text-[var(--text-color-secondary)]">
+              Sin novedades registradas.
+            </div>
+            <div v-else class="space-y-3" data-testid="novedades-timeline">
+              <div
+                v-for="n in novedades"
+                :key="n.id"
+                class="border border-[var(--surface-border)] rounded-lg p-4 space-y-2"
+              >
+                <div class="flex items-start justify-between gap-2">
+                  <div class="flex items-center gap-2">
+                    <Tag :value="novedadTipoLabels[n.tipo]" :severity="novedadTipoSeverity[n.tipo]" />
+                    <span class="text-sm font-medium">{{ n.titulo }}</span>
+                  </div>
+                  <Button
+                    v-if="authStore.isAdmin"
+                    icon="pi pi-trash"
+                    size="small"
+                    severity="danger"
+                    text
+                    rounded
+                    @click="deleteNovedad(n.id)"
+                  />
+                </div>
+                <div class="text-xs text-[var(--text-color-secondary)]">
+                  {{ formatDate(n.fechaInicio) }}<span v-if="n.fechaFin"> → {{ formatDate(n.fechaFin) }}</span>
+                </div>
+                <p v-if="n.descripcion" class="text-sm">{{ n.descripcion }}</p>
+                <div v-if="n.archivos?.length" class="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    v-for="(a, ai) in n.archivos"
+                    :key="ai"
+                    icon="pi pi-paperclip"
+                    :label="a.nombre"
+                    size="small"
+                    severity="secondary"
+                    outlined
+                    @click="downloadFile(a.url)"
+                  />
+                </div>
+              </div>
+            </div>
+          </template>
+        </Card>
+
+        <Dialog
+          v-model:visible="novedadDialogOpen"
+          header="Nueva novedad"
+          :modal="true"
+          :style="{ width: '40rem' }"
+        >
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm font-medium mb-1">Tipo</label>
+              <Select
+                v-model="novedadForm.tipo"
+                :options="[
+                  { label: 'Llamado de atención', value: 'LLAMADO_ATENCION' },
+                  { label: 'Memorando', value: 'MEMORANDO' },
+                  { label: 'Permiso', value: 'PERMISO' },
+                  { label: 'Vacaciones', value: 'VACACIONES' },
+                  { label: 'Otra', value: 'OTRA' },
+                ]"
+                option-label="label"
+                option-value="value"
+                class="w-full"
+                data-testid="novedad-tipo"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Título</label>
+              <InputText
+                v-model="novedadForm.titulo"
+                class="w-full"
+                placeholder="Resumen breve"
+                data-testid="novedad-titulo"
+              />
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm font-medium mb-1">Fecha inicio</label>
+                <input type="date" v-model="novedadForm.fechaInicio" class="w-full px-3 py-2 border border-[var(--surface-border)] rounded-lg" data-testid="novedad-fecha-inicio" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">Fecha fin (opcional)</label>
+                <input type="date" v-model="novedadForm.fechaFin" class="w-full px-3 py-2 border border-[var(--surface-border)] rounded-lg" data-testid="novedad-fecha-fin" />
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Descripción</label>
+              <Textarea v-model="novedadForm.descripcion" rows="3" class="w-full" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Archivos adjuntos</label>
+              <input type="file" :disabled="uploadingNovedadArchivo" @change="onNovedadArchivoChange" />
+              <div v-if="novedadForm.archivos.length" class="mt-2 space-y-1">
+                <div v-for="(a, i) in novedadForm.archivos" :key="i" class="flex items-center gap-2 text-sm">
+                  <i class="pi pi-paperclip text-violet-500" />
+                  <span class="flex-1">{{ a.nombre }}</span>
+                  <Button icon="pi pi-times" size="small" severity="danger" text rounded @click="removeNovedadArchivo(i)" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <template #footer>
+            <Button label="Cancelar" severity="secondary" outlined @click="novedadDialogOpen = false" />
+            <Button
+              label="Guardar"
+              icon="pi pi-check"
+              :disabled="!novedadForm.titulo.trim()"
+              data-testid="novedad-save"
+              @click="saveNovedad"
+            />
+          </template>
+        </Dialog>
       </div>
     </template>
   </div>

@@ -9,8 +9,8 @@
 #   ./ssh-to-instance.sh <instance-name> [region]
 #
 # Examples:
-#   ./ssh-to-instance.sh miempresa-db-dev-1
-#   ./ssh-to-instance.sh miempresa-db-prod-1 us-east-1
+#   ./ssh-to-instance.sh miempresa-backend-staging
+#   ./ssh-to-instance.sh miempresa-backend-prod us-east-1
 # ============================================================================
 
 INSTANCE_NAME="${1}"
@@ -21,8 +21,8 @@ if [ -z "$INSTANCE_NAME" ]; then
     echo "Usage: $0 <instance-name> [region]"
     echo ""
     echo "Examples:"
-    echo "  $0 miempresa-db-dev-1"
-    echo "  $0 miempresa-db-prod-1 us-east-1"
+    echo "  $0 miempresa-backend-staging"
+    echo "  $0 miempresa-backend-prod us-east-1"
     exit 1
 fi
 

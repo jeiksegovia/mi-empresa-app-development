@@ -4,7 +4,15 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
 
+  // Pure SPA: auth-gated dashboard served as static files from Amplify
+  // (manual deploys don't support SSR; prerendering authed pages is pointless)
+  ssr: false,
+
   devtools: { enabled: true },
+  devServer: {
+    port: 3100,
+    host: '0.0.0.0',
+  },
 
   modules: [
     '@pinia/nuxt',
@@ -34,11 +42,14 @@ export default defineNuxtConfig({
     plugins: [
       tailwindcss() as any, // Type compatibility fix for Tailwind CSS v4 Vite plugin
     ],
+    server: {
+      allowedHosts: ['localhost', '127.0.0.1', '10.57.126.228', '100.85.193.33'],
+    },
   },
 
   runtimeConfig: {
     public: {
-      apiBase: 'http://localhost:3001/api/v1',
+      apiBase: 'http://localhost:3101/api/v1',
     },
   },
 
@@ -60,4 +71,5 @@ export default defineNuxtConfig({
       ],
     },
   },
+
 })

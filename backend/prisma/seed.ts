@@ -15,6 +15,16 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log('🌱 Starting database seed...');
 
+  // Safety guard: this seed WIPES all data below. Refuse to run against a
+  // deployed stage database (e.g. via db-tunnel.sh, where NODE_ENV is unset
+  // locally) unless explicitly forced. Use prisma/seed-qa.ts for staging.
+  const dbName = new URL(connectionString).pathname;
+  if (/(staging|prod)/i.test(dbName) && process.env.FORCE_SEED !== 'true') {
+    console.error(`❌ Refusing to seed ${dbName}: it looks like a deployed stage database.`);
+    console.error('   This script deletes ALL data first. Set FORCE_SEED=true to override.');
+    process.exit(1);
+  }
+
   // Clean existing data in development
   if (process.env.NODE_ENV !== 'production') {
     console.log('🧹 Cleaning existing data...');

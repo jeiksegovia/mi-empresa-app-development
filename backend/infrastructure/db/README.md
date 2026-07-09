@@ -10,7 +10,7 @@ cd scripts
 ./deploy-infrastructure.sh --environment dev
 
 # 2. Create Lightsail instance
-./create-instance.sh --stage dev --bundle micro_2_0
+./create-instance.sh --stage staging --bundle micro_3_0
 
 # 3. Deploy application via CodeDeploy
 # (See full documentation)
@@ -58,7 +58,7 @@ cd scripts
 
 ```bash
 cd tests
-./infrastructure-test.sh --stage dev --verbose
+./infrastructure-test.sh --stage staging --verbose
 ```
 
 ## Documentation
@@ -68,7 +68,7 @@ See comprehensive documentation:
 
 ## Cost
 
-- Dev: ~$5/month (micro_2_0)
+- Staging: ~$7/month (micro_3_0)
 - Prod: ~$12/month (small_2_0)
 
 ---

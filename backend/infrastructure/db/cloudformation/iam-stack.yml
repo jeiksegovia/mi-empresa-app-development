@@ -48,10 +48,12 @@ Resources:
               - s3:PutObject
               - s3:ListBucket
             Resource:
-              - !Sub 'arn:aws:s3:::codedeploy-artifacts-*'
-              - !Sub 'arn:aws:s3:::codedeploy-artifacts-*/*'
-              - !Sub 'arn:aws:s3:::${ProjectName}-backups-*'
-              - !Sub 'arn:aws:s3:::${ProjectName}-backups-*/*'
+              - !Sub 'arn:aws:s3:::${ProjectName}-artifacts-${AWS::AccountId}-*'
+              - !Sub 'arn:aws:s3:::${ProjectName}-artifacts-${AWS::AccountId}-*/*'
+              - !Sub 'arn:aws:s3:::${ProjectName}-backups-${AWS::AccountId}-*'
+              - !Sub 'arn:aws:s3:::${ProjectName}-backups-${AWS::AccountId}-*/*'
+              - !Sub 'arn:aws:s3:::${ProjectName}-uploads-${AWS::AccountId}-*'
+              - !Sub 'arn:aws:s3:::${ProjectName}-uploads-${AWS::AccountId}-*/*'
               - !Sub 'arn:aws:s3:::aws-codedeploy-${AWS::Region}'
               - !Sub 'arn:aws:s3:::aws-codedeploy-${AWS::Region}/*'
 
@@ -164,10 +166,9 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-BootstrapUserName'
 
+  # NOTE: The secret access key is intentionally NOT exported as a stack Output
+  # (anyone with cloudformation:DescribeStacks could read it). It is stored only
+  # in SSM at /${ProjectName}/bootstrap/secret-access-key.
   BootstrapAccessKeyId:
     Description: Access key ID for bootstrap user
     Value: !Ref BootstrapUserAccessKey
-
-  BootstrapSecretAccessKey:
-    Description: Secret access key for bootstrap user (SENSITIVE - store securely)
-    Value: !GetAtt BootstrapUserAccessKey.SecretAccessKey

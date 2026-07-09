@@ -1,0 +1,152 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Mi Empresa Backend Infrastructure - S3 Buckets (artifacts, backups, uploads).
+  Environment=dev creates ONLY the uploads bucket, used exclusively by LOCAL
+  development/testing (backend on localhost:3101 signs presigned URLs against it).
+  There is no dev server: artifacts and backups buckets are skipped for dev.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: miempresa
+    Description: Project name for resource naming
+
+  Environment:
+    Type: String
+    Default: staging
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: >-
+      Environment name. dev = LOCAL testing only (uploads bucket, nothing else);
+      staging/prod = full set (artifacts + backups + uploads).
+
+  UploadsCorsAllowedOrigins:
+    Type: CommaDelimitedList
+    Default: 'https://miempresa-stg.disruptiveexp.com,http://localhost:3100,http://localhost:3101,http://localhost:3102'
+    Description: >-
+      Browser origins allowed to PUT/GET directly against the uploads bucket via
+      presigned URLs. Scope per environment: dev -> localhost only;
+      staging -> staging domain + localhost (local QA against staging);
+      prod -> prod domain only.
+
+Conditions:
+  # dev is local-testing only: no CodeDeploy artifacts, no DB backups
+  IsServerEnvironment: !Not [!Equals [!Ref Environment, dev]]
+
+Resources:
+  # ============================================================================
+  # CodeDeploy Artifacts Bucket (deployment zips)
+  # ============================================================================
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Condition: IsServerEnvironment
+    Properties:
+      BucketName: !Sub '${ProjectName}-artifacts-${AWS::AccountId}-${Environment}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldReleases
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # Database Backups Bucket (daily pg_dump, 30-day retention)
+  # ============================================================================
+  BackupsBucket:
+    Type: AWS::S3::Bucket
+    Condition: IsServerEnvironment
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${ProjectName}-backups-${AWS::AccountId}-${Environment}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldBackups
+            Status: Enabled
+            Prefix: daily/
+            ExpirationInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # Application Uploads Bucket
+  # The ONLY storage for user files (certificados, hojas de vida, contratos,
+  # novedades, nomina, fichas). The app never writes to local/VM filesystem:
+  # backend signs presigned URLs, the browser PUTs directly to this bucket.
+  # For Environment=dev this bucket backs LOCAL testing (backend .env
+  # AWS_S3_BUCKET must point here) so upload flows can be QA'd end-to-end.
+  # ============================================================================
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${ProjectName}-uploads-${AWS::AccountId}-${Environment}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods: [GET, PUT, HEAD]
+            AllowedOrigins: !Ref UploadsCorsAllowedOrigins
+            AllowedHeaders: ['*']
+            MaxAge: 3600
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  ArtifactsBucketName:
+    Condition: IsServerEnvironment
+    Description: Bucket for CodeDeploy deployment artifacts
+    Value: !Ref ArtifactsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ArtifactsBucket'
+
+  BackupsBucketName:
+    Condition: IsServerEnvironment
+    Description: Bucket for PostgreSQL backups
+    Value: !Ref BackupsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BackupsBucket'
+
+  UploadsBucketName:
+    Description: Bucket for application file uploads
+    Value: !Ref UploadsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-UploadsBucket'

@@ -23,11 +23,13 @@ echo ""
 # Create .ssh directory if it doesn't exist
 mkdir -p "${HOME}/.ssh"
 
-# Download default key pair
+# Download default key pair.
+# Despite the field name, privateKeyBase64 contains the PEM as PLAIN TEXT --
+# piping through `base64 --decode` corrupts the key.
 aws lightsail download-default-key-pair \
     --region "$REGION" \
     --query "privateKeyBase64" \
-    --output text | base64 --decode > "$SSH_KEY_PATH"
+    --output text > "$SSH_KEY_PATH"
 
 if [ $? -ne 0 ]; then
     echo "ERROR: Failed to download SSH key"
@@ -46,4 +48,4 @@ echo "You can now SSH to instances using:"
 echo "  ssh -i ${SSH_KEY_PATH} ec2-user@<instance-ip>"
 echo ""
 echo "Or use the ssh-to-instance.sh utility:"
-echo "  ./ssh-to-instance.sh miempresa-db-dev-1"
+echo "  ./ssh-to-instance.sh miempresa-backend-staging"

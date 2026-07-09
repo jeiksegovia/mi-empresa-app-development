@@ -9,11 +9,11 @@ set -o pipefail
 # and generates a .env file for the application runtime.
 #
 # Expected environment variables:
-#   - STAGE: Environment stage (dev, prod)
+#   - STAGE: Environment stage (staging, prod)
 #   - AWS_REGION: AWS region (default: us-east-1)
 #
 # Usage:
-#   export STAGE=dev
+#   export STAGE=staging
 #   export AWS_REGION=us-east-1
 #   ./env.sh
 #
@@ -21,7 +21,7 @@ set -o pipefail
 #   .env file in current directory
 # ============================================================================
 
-STAGE="${STAGE:-dev}"
+STAGE="${STAGE:-$(cat /etc/miempresa-stage 2>/dev/null || echo staging)}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 
 echo "[$(date)] Loading environment variables from SSM Parameter Store..."
@@ -81,6 +81,9 @@ AWS_S3_BACKUP_BUCKET=$(getSsmParam "/miempresa/${STAGE}/api/AWS_S3_BACKUP_BUCKET
 
 # CORS parameters
 CORS_ORIGIN=$(getSsmParam "/miempresa/${STAGE}/api/CORS_ORIGIN" "http://localhost:3000")
+
+# CloudFront origin verification (empty = middleware disabled)
+ORIGIN_VERIFY_SECRET=$(getSsmParam "/miempresa/${STAGE}/api/ORIGIN_VERIFY_SECRET")
 
 # Application configuration
 NODE_ENV=$(getSsmParam "/miempresa/${STAGE}/api/NODE_ENV" "${STAGE}")
@@ -148,6 +151,9 @@ AWS_S3_BACKUP_BUCKET=${AWS_S3_BACKUP_BUCKET}
 
 # CORS Configuration
 CORS_ORIGIN=${CORS_ORIGIN}
+
+# CloudFront Origin Verification
+ORIGIN_VERIFY_SECRET=${ORIGIN_VERIFY_SECRET}
 
 # API Configuration
 API_VERSION=${API_VERSION}

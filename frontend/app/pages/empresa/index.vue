@@ -8,6 +8,10 @@ const authStore = useAuthStore()
 const empresa = computed(() => authStore.empresa)
 
 onMounted(async () => {
+  if (!authStore.isAdmin) {
+    await navigateTo('/')
+    return
+  }
   if (!empresa.value) {
     await authStore.fetchEmpresa()
   }

@@ -8,14 +8,18 @@ set -o pipefail
 # This script automatically refreshes AWS temporary credentials by assuming
 # the CodeDeployInstanceRole using bootstrap IAM user credentials.
 #
-# The script is designed to run via CRON every 50 minutes to ensure
-# credentials never expire (1-hour session duration).
+# Runs via CRON at :00 and :45 of every hour, so the 1-hour session is always
+# renewed with at least 15 minutes of margin.
 #
 # Usage:
 #   ./refresh-credentials.sh
 #
-# CRON schedule (every 50 minutes):
-#   */50 * * * * /opt/miempresa/scripts/refresh-credentials.sh
+# CRON schedule (installed by create-instance.sh):
+#   */45 * * * * /opt/miempresa/scripts/refresh-credentials.sh
+#
+# IMPORTANT: the role session name is STABLE (miempresa-backend-<stage>).
+# The CodeDeploy on-premises registration uses this exact assumed-role ARN;
+# a changing session name would break every deployment.
 #
 # AWS Best Practice: Use STS temporary credentials instead of long-term
 # credentials on EC2/Lightsail instances for enhanced security.
@@ -52,7 +56,9 @@ if [ -z "$AWS_ACCOUNT_ID" ]; then
 fi
 
 ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/CodeDeployInstanceRole"
-ROLE_SESSION_NAME="lightsail-$(hostname)-$(date +%s)"
+# Stable session name — must match the --iam-session-arn used at registration
+STAGE=$(cat /etc/miempresa-stage 2>/dev/null || echo "staging")
+ROLE_SESSION_NAME="miempresa-backend-${STAGE}"
 
 echo "  AWS Account ID: ${AWS_ACCOUNT_ID}"
 echo "  Role ARN: ${ROLE_ARN}"
@@ -113,12 +119,28 @@ echo "Updating credentials file..."
 mkdir -p /root/.aws
 mkdir -p /home/ec2-user/.aws
 
+# CRITICAL: preserve the [bootstrap] section — it holds the long-lived keys this
+# script itself needs on the NEXT run. Overwriting the file without it bricks
+# the refresh cycle within the hour.
+BOOTSTRAP_KEY_ID=$(awk '/^\[bootstrap\]/{f=1;next}/^\[/{f=0}f&&/aws_access_key_id/{print $3}' /root/.aws/credentials 2>/dev/null)
+BOOTSTRAP_SECRET=$(awk '/^\[bootstrap\]/{f=1;next}/^\[/{f=0}f&&/aws_secret_access_key/{print $3}' /root/.aws/credentials 2>/dev/null)
+
+if [ -z "$BOOTSTRAP_KEY_ID" ] || [ -z "$BOOTSTRAP_SECRET" ]; then
+    echo "✗ ERROR: [bootstrap] section not found in /root/.aws/credentials"
+    echo "  Refusing to overwrite the credentials file (would brick future refreshes)."
+    exit 1
+fi
+
 # Update root credentials (for CodeDeploy agent and system scripts)
 cat > /root/.aws/credentials <<EOF
 [default]
 aws_access_key_id = ${ACCESS_KEY}
 aws_secret_access_key = ${SECRET_KEY}
 aws_session_token = ${SESSION_TOKEN}
+
+[bootstrap]
+aws_access_key_id = ${BOOTSTRAP_KEY_ID}
+aws_secret_access_key = ${BOOTSTRAP_SECRET}
 EOF
 
 chmod 600 /root/.aws/credentials
@@ -225,8 +247,8 @@ echo ""
 # Calculate Next Refresh Time
 # ============================================================================
 
-# Calculate next refresh time (50 minutes from now)
-NEXT_REFRESH=$(date -d "+50 minutes" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || date -v+50M "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "in 50 minutes")
+# Calculate next refresh time (cron fires at :00 and :45)
+NEXT_REFRESH=$(date -d "+45 minutes" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || date -v+45M "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "in 45 minutes")
 
 echo "Next refresh scheduled: ${NEXT_REFRESH}"
 echo ""

@@ -49,16 +49,16 @@ if ! command -v pm2 &> /dev/null; then
     exit 1
 fi
 
-if pm2 list | grep -q "miempresa-api.*online"; then
+if sudo -u ec2-user pm2 list | grep -q "miempresa-api.*online"; then
     echo "  ✓ PM2 process is online"
 else
     echo "  ✗ PM2 process is not online"
     echo ""
     echo "PM2 Status:"
-    pm2 list
+    sudo -u ec2-user pm2 list
     echo ""
     echo "PM2 Logs (last 20 lines):"
-    pm2 logs miempresa-api --lines 20 --nostream
+    sudo -u ec2-user pm2 logs miempresa-api --lines 20 --nostream
     exit 1
 fi
 
@@ -143,10 +143,10 @@ for i in $(seq 1 $MAX_RETRIES); do
             echo "Troubleshooting information:"
             echo ""
             echo "PM2 Status:"
-            pm2 list
+            sudo -u ec2-user pm2 list
             echo ""
             echo "PM2 Logs (last 50 lines):"
-            pm2 logs miempresa-api --lines 50 --nostream
+            sudo -u ec2-user pm2 logs miempresa-api --lines 50 --nostream
             echo ""
             echo "Application Logs:"
             if [ -f "/opt/miempresa/logs/pm2.log" ]; then

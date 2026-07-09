@@ -30,17 +30,17 @@ echo ""
 echo "[1/1] Stopping PM2 process..."
 
 if command -v pm2 &> /dev/null; then
-    if pm2 list 2>/dev/null | grep -q "miempresa-api"; then
+    if sudo -u ec2-user pm2 list 2>/dev/null | grep -q "miempresa-api"; then
         echo "  Stopping miempresa-api process..."
 
         # Graceful stop
-        pm2 stop miempresa-api
+        sudo -u ec2-user pm2 stop miempresa-api
 
         echo "  Waiting for graceful shutdown..."
         sleep 5
 
         # Verify process stopped
-        if pm2 list | grep -q "miempresa-api.*stopped"; then
+        if sudo -u ec2-user pm2 list | grep -q "miempresa-api.*stopped"; then
             echo "  ✓ Process stopped gracefully"
         else
             echo "  ○ Process may still be shutting down"

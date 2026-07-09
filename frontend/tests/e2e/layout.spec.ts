@@ -171,3 +171,88 @@ test.describe('Layout Components', () => {
     await expect(page).toHaveURL('/login', { timeout: 5000 })
   })
 })
+
+// ─── Appended: desktop sidebar behavior describe block ───────────────────────
+
+test.describe('desktop sidebar behavior', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.context().clearCookies()
+    await login(page)
+  })
+
+  test('hamburger button is visible at 1280px viewport width', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.waitForTimeout(300)
+
+    // The "Toggle menu" button is in the header and visible at all viewport widths
+    const menuToggle = page.locator('header').getByRole('button', { name: 'Toggle menu' })
+    await expect(menuToggle).toBeVisible()
+  })
+
+  test('sidebar is initially closed (off-screen) at 1280px', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.waitForTimeout(300)
+
+    const sidebar = page.locator('aside')
+    await expect(sidebar).toBeAttached()
+
+    // At desktop width, sidebar starts hidden (-translate-x-full) until toggled
+    const isHidden = await sidebar.evaluate((el) => {
+      return (
+        el.classList.contains('-translate-x-full') ||
+        (getComputedStyle(el).transform !== 'none' &&
+          getComputedStyle(el).transform !== 'matrix(1, 0, 0, 1, 0, 0)')
+      )
+    })
+    expect(isHidden).toBe(true)
+  })
+
+  test('clicking hamburger opens sidebar at 1280px', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.waitForTimeout(300)
+
+    const menuToggle = page.locator('header').getByRole('button', { name: 'Toggle menu' })
+    await menuToggle.click()
+    await page.waitForTimeout(300)
+
+    const sidebar = page.locator('aside')
+    // After toggle, sidebar should have translate-x-0 (visible state)
+    const isVisible = await sidebar.evaluate((el) => {
+      return (
+        el.classList.contains('translate-x-0') &&
+        !el.classList.contains('-translate-x-full')
+      )
+    })
+    expect(isVisible).toBe(true)
+  })
+
+  test('clicking overlay closes sidebar at 1280px', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.waitForTimeout(300)
+
+    // Open sidebar first
+    const menuToggle = page.locator('header').getByRole('button', { name: 'Toggle menu' })
+    await menuToggle.click()
+    await page.waitForTimeout(300)
+
+    // Overlay should appear
+    const overlay = page.locator('div.fixed.inset-0')
+    await expect(overlay).toBeVisible({ timeout: 5000 })
+
+    // Click the overlay area to the right of the sidebar (sidebar is 280px wide)
+    // At 1280px viewport, click at x=600 (well outside the 280px sidebar)
+    await overlay.click({ position: { x: 600, y: 400 }, force: true })
+    await page.waitForTimeout(300)
+
+    // Sidebar should be hidden again
+    const sidebar = page.locator('aside')
+    const isHiddenAfterClose = await sidebar.evaluate((el) => {
+      return (
+        el.classList.contains('-translate-x-full') ||
+        (getComputedStyle(el).transform !== 'none' &&
+          getComputedStyle(el).transform !== 'matrix(1, 0, 0, 1, 0, 0)')
+      )
+    })
+    expect(isHiddenAfterClose).toBe(true)
+  })
+})

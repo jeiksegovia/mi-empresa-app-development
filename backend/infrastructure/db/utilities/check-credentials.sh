@@ -160,7 +160,7 @@ else
     echo -e "${RED}✗ CRON job NOT configured${NC}"
     echo ""
     echo "Action required: Add CRON job"
-    echo "  (sudo crontab -l 2>/dev/null; echo '*/50 * * * * /opt/miempresa/scripts/refresh-credentials.sh') | sudo crontab -"
+    echo "  (sudo crontab -l 2>/dev/null; echo '*/45 * * * * /opt/miempresa/scripts/refresh-credentials.sh') | sudo crontab -"
     exit 1
 fi
 

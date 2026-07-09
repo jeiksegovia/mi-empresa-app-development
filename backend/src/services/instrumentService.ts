@@ -438,6 +438,30 @@ export async function updateRecord(id: number, input: UpdateRecordInput): Promis
     throw new Error('Record not found')
   }
 
+  // State transition validation
+  if (input.estado && input.estado !== existing.estado) {
+    const currentState = existing.estado as string
+    const nextState = input.estado as string
+
+    // VENCIDO is a terminal state - no transitions allowed out of it
+    if (currentState === 'VENCIDO') {
+      throw new Error(`Invalid state transition: cannot transition from VENCIDO to ${nextState}`)
+    }
+
+    // COMPLETADO cannot go back to PENDIENTE
+    if (currentState === 'COMPLETADO' && nextState === 'PENDIENTE') {
+      throw new Error('Invalid state transition: cannot transition from COMPLETADO to PENDIENTE')
+    }
+
+    // Transitioning to COMPLETADO requires archivoCompletado
+    if (nextState === 'COMPLETADO') {
+      const hasArchivo = input.archivoCompletado || existing.archivoCompletado
+      if (!hasArchivo) {
+        throw new Error('archivoCompletado is required to transition to COMPLETADO')
+      }
+    }
+  }
+
   const updateData: Record<string, unknown> = { ...input }
 
   if (input.fechaCompletado) {

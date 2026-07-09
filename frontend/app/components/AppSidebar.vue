@@ -49,7 +49,7 @@ const handleLogout = async () => {
   <aside
     :class="[
       'fixed left-0 top-0 h-screen bg-[var(--surface-section)] border-r border-[var(--surface-border)] transition-transform duration-300 z-40 flex flex-col',
-      visible ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      visible ? 'translate-x-0' : '-translate-x-full'
     ]"
     :style="{ width: `${sidebarWidth}px` }"
   >
@@ -112,7 +112,7 @@ const handleLogout = async () => {
   <!-- Overlay for mobile -->
   <div
     v-if="visible"
-    class="fixed inset-0 bg-black/50 z-30 md:hidden"
+    class="fixed inset-0 bg-black/50 z-30"
     @click="emit('close')"
   />
 </template>

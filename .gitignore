@@ -97,3 +97,4 @@ samconfig.toml
 *.tsbuildinfo
 tsconfig.tsbuildinfo
 test-results/.last-run.json
+backend/playwright-report/index.html

@@ -25,7 +25,7 @@ export default defineConfig({
   // Global test configuration
   use: {
     // Base URL for E2E testing
-    baseURL: process.env.TEST_FRONTEND_URL || 'http://localhost:3000',
+    baseURL: process.env.TEST_FRONTEND_URL || 'http://localhost:3100',
     
     // Browser context options
     viewport: { width: 1280, height: 720 },

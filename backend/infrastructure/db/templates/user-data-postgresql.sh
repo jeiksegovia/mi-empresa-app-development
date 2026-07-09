@@ -16,20 +16,25 @@ set -o pipefail
 # - AWS CLI v2
 # ============================================================================
 
-# Log all output
+# Log all output to /var/log/user-data.log, with per-command trace lines
+# (timestamped) so failed bootstraps are debuggable line-by-line.
 exec > >(tee -a /var/log/user-data.log)
 exec 2>&1
+export PS4='+ [$(date "+%H:%M:%S")] '
+set -x
 
 echo "=========================================="
 echo "Starting user-data script at $(date)"
 echo "=========================================="
 
-# Environment variables (passed by create-instance.sh)
-STAGE="${STAGE:-dev}"
+# Environment variables — create-instance.sh prepends explicit exports
+# (export STAGE=..., export AWS_REGION=...) before this content; the defaults
+# below only apply if the script is run standalone.
+STAGE="${STAGE:-staging}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 DB_NAME="miempresa_${STAGE}"
 DB_USER="miempresa"
-DB_PASSWORD="${DB_PASSWORD:-$(openssl rand -base64 32)}"
+DB_PASSWORD="${DB_PASSWORD:-$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)}"
 
 echo "Configuration:"
 echo "  STAGE: ${STAGE}"
@@ -37,16 +42,34 @@ echo "  AWS_REGION: ${AWS_REGION}"
 echo "  DB_NAME: ${DB_NAME}"
 echo "  DB_USER: ${DB_USER}"
 
+# Persist stage for on-instance scripts (refresh-credentials.sh, backup-postgres-s3.sh)
+echo "${STAGE}" > /etc/miempresa-stage
+chmod 644 /etc/miempresa-stage
+
+# ============================================================================
+# 0. Swap (2 GB) — mandatory on 1 GB micro_3_0: npm/prisma would OOM without it
+# ============================================================================
+echo "Step 0: Creating 2 GB swapfile..."
+if [ ! -f /swapfile ]; then
+    dd if=/dev/zero of=/swapfile bs=1M count=2048
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+echo "✓ Swap active: $(free -h | grep Swap)"
+
 # ============================================================================
 # 1. System Updates
 # ============================================================================
 echo "Step 1: Updating system packages..."
 dnf update -y
 
-# Install essential utilities
+# Install essential utilities.
+# NOTE: no 'curl' here — AL2023 preinstalls curl-minimal (provides /usr/bin/curl)
+# and installing full curl CONFLICTS with it, aborting the whole bootstrap.
 dnf install -y \
   wget \
-  curl \
   git \
   tar \
   gzip \
@@ -54,8 +77,12 @@ dnf install -y \
   jq \
   ruby \
   openssl \
+  cronie \
   postgresql15-contrib \
   postgresql15-devel
+
+# AL2023 does not preinstall cron — crond must be installed AND enabled
+systemctl enable --now crond
 
 echo "✓ System packages updated"
 
@@ -64,16 +91,16 @@ echo "✓ System packages updated"
 # ============================================================================
 echo "Step 2: Installing PostgreSQL 15..."
 
-# Reference: https://hbayraktar.medium.com/how-to-install-postgresql-15-on-amazon-linux-2023-a-step-by-step-guide-57eebb7ad9fc
+# Reference: https://hbayraktar.medium.com/how-to-install-postgresql-on-amazon-linux-2023-a-step-by-step-guide-57eebb7ad9fc
 
 # Install PostgreSQL 15 server
 dnf install -y postgresql15 postgresql15-server
 
 # Initialize database cluster
-sudo -u postgres /usr/bin/postgresql-15-setup initdb
+postgresql-setup --initdb
 
 # Configure PostgreSQL for local and network access
-cat > /var/lib/pgsql/15/data/pg_hba.conf <<EOF
+cat > /var/lib/pgsql/data/pg_hba.conf <<EOF
 # TYPE  DATABASE        USER            ADDRESS                 METHOD
 
 # "local" is for Unix domain socket connections only
@@ -91,11 +118,28 @@ host    ${DB_NAME}      ${DB_USER}      ::1/128                 md5
 EOF
 
 # Configure PostgreSQL to listen on all interfaces (for future flexibility)
-sed -i "s/#listen_addresses = 'localhost'/listen_addresses = 'localhost'/g" /var/lib/pgsql/15/data/postgresql.conf
+sed -i "s/#listen_addresses = 'localhost'/listen_addresses = 'localhost'/g" /var/lib/pgsql/data/postgresql.conf
+
+# Tune for micro_3_0 (1 GB RAM shared with Node/PM2/CodeDeploy agent + 2 GB swap).
+# Defaults (shared_buffers=128MB, max_connections=100) waste connection slots and
+# under-use cache; these values follow pgtune "mixed" guidance scaled to ~1 GB.
+cat >> /var/lib/pgsql/data/postgresql.conf <<'PGTUNE'
+
+# --- miempresa tuning (micro_3_0: 1 GB RAM, SSD) ---
+shared_buffers = 256MB
+effective_cache_size = 512MB
+work_mem = 8MB
+maintenance_work_mem = 64MB
+max_connections = 50
+random_page_cost = 1.1
+checkpoint_completion_target = 0.9
+wal_compression = on
+log_min_duration_statement = 1000
+PGTUNE
 
 # Enable and start PostgreSQL
-systemctl enable postgresql-15
-systemctl start postgresql-15
+systemctl enable postgresql
+systemctl start postgresql
 
 # Wait for PostgreSQL to be ready
 sleep 5
@@ -214,20 +258,17 @@ chmod 600 /root/.aws/config
 echo "✓ AWS credentials directory configured"
 
 # ============================================================================
-# 8. Store Database Password in SSM Parameter Store
+# 8. Stash Database Password for create-instance.sh
 # ============================================================================
-echo "Step 8: Storing database password in SSM..."
+echo "Step 8: Stashing database password..."
 
-# Note: This requires bootstrap credentials to be configured
-# The password will be stored during instance registration
-# For now, we'll save it locally for the refresh script to upload
+# create-instance.sh reads this file over SSH, stores the password in SSM as
+# SecureString, then deletes it. Not /tmp (systemd-tmpfiles cleanup).
+printf '%s' "${DB_PASSWORD}" > /opt/miempresa/.db-password
+chmod 600 /opt/miempresa/.db-password
+chown root:root /opt/miempresa/.db-password
 
-cat > /tmp/db-password.txt <<EOF
-${DB_PASSWORD}
-EOF
-chmod 600 /tmp/db-password.txt
-
-echo "✓ Database password prepared for SSM storage"
+echo "✓ Database password stashed at /opt/miempresa/.db-password"
 
 # ============================================================================
 # 9. System Configuration
@@ -295,7 +336,7 @@ echo ""
 
 # PostgreSQL
 echo -n "PostgreSQL: "
-if systemctl is-active --quiet postgresql-15; then
+if systemctl is-active --quiet postgresql; then
     echo "✓ Running"
 else
     echo "✗ Not running"

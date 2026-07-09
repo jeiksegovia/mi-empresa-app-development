@@ -34,21 +34,8 @@ echo ""
 # Configuration
 # ============================================================================
 
-# Determine environment from deployment
-DEPLOYMENT_GROUP_NAME="${DEPLOYMENT_GROUP_NAME:-dev}"
-
-if [[ "$DEPLOYMENT_GROUP_NAME" == *"prod"* ]]; then
-    STAGE="prod"
-elif [[ "$DEPLOYMENT_GROUP_NAME" == *"dev"* ]]; then
-    STAGE="dev"
-else
-    # Try to determine from hostname
-    if [[ "$(hostname)" == *"prod"* ]]; then
-        STAGE="prod"
-    else
-        STAGE="dev"
-    fi
-fi
+# Stage recorded at instance creation (user-data writes /etc/miempresa-stage)
+STAGE=$(cat /etc/miempresa-stage 2>/dev/null || echo "staging")
 
 # Configuration
 DB_NAME="miempresa_${STAGE}"
@@ -56,7 +43,9 @@ DB_USER="miempresa"
 DB_HOST="localhost"
 DB_PORT="5432"
 AWS_REGION="${AWS_REGION:-us-east-1}"
-S3_BUCKET="miempresa-backups-${STAGE}"
+# May fail if STS creds expired; resolved again after the refresh step below
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+S3_BUCKET="miempresa-backups-${AWS_ACCOUNT_ID}-${STAGE}"
 BACKUP_DIR="/opt/miempresa/backups"
 RETENTION_DAYS=30
 MAX_RETRIES=3
@@ -101,6 +90,13 @@ if [ -f "/opt/miempresa/scripts/refresh-credentials.sh" ]; then
     echo "  ✓ Credentials refreshed"
 else
     echo "  ⚠ Warning: refresh-credentials.sh not found, using existing credentials"
+fi
+
+# Resolve account-scoped bucket name now that credentials are fresh
+if [ -z "$AWS_ACCOUNT_ID" ]; then
+    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    S3_BUCKET="miempresa-backups-${AWS_ACCOUNT_ID}-${STAGE}"
+    echo "  S3 Bucket (resolved): ${S3_BUCKET}"
 fi
 
 echo ""

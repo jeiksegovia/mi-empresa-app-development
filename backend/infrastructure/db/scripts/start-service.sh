@@ -67,34 +67,29 @@ echo ""
 
 echo "[3/4] Starting PM2 process..."
 
-# Source environment variables
-set -a
-source .env
-set +a
+# This hook runs as root (appspec runas), but the PM2 daemon that owns the
+# process, `pm2 save`, and boot persistence must ALL belong to ec2-user —
+# mixing users means the app never comes back after a reboot.
+# The app reads .env itself (dotenv) from its cwd, so no env sourcing needed.
 
-# Stop any existing process (shouldn't exist, but just in case)
-pm2 stop miempresa-api 2>/dev/null || true
-pm2 delete miempresa-api 2>/dev/null || true
+sudo -u ec2-user bash -c "cd ${APP_DIR} && pm2 stop miempresa-api 2>/dev/null; pm2 delete miempresa-api 2>/dev/null; true"
 
-# Start the application
-echo "  Starting miempresa-api..."
-
-pm2 start dist/server.js \
+echo "  Starting miempresa-api as ec2-user..."
+sudo -u ec2-user bash -c "cd ${APP_DIR} && pm2 start dist/server.js \
     --name miempresa-api \
     --instances 1 \
     --max-memory-restart 500M \
     --log /opt/miempresa/logs/pm2.log \
-    --time
+    --time"
 
 # Wait a moment for process to initialize
 sleep 3
 
-# Check if process started successfully
-if pm2 list | grep -q "miempresa-api.*online"; then
+if sudo -u ec2-user pm2 list | grep -q "miempresa-api.*online"; then
     echo "  ✓ PM2 process started successfully"
 else
     echo "  ✗ PM2 process failed to start"
-    pm2 logs miempresa-api --lines 50
+    sudo -u ec2-user pm2 logs miempresa-api --lines 50 --nostream
     exit 1
 fi
 
@@ -106,15 +101,16 @@ echo ""
 
 echo "[4/4] Configuring PM2 persistence..."
 
-# Save PM2 process list
-pm2 save
+# Save the ec2-user process list
+sudo -u ec2-user pm2 save
 echo "  ✓ PM2 configuration saved"
 
-# Setup PM2 to start on system boot
-# Run as ec2-user to ensure proper ownership
-sudo -u ec2-user pm2 startup systemd -u ec2-user --hp /home/ec2-user
+# Install the systemd unit for ec2-user's PM2 daemon (running as root installs
+# the unit directly, targeting ec2-user)
+pm2 startup systemd -u ec2-user --hp /home/ec2-user
+systemctl enable pm2-ec2-user 2>/dev/null || true
 
-echo "  ✓ PM2 startup script configured"
+echo "  ✓ PM2 startup script configured (pm2-ec2-user.service)"
 echo ""
 
 # ============================================================================
@@ -122,7 +118,7 @@ echo ""
 # ============================================================================
 
 echo "PM2 Process Status:"
-pm2 list
+sudo -u ec2-user pm2 list
 echo ""
 
 echo "Application Environment:"

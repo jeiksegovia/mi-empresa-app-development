@@ -17,7 +17,7 @@ set -e
 #   ./infrastructure-test.sh --stage <dev|prod> [--verbose]
 #
 # Examples:
-#   ./infrastructure-test.sh --stage dev
+#   ./infrastructure-test.sh --stage staging
 #   ./infrastructure-test.sh --stage prod --verbose
 # ============================================================================
 
@@ -120,7 +120,7 @@ test_command() {
 # Configuration
 # ============================================================================
 
-INSTANCE_NAME="miempresa-db-${STAGE}-1"
+INSTANCE_NAME="miempresa-backend-${STAGE}"
 STATIC_IP_NAME="miempresa-ip-${STAGE}"
 S3_BUCKET="miempresa-backups-${STAGE}"
 
@@ -358,7 +358,7 @@ if [ -n "$PUBLIC_IP" ] && [ -f "$SSH_KEY" ]; then
         -o ConnectTimeout=10 \
         -o LogLevel=ERROR \
         ec2-user@"${PUBLIC_IP}" \
-        "sudo systemctl is-active postgresql-15" 2>/dev/null || echo "unknown")
+        "sudo systemctl is-active postgresql" 2>/dev/null || echo "unknown")
 
     if [ "$PG_STATUS" == "active" ]; then
         log_success "PostgreSQL service is running"

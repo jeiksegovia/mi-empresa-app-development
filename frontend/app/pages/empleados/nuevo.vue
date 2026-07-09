@@ -29,7 +29,7 @@ const step1 = reactive({
   genero: '',
   fechaNacimiento: '',
   estadoCivil: '',
-  tipoVivienda: '' as '' | 'CASA' | 'APARTAMENTO' | 'LOTE',
+  tipoVivienda: '' as '' | 'PROPIA' | 'ARRENDADA' | 'FAMILIAR',
   estratoSocioeconomico: '',
   direccion: '',
   telefono: '',
@@ -80,6 +80,7 @@ interface CargoForm {
   ubicacion: string
   fechaIngreso: string
   fechaTerminacion: string
+  salario: number | null
 }
 
 interface EmergencyContactForm {
@@ -93,7 +94,7 @@ const cargos = ref<CargoForm[]>([])
 const emergencyContacts = ref<EmergencyContactForm[]>([])
 
 function addCargo() {
-  cargos.value.push({ nombreCargo: '', ubicacion: '', fechaIngreso: '', fechaTerminacion: '' })
+  cargos.value.push({ nombreCargo: '', ubicacion: '', fechaIngreso: '', fechaTerminacion: '', salario: null })
 }
 
 function removeCargo(i: number) {
@@ -143,17 +144,14 @@ function removeVehiculo(i: number) {
 }
 
 // ─── Step 5 – Certificados y Migración ───────────────────────────────────────
-const certAlturas = reactive({
-  enabled: false,
-  fechaExpedicion: '',
-  fechaVencimiento: '',
-})
-
-const certRiesgo = reactive({
-  enabled: false,
-  fechaExpedicion: '',
-  fechaVencimiento: '',
-})
+const certificados = ref<
+  Array<{
+    tipo: '' | 'ALTURAS' | 'RIESGO_ELECTRICO' | 'MANIPULACION_ALIMENTOS' | 'OTRO'
+    nombre?: string
+    fechaExpedicion: string
+    fechaVencimiento: string
+  }>
+>([])
 
 const migracion = reactive({
   enabled: false,
@@ -223,6 +221,7 @@ async function submit() {
         ubicacion: c.ubicacion.trim(),
         fechaIngreso: c.fechaIngreso,
         fechaTerminacion: c.fechaTerminacion || undefined,
+        salario: c.salario != null ? c.salario : undefined,
       }))
     }
 
@@ -258,18 +257,16 @@ async function submit() {
     }
 
     // Step 5 — Certificados & Migración
-    if (certAlturas.enabled && certAlturas.fechaExpedicion && certAlturas.fechaVencimiento) {
-      payload.certificadoAlturas = {
-        fechaExpedicion: certAlturas.fechaExpedicion,
-        fechaVencimiento: certAlturas.fechaVencimiento,
-      }
-    }
-
-    if (certRiesgo.enabled && certRiesgo.fechaExpedicion && certRiesgo.fechaVencimiento) {
-      payload.certificadoRiesgoElectrico = {
-        fechaExpedicion: certRiesgo.fechaExpedicion,
-        fechaVencimiento: certRiesgo.fechaVencimiento,
-      }
+    const validCertificados = certificados.value.filter(
+      (c) => c.tipo && c.fechaExpedicion && c.fechaVencimiento
+    )
+    if (validCertificados.length) {
+      payload.certificados = validCertificados.map((c) => ({
+        tipo: c.tipo,
+        nombre: c.tipo === 'OTRO' ? c.nombre?.trim() || undefined : undefined,
+        fechaExpedicion: c.fechaExpedicion,
+        fechaVencimiento: c.fechaVencimiento,
+      }))
     }
 
     if (migracion.enabled) {
@@ -327,9 +324,9 @@ const estadosCiviles = [
 ]
 
 const tiposVivienda = [
-  { label: 'Casa', value: 'CASA' },
-  { label: 'Apartamento', value: 'APARTAMENTO' },
-  { label: 'Lote', value: 'LOTE' },
+  { label: 'Propia', value: 'PROPIA' },
+  { label: 'Arrendada', value: 'ARRENDADA' },
+  { label: 'Familiar', value: 'FAMILIAR' },
 ]
 
 const parentescos = [
@@ -600,6 +597,21 @@ const tiposVehiculo = [
                   <label class="text-xs text-[var(--text-color-secondary)]">Fecha Terminación (si aplica)</label>
                   <InputText v-model="cargo.fechaTerminacion" type="date" size="small" />
                 </div>
+                <div class="flex flex-col gap-1 sm:col-span-2">
+                  <label class="text-xs text-[var(--text-color-secondary)]">Salario (opcional)</label>
+                  <InputNumber
+                    v-model="cargo.salario"
+                    mode="decimal"
+                    :min-fraction-digits="0"
+                    :max-fraction-digits="2"
+                    placeholder="0.00"
+                    size="small"
+                    input-class="w-full"
+                  />
+                  <p class="text-xs text-[var(--text-color-secondary)]">
+                    Se extraerá de nómina cuando el módulo esté activo
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -757,63 +769,17 @@ const tiposVehiculo = [
 
     <!-- ───────────────────── STEP 5: Certificados y Migración ───────────────── -->
     <div v-show="currentStep === 5" data-step="5" class="space-y-4">
-      <!-- Certificado Alturas -->
+      <!-- Certificados genéricos — shared editor used by wizard + edit page -->
       <Card>
         <template #header>
-          <div class="px-6 pt-5 pb-0 flex items-center justify-between">
+          <div class="px-6 pt-5 pb-0">
             <h3 class="text-base font-semibold flex items-center gap-2 text-[var(--text-color)]">
-              <i class="pi pi-shield text-violet-500" /> Certificado de Alturas
+              <i class="pi pi-shield text-violet-500" /> Certificados del Empleado
             </h3>
-            <div class="flex items-center gap-2">
-              <Checkbox v-model="certAlturas.enabled" :binary="true" input-id="certAlturasEnabled" />
-              <label for="certAlturasEnabled" class="text-sm">Tiene certificado</label>
-            </div>
           </div>
         </template>
         <template #content>
-          <div v-if="!certAlturas.enabled" class="text-center py-6 text-[var(--text-color-secondary)] text-sm opacity-60">
-            Marca la casilla si el empleado tiene certificado de alturas.
-          </div>
-          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="flex flex-col gap-1">
-              <label class="text-sm font-medium">Fecha Expedición</label>
-              <InputText v-model="certAlturas.fechaExpedicion" type="date" />
-            </div>
-            <div class="flex flex-col gap-1">
-              <label class="text-sm font-medium">Fecha Vencimiento</label>
-              <InputText v-model="certAlturas.fechaVencimiento" type="date" />
-            </div>
-          </div>
-        </template>
-      </Card>
-
-      <!-- Certificado Riesgo Eléctrico -->
-      <Card>
-        <template #header>
-          <div class="px-6 pt-5 pb-0 flex items-center justify-between">
-            <h3 class="text-base font-semibold flex items-center gap-2 text-[var(--text-color)]">
-              <i class="pi pi-bolt text-violet-500" /> Certificado Riesgo Eléctrico
-            </h3>
-            <div class="flex items-center gap-2">
-              <Checkbox v-model="certRiesgo.enabled" :binary="true" input-id="certRiesgoEnabled" />
-              <label for="certRiesgoEnabled" class="text-sm">Tiene certificado</label>
-            </div>
-          </div>
-        </template>
-        <template #content>
-          <div v-if="!certRiesgo.enabled" class="text-center py-6 text-[var(--text-color-secondary)] text-sm opacity-60">
-            Marca la casilla si el empleado tiene certificado de riesgo eléctrico.
-          </div>
-          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="flex flex-col gap-1">
-              <label class="text-sm font-medium">Fecha Expedición</label>
-              <InputText v-model="certRiesgo.fechaExpedicion" type="date" />
-            </div>
-            <div class="flex flex-col gap-1">
-              <label class="text-sm font-medium">Fecha Vencimiento</label>
-              <InputText v-model="certRiesgo.fechaVencimiento" type="date" />
-            </div>
-          </div>
+          <EmpleadoCertificadosEditor v-model:certificados="certificados" />
         </template>
       </Card>
 

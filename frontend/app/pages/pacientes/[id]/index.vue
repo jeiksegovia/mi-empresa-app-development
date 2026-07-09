@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useFileStash, useFileStashTitleGuard } from '~/composables/useFileStash'
+
 definePageMeta({
   middleware: 'auth',
   layout: 'default',
@@ -15,9 +17,12 @@ interface EmergencyContact {
 interface RegistroFicha {
   id: number
   instrumentoId: number
-  instrumentoNombre: string
-  instrumentoTipo: string
-  estado: string
+  // Backend now returns a nested `instrumento` object (W2 schema change).
+  // Some legacy records may still serialize flat fields — accept either shape.
+  instrumentoNombre?: string
+  instrumentoTipo?: string
+  instrumento?: { id: number; nombreInstrumento: string; tipo: string }
+  estado: 'PENDIENTE' | 'COMPLETADO' | 'VENCIDO'
   fechaCompletado: string | null
   fechaVencimiento: string | null
 }
@@ -49,8 +54,16 @@ interface PatientDetail {
   notasCliente: NotaCliente[]
 }
 
+interface Instrument {
+  id: number
+  nombreInstrumento: string
+  tipo: string
+  estado: string
+}
+
 const route = useRoute()
 const { apiFetch } = useApi()
+const toast = useToast()
 
 const patient = ref<PatientDetail | null>(null)
 const loading = ref(true)
@@ -66,22 +79,72 @@ const noteForm = reactive({
 })
 const submittingNote = ref(false)
 
+// ── B5: Instrument assignment ─────────────────────────────────────────────────
+const instruments = ref<Instrument[]>([])
+const selectedInstrumentId = ref<number | null>(null)
+const assigningInstrument = ref(false)
+const deletingFichaId = ref<number | null>(null)
+
+// ── B6: Ficha status dialog ───────────────────────────────────────────────────
 const showFichaDialog = ref(false)
 const fichaForm = reactive({
   id: 0,
-  estado: 'PENDIENTE' as 'COMPLETADO' | 'PENDIENTE' | 'VENCIDO',
-  fechaCompletado: '',
-  fechaVencimiento: '',
-  notasObservaciones: '',
+  currentEstado: 'PENDIENTE' as 'COMPLETADO' | 'PENDIENTE' | 'VENCIDO',
+  newEstado: '' as 'COMPLETADO' | 'VENCIDO' | '',
   instrumentoNombre: '',
+  // D1 mitigation + Bug 2: free-form notes + optional next-due date.
+  notasObservaciones: '',
+  fechaVencimiento: '' as string,
 })
 const submittingFicha = ref(false)
+
+// File upload state for COMPLETADO transition
+const uploadedFile = ref<File | null>(null)
+const uploadingFile = ref(false)
+const uploadedFileKey = ref<string | null>(null)
+// Persisted display name of the last selected file (cannot persist the File itself).
+const uploadedFileName = ref<string | null>(null)
+
+// sessionStorage draft key, scoped per ficha id (line 87).
+const fichaDraftKey = computed(
+  () => `ficha-form-draft-${route.params.id}-${fichaForm.id || 'new'}`
+)
+
+// ── W7: IndexedDB file stash — survives full reload on Android ───────────────
+const { stash: stashFile, restore: restoreFile, clear: clearFile } = useFileStash()
+const fichaFileGuard = useFileStashTitleGuard('Adjuntar archivo de respaldo')
+// W9: stash key MUST include the ficha id so each ficha on the same
+// patient page gets its own slot. route.params.id is the patient id,
+// not the ficha id — without fichaForm.id, every ficha shares the
+// same stash and the second dialog opened shows the first dialog's file.
+const stashKey = computed(() => `ficha:${route.params.id}:${fichaForm.id || 'new'}:file`)
 
 const tabs = [
   { label: 'Información Básica', icon: 'pi pi-user' },
   { label: 'Fichas & Evaluaciones', icon: 'pi pi-file-check' },
   { label: 'Notas', icon: 'pi pi-book' },
 ]
+
+// Valid status transitions (mirrors backend logic).
+// D3 (scope-decisions): VENCIDO → COMPLETADO is now allowed when an archive is supplied.
+const validTransitions: Record<string, Array<'COMPLETADO' | 'VENCIDO'>> = {
+  PENDIENTE: ['COMPLETADO', 'VENCIDO'],
+  COMPLETADO: ['VENCIDO'],
+  VENCIDO: ['COMPLETADO'],
+}
+
+const availableTransitions = computed(() => {
+  return validTransitions[fichaForm.currentEstado] ?? []
+})
+
+const transitionOptions = computed(() =>
+  availableTransitions.value.map((v) => ({
+    label: v === 'COMPLETADO' ? 'Completado' : 'Vencido',
+    value: v,
+  }))
+)
+
+const requiresFileUpload = computed(() => fichaForm.newEstado === 'COMPLETADO')
 
 async function fetchPatient() {
   loading.value = true
@@ -99,6 +162,18 @@ async function fetchPatient() {
     }
   } finally {
     loading.value = false
+  }
+}
+
+async function fetchInstruments() {
+  try {
+    const res = await apiFetch<{ success: boolean; data: Instrument[]; total: number }>(
+      '/instruments?estado=ACTIVO&limit=100'
+    )
+    // The list endpoint returns { data, total, page, ... }
+    instruments.value = (res as any).data ?? []
+  } catch (e) {
+    console.error('Error fetching instruments:', e)
   }
 }
 
@@ -158,12 +233,6 @@ const prioridadOptions = [
   { label: 'Baja', value: 'BAJA' },
 ]
 
-const estadoFichaOptions = [
-  { label: 'Completado', value: 'COMPLETADO' },
-  { label: 'Pendiente', value: 'PENDIENTE' },
-  { label: 'Vencido', value: 'VENCIDO' },
-]
-
 async function handleNoteSubmit() {
   if (!noteForm.contenido.trim() || !patient.value) {
     return
@@ -180,17 +249,16 @@ async function handleNoteSubmit() {
       },
     })
 
-    // Refresh patient data to show new note
     await fetchPatient()
 
-    // Reset form and close dialog
     noteForm.tipo = 'NEUTRAL'
     noteForm.prioridad = 'MEDIA'
     noteForm.contenido = ''
     showNoteDialog.value = false
+    toast.add({ severity: 'success', summary: 'Nota guardada', life: 3000 })
   } catch (e: any) {
     console.error('Error creating note:', e)
-    alert('Error al crear la nota. Por favor, intenta nuevamente.')
+    toast.add({ severity: 'error', summary: 'Error al crear la nota', life: 4000 })
   } finally {
     submittingNote.value = false
   }
@@ -203,58 +271,265 @@ function openNoteDialog() {
   showNoteDialog.value = true
 }
 
-function openFichaDialog(ficha: any) {
+// ── B5 handlers ───────────────────────────────────────────────────────────────
+
+async function assignInstrument() {
+  if (!selectedInstrumentId.value || !patient.value) return
+
+  assigningInstrument.value = true
+  try {
+    await apiFetch(`/patients/${patient.value.id}/fichas`, {
+      method: 'POST',
+      body: {
+        instrumentoId: selectedInstrumentId.value,
+        versionRegistro: '1.0',
+      },
+    })
+    selectedInstrumentId.value = null
+    await fetchPatient()
+    toast.add({ severity: 'success', summary: 'Instrumento asignado', life: 3000 })
+  } catch (e: any) {
+    console.error('Error assigning instrument:', e)
+    toast.add({ severity: 'error', summary: 'Error al asignar el instrumento', life: 4000 })
+  } finally {
+    assigningInstrument.value = false
+  }
+}
+
+async function deleteFicha(fichaId: number) {
+  if (!patient.value) return
+
+  deletingFichaId.value = fichaId
+  try {
+    await apiFetch(`/patients/${patient.value.id}/fichas/${fichaId}`, {
+      method: 'DELETE',
+    })
+    await fetchPatient()
+    toast.add({ severity: 'success', summary: 'Ficha eliminada', life: 3000 })
+  } catch (e: any) {
+    console.error('Error deleting ficha:', e)
+    const msg = e?.data?.message || 'Error al eliminar la ficha'
+    toast.add({ severity: 'error', summary: msg, life: 4000 })
+  } finally {
+    deletingFichaId.value = null
+  }
+}
+
+// ── B6 handlers ───────────────────────────────────────────────────────────────
+
+function openFichaDialog(ficha: RegistroFicha) {
+  // W9: explicit reset FIRST — before anything that might read or
+  // restore state — so closing & re-opening for a DIFFERENT ficha on
+  // the same page never shows the previous ficha's file/filename/key.
+  uploadedFile.value = null
+  uploadedFileName.value = null
+  uploadedFileKey.value = null
+
   fichaForm.id = ficha.id
-  fichaForm.estado = ficha.estado
-  fichaForm.fechaCompletado = ficha.fechaCompletado || ''
-  fichaForm.fechaVencimiento = ficha.fechaVencimiento || ''
-  fichaForm.notasObservaciones = ficha.notasObservaciones || ''
-  fichaForm.instrumentoNombre = ficha.instrumento?.nombre || 'Ficha'
+  fichaForm.currentEstado = ficha.estado
+  fichaForm.newEstado = ''
+  fichaForm.instrumentoNombre =
+    ficha.instrumento?.nombreInstrumento
+    || ficha.instrumentoNombre
+    || 'Ficha'
+
+  // D1 mitigation: restore any in-progress draft (Android tab-unload protection).
+  // readFichaDraft() internally validates parsed.id === fichaForm.id so
+  // drafts from another ficha are ignored here.
+  const draft = readFichaDraft()
+  if (draft) {
+    fichaForm.newEstado = (draft.newEstado as typeof fichaForm.newEstado) || ''
+    fichaForm.notasObservaciones = draft.notasObservaciones ?? ''
+    fichaForm.fechaVencimiento = draft.fechaVencimiento ?? ''
+    uploadedFileName.value = draft.uploadedFileName ?? null
+    if (draft.uploadedFileName) {
+      toast.add({
+        severity: 'info',
+        summary: 'Borrador restaurado',
+        detail: `Vuelve a seleccionar "${draft.uploadedFileName}" para continuar.`,
+        life: 5000,
+      })
+    }
+  } else {
+    fichaForm.notasObservaciones = ''
+    fichaForm.fechaVencimiento = ''
+    uploadedFileName.value = null
+  }
+
+  // W7 + W9: try to re-hydrate File from IndexedDB stash UNDER THE
+  // ficha-scoped key. If found, populate uploadedFile directly so the
+  // user sees the file is "still there" — no re-pick needed.
+  // Switching fichas: the new stashKey is ficha:<patientId>:<fichaId>:file,
+  // so the previous ficha's IDB entry is NOT picked up.
+  if (import.meta.client) {
+    restoreFile(stashKey.value).then((restoredFile) => {
+      if (restoredFile && !uploadedFile.value) {
+        uploadedFile.value = restoredFile
+        uploadedFileName.value = restoredFile.name
+        toast.add({
+          severity: 'success',
+          summary: 'Archivo restaurado',
+          detail: `«${restoredFile.name}» se restauró automáticamente.`,
+          life: 4000,
+        })
+      }
+    }).catch(() => { /* IDB may be unavailable — silent */ })
+  }
+
   showFichaDialog.value = true
 }
 
-async function handleFichaSubmit() {
-  if (!fichaForm.id) {
-    return
+async function onFileSelected(event: Event) {
+  fichaFileGuard.disarm() // reset the title-guard prefix (Fix Option B)
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0] ?? null
+  uploadedFile.value = file
+  uploadedFileKey.value = null
+  if (file) {
+    uploadedFileName.value = file.name
+    // W7: persist the File to IndexedDB so Android Chrome can re-hydrate
+    // after a tab discard. sessionStorage can only hold the file NAME.
+    await stashFile(stashKey.value, file)
+    writeFichaDraft() // keep sessionStorage draft in sync (existing line)
   }
+}
+
+// ── D1: form-state draft persistence (sessionStorage) ────────────────────────
+function readFichaDraft(): {
+  newEstado?: string
+  notasObservaciones?: string
+  fechaVencimiento?: string
+  uploadedFileName?: string
+} | null {
+  if (!import.meta.client) return null
+  try {
+    const raw = sessionStorage.getItem(fichaDraftKey.value)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    // Discard drafts from a different ficha id — fichaForm.id changed.
+    if (!parsed || parsed.id !== fichaForm.id) return null
+    const { newEstado, notasObservaciones, fechaVencimiento, uploadedFileName } = parsed
+    return { newEstado, notasObservaciones, fechaVencimiento, uploadedFileName }
+  } catch {
+    return null
+  }
+}
+
+function writeFichaDraft() {
+  if (!import.meta.client) return
+  try {
+    sessionStorage.setItem(
+      fichaDraftKey.value,
+      JSON.stringify({
+        id: fichaForm.id,
+        newEstado: fichaForm.newEstado,
+        notasObservaciones: fichaForm.notasObservaciones,
+        fechaVencimiento: fichaForm.fechaVencimiento,
+        uploadedFileName: uploadedFileName.value,
+      })
+    )
+  } catch {
+    // sessionStorage may be disabled — silently ignore.
+  }
+}
+
+function clearFichaDraft() {
+  if (!import.meta.client) return
+  try { sessionStorage.removeItem(fichaDraftKey.value) } catch { /* noop */ }
+}
+
+watch(
+  () => [fichaForm.newEstado, fichaForm.notasObservaciones, fichaForm.fechaVencimiento],
+  () => { if (showFichaDialog.value) writeFichaDraft() }
+)
+
+watch(uploadedFileName, () => { if (showFichaDialog.value) writeFichaDraft() })
+
+async function handleFichaSubmit() {
+  if (!fichaForm.id || !fichaForm.newEstado || !patient.value) return
 
   submittingFicha.value = true
   try {
-    const payload: any = {
-      estado: fichaForm.estado,
+    let archivoCompletado: string | undefined
+
+    // Upload file when transitioning to COMPLETADO
+    if (fichaForm.newEstado === 'COMPLETADO') {
+      if (!uploadedFile.value) {
+        toast.add({ severity: 'warn', summary: 'Debes adjuntar un archivo para marcar como completado', life: 4000 })
+        submittingFicha.value = false
+        return
+      }
+
+      uploadingFile.value = true
+      try {
+        // Step 1: Get presigned URL
+        const presignedRes = await apiFetch<{ success: boolean; data: { uploadUrl: string; key: string } }>(
+          '/uploads/presigned-url',
+          {
+            method: 'POST',
+            body: {
+              contentType: uploadedFile.value.type,
+              folder: 'fichas',
+            },
+          }
+        )
+
+        const { uploadUrl, key } = presignedRes.data
+
+        // Step 2: Upload directly to S3 using the presigned URL
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'PUT',
+          body: uploadedFile.value,
+          headers: { 'Content-Type': uploadedFile.value.type },
+        })
+
+        if (!uploadResponse.ok) {
+          throw new Error(`Upload failed: ${uploadResponse.status}`)
+        }
+
+        archivoCompletado = key
+      } finally {
+        uploadingFile.value = false
+      }
     }
 
-    if (fichaForm.fechaCompletado) {
-      payload.fechaCompletado = fichaForm.fechaCompletado
-    }
-
-    if (fichaForm.fechaVencimiento) {
-      payload.fechaVencimiento = fichaForm.fechaVencimiento
-    }
-
-    if (fichaForm.notasObservaciones.trim()) {
-      payload.notasObservaciones = fichaForm.notasObservaciones.trim()
-    }
-
-    await apiFetch(`/instruments/records/${fichaForm.id}`, {
-      method: 'PUT',
-      body: payload,
+    // Step 3: Update ficha status (Bug 2: include notasObservaciones + fechaVencimiento).
+    const notas = fichaForm.notasObservaciones.trim()
+    const fechaVenc = fichaForm.fechaVencimiento || ''
+    await apiFetch(`/patients/${patient.value.id}/fichas/${fichaForm.id}/status`, {
+      method: 'PATCH',
+      body: {
+        estado: fichaForm.newEstado,
+        ...(archivoCompletado ? { archivoCompletado } : {}),
+        ...(notas ? { notasObservaciones: notas } : {}),
+        ...(fechaVenc ? { fechaVencimiento: fechaVenc } : {}),
+      },
     })
 
-    // Refresh patient data to show updated ficha
     await fetchPatient()
-
-    // Close dialog
+    clearFichaDraft()
+    // W7: clear the IndexedDB file stash on successful submit so the
+    // next session starts clean. (Fix Option A — Diff 4)
+    await clearFile(stashKey.value)
+    uploadedFile.value = null
+    uploadedFileName.value = null
+    uploadedFileKey.value = null
     showFichaDialog.value = false
+    fichaFileGuard.disarm()
+    toast.add({ severity: 'success', summary: 'Estado actualizado', life: 3000 })
   } catch (e: any) {
-    console.error('Error updating ficha:', e)
-    alert('Error al actualizar la ficha. Por favor, intenta nuevamente.')
+    console.error('Error updating ficha status:', e)
+    const msg = e?.data?.message || 'Error al actualizar el estado'
+    toast.add({ severity: 'error', summary: msg, life: 4000 })
   } finally {
     submittingFicha.value = false
   }
 }
 
-onMounted(fetchPatient)
+onMounted(async () => {
+  await fetchPatient()
+  await fetchInstruments()
+})
 </script>
 
 <template>
@@ -412,6 +687,43 @@ onMounted(fetchPatient)
 
       <!-- TAB 1: Fichas & Evaluaciones -->
       <div v-show="activeTab === 1" class="space-y-4">
+
+        <!-- B5: Assign Instrument Card -->
+        <Card>
+          <template #header>
+            <div class="px-6 pt-5 pb-0">
+              <h3 class="text-base font-semibold text-[var(--text-color)] flex items-center gap-2">
+                <i class="pi pi-plus-circle text-violet-500" /> Asignar Instrumento
+              </h3>
+            </div>
+          </template>
+          <template #content>
+            <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+              <div class="flex-1">
+                <label class="block text-sm font-medium mb-2">Seleccionar instrumento</label>
+                <Select
+                  v-model="selectedInstrumentId"
+                  :options="instruments"
+                  option-label="nombreInstrumento"
+                  option-value="id"
+                  placeholder="Seleccionar instrumento"
+                  class="w-full"
+                  filter
+                  filter-placeholder="Buscar..."
+                />
+              </div>
+              <Button
+                label="Asignar Instrumento"
+                icon="pi pi-plus"
+                :disabled="!selectedInstrumentId || assigningInstrument"
+                :loading="assigningInstrument"
+                @click="assignInstrument"
+              />
+            </div>
+          </template>
+        </Card>
+
+        <!-- Fichas List Card -->
         <Card>
           <template #header>
             <div class="px-6 pt-5 pb-0">
@@ -437,8 +749,22 @@ onMounted(fetchPatient)
               <Column header="Instrumento" style="min-width: 200px">
                 <template #body="{ data }">
                   <div>
-                    <p class="font-medium text-[var(--text-color)]">{{ data.instrumentoNombre }}</p>
-                    <p class="text-xs text-[var(--text-color-secondary)]">{{ data.instrumentoTipo }}</p>
+                    <!-- Bug 1: backend now returns the instrumento as a nested object
+                         (W2 shape change). Read from either the nested or flat shape. -->
+                    <p class="font-medium text-[var(--text-color)]">
+                      {{
+                        data.instrumento?.nombreInstrumento
+                          || data.instrumentoNombre
+                          || '—'
+                      }}
+                    </p>
+                    <p class="text-xs text-[var(--text-color-secondary)]">
+                      {{
+                        data.instrumento?.tipo
+                          || data.instrumentoTipo
+                          || '—'
+                      }}
+                    </p>
                   </div>
                 </template>
               </Column>
@@ -464,17 +790,38 @@ onMounted(fetchPatient)
                 </template>
               </Column>
 
-              <Column header="Acciones" style="min-width: 80px">
+              <Column header="Acciones" style="min-width: 120px">
                 <template #body="{ data }">
-                  <Button
-                    icon="pi pi-eye"
-                    size="small"
-                    severity="secondary"
-                    text
-                    rounded
-                    v-tooltip.top="'Ver detalles'"
-                    @click="openFichaDialog(data)"
-                  />
+                  <div class="flex items-center gap-1">
+                    <!-- View / update status button — Bug 3: drives disabled from the transitions map,
+                         so VENCIDO rows are editable once the backend allows VENCIDO → COMPLETADO. -->
+                    <Button
+                      icon="pi pi-pencil"
+                      size="small"
+                      severity="secondary"
+                      text
+                      rounded
+                      v-tooltip.top="
+                        (validTransitions[data.estado]?.length ?? 0) > 0
+                          ? 'Cambiar estado'
+                          : 'Sin transiciones disponibles'
+                      "
+                      :disabled="!validTransitions[data.estado]?.length"
+                      @click="openFichaDialog(data)"
+                    />
+                    <!-- B5: Delete button — only for PENDIENTE fichas -->
+                    <Button
+                      v-if="data.estado === 'PENDIENTE'"
+                      icon="pi pi-trash"
+                      size="small"
+                      severity="danger"
+                      text
+                      rounded
+                      v-tooltip.top="'Eliminar ficha'"
+                      :loading="deletingFichaId === data.id"
+                      @click="deleteFicha(data.id)"
+                    />
+                  </div>
                 </template>
               </Column>
             </DataTable>
@@ -591,75 +938,138 @@ onMounted(fetchPatient)
         </form>
       </Dialog>
 
-      <!-- Ficha Update Dialog -->
+      <!-- B6: Ficha Status Dialog -->
       <Dialog
         v-model:visible="showFichaDialog"
         modal
-        :header="`Actualizar: ${fichaForm.instrumentoNombre}`"
-        :style="{ width: '32rem' }"
+        :header="`Actualizar Estado: ${fichaForm.instrumentoNombre}`"
+        :style="{ width: '34rem' }"
         :breakpoints="{ '640px': '95vw' }"
       >
-        <form @submit.prevent="handleFichaSubmit" class="space-y-4 pt-4">
+        <div class="space-y-5 pt-4">
+          <!-- Current status display -->
+          <div class="flex items-center gap-3 p-3 rounded-lg bg-[var(--surface-ground)]">
+            <span class="text-sm text-[var(--text-color-secondary)]">Estado actual:</span>
+            <Tag
+              :value="fichaForm.currentEstado"
+              :severity="estadoSeverityMap[fichaForm.currentEstado] || 'info'"
+            />
+          </div>
+
+          <!-- Transition target — disabled only when no valid transitions exist. -->
           <div>
-            <label for="estado" class="block text-sm font-medium mb-2">Estado *</label>
+            <label for="newEstado" class="block text-sm font-medium mb-2">Nuevo Estado *</label>
+            <div v-if="availableTransitions.length === 0"
+              class="text-sm text-[var(--text-color-secondary)] italic">
+              Este registro está en estado final y no puede cambiar.
+            </div>
             <Select
-              id="estado"
-              v-model="fichaForm.estado"
-              :options="estadoFichaOptions"
+              v-else
+              id="newEstado"
+              v-model="fichaForm.newEstado"
+              :options="transitionOptions"
               option-label="label"
               option-value="value"
-              placeholder="Selecciona el estado"
+              placeholder="Selecciona el nuevo estado"
               class="w-full"
             />
           </div>
 
+          <!-- Bug 2: free-form notes (always available, sent with the PATCH when set). -->
           <div>
-            <label for="fechaCompletado" class="block text-sm font-medium mb-2">Fecha Completado</label>
-            <input
-              id="fechaCompletado"
-              v-model="fichaForm.fechaCompletado"
-              type="date"
-              class="w-full px-3 py-2 border border-[var(--surface-border)] rounded-md text-sm"
-            />
-          </div>
-
-          <div>
-            <label for="fechaVencimiento" class="block text-sm font-medium mb-2">Fecha Vencimiento</label>
-            <input
-              id="fechaVencimiento"
-              v-model="fichaForm.fechaVencimiento"
-              type="date"
-              class="w-full px-3 py-2 border border-[var(--surface-border)] rounded-md text-sm"
-            />
-          </div>
-
-          <div>
-            <label for="notasObservaciones" class="block text-sm font-medium mb-2">Notas / Observaciones</label>
+            <label for="notasObservaciones" class="block text-sm font-medium mb-2">
+              Notas / Observaciones
+            </label>
             <Textarea
               id="notasObservaciones"
               v-model="fichaForm.notasObservaciones"
-              rows="4"
-              placeholder="Agrega notas u observaciones sobre este registro..."
+              rows="3"
+              placeholder="Anota observaciones sobre el cambio de estado..."
               class="w-full"
             />
           </div>
 
-          <div class="flex justify-end gap-2">
+          <!-- Bug 2: optional next due-date (e.g. to flag the next periodicidad). -->
+          <div>
+            <label for="fechaVencimiento" class="block text-sm font-medium mb-2">
+              Próximo vencimiento
+              <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
+            </label>
+            <DatePicker
+              id="fechaVencimiento"
+              v-model="fichaForm.fechaVencimiento"
+              date-format="yy-mm-dd"
+              show-icon
+              class="w-full"
+              :show-button-bar="true"
+              data-testid="ficha-fecha-vencimiento"
+            />
+          </div>
+
+          <!-- File upload — required when transitioning to COMPLETADO.
+               If we restored `uploadedFileName` from sessionStorage but not the File,
+               we show that name + a hint so the user knows to re-select. -->
+          <div v-if="requiresFileUpload">
+            <label class="block text-sm font-medium mb-2">
+              Archivo de respaldo *
+              <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">
+                (requerido para marcar como completado)
+              </span>
+            </label>
+            <div class="flex items-center gap-3">
+              <label
+                class="flex items-center gap-2 px-4 py-2 border border-[var(--surface-border)] rounded-md cursor-pointer hover:bg-[var(--surface-hover)] transition-colors text-sm"
+                @click="fichaFileGuard.arm()"
+              >
+                <i class="pi pi-upload text-violet-500" />
+                {{
+                  uploadedFile
+                    ? uploadedFile.name
+                    : (uploadedFileName || 'Seleccionar archivo')
+                }}
+                <input
+                  type="file"
+                  class="hidden"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  data-testid="ficha-file-input"
+                  @change="onFileSelected"
+                />
+              </label>
+              <span v-if="uploadedFile" class="text-xs text-[var(--text-color-secondary)]">
+                {{ (uploadedFile.size / 1024).toFixed(1) }} KB
+              </span>
+            </div>
+            <p v-if="uploadedFile" class="mt-1.5 flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+              <i class="pi pi-check-circle" /> Archivo seleccionado
+            </p>
+            <p v-else-if="uploadedFileName" class="mt-1.5 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+              <i class="pi pi-info-circle" /> Vuelve a seleccionar
+              &laquo;{{ uploadedFileName }}&raquo; para continuar.
+            </p>
+          </div>
+
+          <!-- Footer actions -->
+          <div class="flex justify-end gap-2 pt-1">
             <Button
               label="Cancelar"
               severity="secondary"
               outlined
-              @click="showFichaDialog = false"
               :disabled="submittingFicha"
+              @click="showFichaDialog = false"
             />
             <Button
-              type="submit"
               label="Guardar Cambios"
               icon="pi pi-save"
-              :loading="submittingFicha"
+              :loading="submittingFicha || uploadingFile"
+              :disabled="
+                availableTransitions.length === 0
+                  || !fichaForm.newEstado
+                  || (requiresFileUpload && !uploadedFile)
+              "
+              @click="handleFichaSubmit"
             />
           </div>
-        </form>
+        </div>
       </Dialog>
     </template>
   </div>

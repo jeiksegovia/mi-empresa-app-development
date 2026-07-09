@@ -3,265 +3,260 @@ set -e
 set -o pipefail
 
 # ============================================================================
-# Deploy Infrastructure Using CloudFormation
+# Deploy Infrastructure Using CloudFormation (v2)
 # ============================================================================
-# This script deploys all CloudFormation stacks for Mi Empresa backend.
+# Deploys the foundation stacks for the Mi Empresa backend:
+#   1. miempresa-iam            - Roles, policies, bootstrap user (global)
+#   2. miempresa-s3-<stage>     - Artifacts, backups, uploads buckets
+#   3. miempresa-ssm-<stage>    - Environment variables + secrets
+#   4. miempresa-codedeploy     - CodeDeploy application & groups (global)
+#
+# The edge stack (DNS + TLS via CloudFront/ACM) is deployed separately AFTER
+# the Lightsail instance exists — it needs the static IP. See create-instance.sh.
 #
 # Usage:
-#   ./deploy-infrastructure.sh [--environment dev|prod] [--region us-east-1]
-#
-# What this deploys:
-#   1. IAM Stack - Roles, policies, bootstrap user
-#   2. SSM Parameters Stack - Environment variables
-#   3. CodeDeploy Stack - Application and deployment groups
-#
-# Prerequisites:
-#   - AWS CLI v2 configured with appropriate permissions
-#   - CloudFormation permissions
+#   ./deploy-infrastructure.sh --stage <staging|prod> [--region us-east-1] [--profile disruptive]
 # ============================================================================
 
-ENVIRONMENT="dev"
+STAGE="staging"
 REGION="us-east-1"
+PROFILE=""
 PROJECT_NAME="miempresa"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CFN_DIR="${SCRIPT_DIR}/../cloudformation"
 
-# Colors
+# ----------------------------------------------------------------------------
+# DEV-only CORS allowlist for the uploads bucket.
+#
+# STAGE=dev ⇒ the bucket is used by LOCAL testing (see s3-stack.yml header).
+# Every frontend origin that signs/uses presigned URLs against this bucket
+# MUST appear here, otherwise the browser preflight (OPTIONS) returns
+# CORS 403 and uploads fail silently in the UI.
+#
+# Origin sources:
+#   * localhost variants — for `npm run dev` on the engineer's machine.
+#   * WireGuard / LAN IPs — when developers run the frontend on a remote
+#     machine (e.g. dev VM, Tailscale node) and still hit the dev bucket.
+#   * The staging hostname is intentionally included: a localhost frontend
+#     that proxies through a staging-domain reverse proxy (e.g. via the
+#     CodeDeploy app) will see that origin in the browser. Keeping it
+#     here avoids surprise 403s during local QA against staging.
+#
+# INVARIANT — keep this in sync with:
+#   * frontend/app.config.ts        (NUXT_PUBLIC_API_BASE, allowedOrigins)
+#   * backend/src/config/env.ts     (CORS_ORIGIN, allowedOrigins)
+#   * any `.env` files referencing the API base URL
+# If a new dev host shows up, add it HERE (and to the staging bucket's
+# allowlist via the same mechanism) before merging the frontend change.
+# ----------------------------------------------------------------------------
+DEV_LOCAL_ORIGINS="https://miempresa-stg.disruptiveexp.com,http://localhost:3100,http://localhost:3101,http://localhost:3102,http://100.85.193.33:3100,http://10.57.126.228:3100"
+
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
+log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# ============================================================================
-# Parse Arguments
-# ============================================================================
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --environment|--stage)
-            ENVIRONMENT="$2"
-            shift 2
-            ;;
-        --region)
-            REGION="$2"
-            shift 2
-            ;;
+        --environment|--stage) STAGE="$2";   shift 2 ;;
+        --region)              REGION="$2";  shift 2 ;;
+        --profile)             PROFILE="$2"; shift 2 ;;
         --help)
             cat <<EOF
-Usage: $0 [OPTIONS]
-
-Deploy CloudFormation stacks for Mi Empresa backend infrastructure.
+Usage: $0 --stage <staging|prod> [OPTIONS]
 
 Options:
-  --environment ENV    Environment name (dev or prod) [default: dev]
+  --stage STAGE        Environment (staging or prod) [default: staging]
   --region REGION      AWS region [default: us-east-1]
-  --help              Show this help message
-
-Examples:
-  # Deploy dev environment
-  $0 --environment dev
-
-  # Deploy prod environment
-  $0 --environment prod --region us-east-1
+  --profile PROFILE    AWS CLI profile (e.g. disruptive)
+  --help               Show this help
 EOF
-            exit 0
-            ;;
-        *)
-            log_error "Unknown argument: $1"
-            exit 1
-            ;;
+            exit 0 ;;
+        *) log_error "Unknown argument: $1"; exit 1 ;;
     esac
 done
 
-# Validate environment
-if [[ "$ENVIRONMENT" != "dev" && "$ENVIRONMENT" != "prod" ]]; then
-    log_error "Environment must be 'dev' or 'prod'"
+if [[ "$STAGE" != "staging" && "$STAGE" != "prod" ]]; then
+    log_error "Stage must be 'staging' or 'prod'"
     exit 1
 fi
 
+AWS=(aws)
+[ -n "$PROFILE" ] && AWS=(aws --profile "$PROFILE")
+
 log_info "Deployment Configuration"
-echo "  Environment: ${ENVIRONMENT}"
+echo "  Stage: ${STAGE}"
 echo "  Region: ${REGION}"
 echo "  Project: ${PROJECT_NAME}"
+echo "  Profile: ${PROFILE:-default}"
 echo ""
 
 # ============================================================================
-# Deploy IAM Stack
+# Helper: fetch an SSM parameter value, empty string if missing
+# ============================================================================
+get_param() {
+    "${AWS[@]}" ssm get-parameter --name "$1" --with-decryption \
+        --region "${REGION}" --query "Parameter.Value" --output text 2>/dev/null || echo ""
+}
+
+# ============================================================================
+# 1. IAM Stack (global)
 # ============================================================================
 log_info "Deploying IAM Stack..."
 
 IAM_STACK_NAME="${PROJECT_NAME}-iam"
 
-aws cloudformation deploy \
+"${AWS[@]}" cloudformation deploy \
     --template-file "${CFN_DIR}/iam-stack.yml" \
     --stack-name "${IAM_STACK_NAME}" \
-    --parameter-overrides \
-        ProjectName="${PROJECT_NAME}" \
+    --parameter-overrides ProjectName="${PROJECT_NAME}" \
     --capabilities CAPABILITY_NAMED_IAM \
     --region "${REGION}" \
-    --tags \
-        Project="${PROJECT_NAME}" \
-        Environment=global \
-        ManagedBy=CloudFormation
+    --no-fail-on-empty-changeset \
+    --tags Project="${PROJECT_NAME}" Environment=global ManagedBy=CloudFormation
 
-if [ $? -eq 0 ]; then
-    log_info "✓ IAM Stack deployed successfully"
+log_info "✓ IAM Stack deployed"
+
+ROLE_ARN=$("${AWS[@]}" cloudformation describe-stacks \
+    --stack-name "${IAM_STACK_NAME}" --region "${REGION}" \
+    --query "Stacks[0].Outputs[?OutputKey=='CodeDeployInstanceRoleArn'].OutputValue" --output text)
+log_info "  Role ARN: ${ROLE_ARN}"
+echo ""
+
+# ============================================================================
+# 2. Configure local 'bootstrap' AWS profile (used by admins for debugging;
+#    create-instance.sh pushes the same keys to the instance)
+# ============================================================================
+log_info "Configuring local AWS CLI bootstrap profile..."
+
+BOOTSTRAP_ACCESS_KEY=$(get_param "/${PROJECT_NAME}/bootstrap/access-key-id")
+BOOTSTRAP_SECRET_KEY=$(get_param "/${PROJECT_NAME}/bootstrap/secret-access-key")
+
+if [ -n "$BOOTSTRAP_ACCESS_KEY" ] && [ -n "$BOOTSTRAP_SECRET_KEY" ]; then
+    aws configure set aws_access_key_id "${BOOTSTRAP_ACCESS_KEY}" --profile bootstrap
+    aws configure set aws_secret_access_key "${BOOTSTRAP_SECRET_KEY}" --profile bootstrap
+    aws configure set region "${REGION}" --profile bootstrap
+    aws configure set output json --profile bootstrap
+    log_info "✓ Local 'bootstrap' profile configured"
 else
-    log_error "IAM Stack deployment failed"
-    exit 1
+    log_warn "Bootstrap credentials not found in SSM (unexpected after IAM stack deploy)"
+fi
+echo ""
+
+# ============================================================================
+# 3. S3 Stack (per stage)
+# ============================================================================
+log_info "Deploying S3 Stack for ${STAGE}..."
+
+# Compose S3 parameter overrides. STAGE=dev gets DEV_LOCAL_ORIGINS (so
+# every dev machine origin can PUT/GET against the dev bucket); staging
+# and prod keep the template default so out-of-scope hosts can't be
+# accidentally whitelisted.
+S3_PARAM_OVERRIDES=(
+    ProjectName="${PROJECT_NAME}"
+    Environment="${STAGE}"
+)
+if [ "${STAGE}" = "dev" ]; then
+    # CFN CommaDelimitedList params are passed as ONE quoted "Key=Value"
+    # string. The commas inside DEV_LOCAL_ORIGINS stay literal — CFN
+    # splits the value at deploy time, not the shell.
+    S3_PARAM_OVERRIDES+=("UploadsCorsAllowedOrigins=${DEV_LOCAL_ORIGINS}")
+    log_info "  S3 uploads CORS (dev override): ${DEV_LOCAL_ORIGINS}"
 fi
 
-# Get outputs from IAM stack
-ROLE_ARN=$(aws cloudformation describe-stacks \
-    --stack-name "${IAM_STACK_NAME}" \
+"${AWS[@]}" cloudformation deploy \
+    --template-file "${CFN_DIR}/s3-stack.yml" \
+    --stack-name "${PROJECT_NAME}-s3-${STAGE}" \
+    --parameter-overrides "${S3_PARAM_OVERRIDES[@]}" \
     --region "${REGION}" \
-    --query "Stacks[0].Outputs[?OutputKey=='CodeDeployInstanceRoleArn'].OutputValue" \
-    --output text)
+    --no-fail-on-empty-changeset \
+    --tags Project="${PROJECT_NAME}" Environment="${STAGE}" ManagedBy=CloudFormation
 
-BOOTSTRAP_USER=$(aws cloudformation describe-stacks \
-    --stack-name "${IAM_STACK_NAME}" \
-    --region "${REGION}" \
-    --query "Stacks[0].Outputs[?OutputKey=='BootstrapUserName'].OutputValue" \
-    --output text)
-
-log_info "  Role ARN: ${ROLE_ARN}"
-log_info "  Bootstrap User: ${BOOTSTRAP_USER}"
+log_info "✓ S3 Stack deployed"
 echo ""
 
 # ============================================================================
-# Configure AWS CLI Bootstrap Profile
+# 4. SSM Parameters Stack (per stage)
+#    Secrets: reuse existing values if present, otherwise generate strong ones.
+#    Passing them explicitly on every deploy keeps CloudFormation and SSM in sync.
 # ============================================================================
-log_info "Configuring AWS CLI bootstrap profile..."
+log_info "Deploying SSM Parameters Stack for ${STAGE}..."
 
-BOOTSTRAP_ACCESS_KEY=$(aws ssm get-parameter \
-    --name "/${PROJECT_NAME}/bootstrap/access-key-id" \
-    --region "${REGION}" \
-    --query "Parameter.Value" \
-    --output text)
+SSM_STACK_NAME="${PROJECT_NAME}-ssm-${STAGE}"
 
-BOOTSTRAP_SECRET_KEY=$(aws ssm get-parameter \
-    --name "/${PROJECT_NAME}/bootstrap/secret-access-key" \
-    --with-decryption \
-    --region "${REGION}" \
-    --query "Parameter.Value" \
-    --output text)
+JWT_SECRET=$(get_param "/${PROJECT_NAME}/${STAGE}/api/JWT_SECRET")
+[ -z "$JWT_SECRET" ] || [[ "$JWT_SECRET" == *"-jwt-secret-"* ]] && JWT_SECRET=$(openssl rand -hex 32)
 
-aws configure set aws_access_key_id "${BOOTSTRAP_ACCESS_KEY}" --profile bootstrap
-aws configure set aws_secret_access_key "${BOOTSTRAP_SECRET_KEY}" --profile bootstrap
-aws configure set region "${REGION}" --profile bootstrap
-aws configure set output json --profile bootstrap
+SESSION_SECRET=$(get_param "/${PROJECT_NAME}/${STAGE}/api/SESSION_SECRET")
+[ -z "$SESSION_SECRET" ] || [[ "$SESSION_SECRET" == *"-session-secret-"* ]] && SESSION_SECRET=$(openssl rand -hex 32)
 
-log_info "✓ Bootstrap profile configured"
-echo ""
+ORIGIN_VERIFY_SECRET=$(get_param "/${PROJECT_NAME}/${STAGE}/api/ORIGIN_VERIFY_SECRET")
+[ -z "$ORIGIN_VERIFY_SECRET" ] && ORIGIN_VERIFY_SECRET=$(openssl rand -hex 16)
 
-# ============================================================================
-# Deploy SSM Parameters Stack
-# ============================================================================
-log_info "Deploying SSM Parameters Stack for ${ENVIRONMENT}..."
-
-SSM_STACK_NAME="${PROJECT_NAME}-ssm-${ENVIRONMENT}"
-
-# Set environment-specific parameters
-if [ "$ENVIRONMENT" == "dev" ]; then
-    CORS_ORIGIN="http://localhost:3000"
+if [ "$STAGE" == "staging" ]; then
+    CORS_ORIGIN="http://localhost:3000"   # updated once the Amplify frontend URL exists
     LOG_LEVEL="debug"
 else
-    CORS_ORIGIN="https://app.miempresa.com"
+    CORS_ORIGIN="https://app.disruptiveexp.com"
     LOG_LEVEL="info"
 fi
 
-aws cloudformation deploy \
+"${AWS[@]}" cloudformation deploy \
     --template-file "${CFN_DIR}/ssm-parameters-stack.yml" \
     --stack-name "${SSM_STACK_NAME}" \
     --parameter-overrides \
-        Environment="${ENVIRONMENT}" \
+        Environment="${STAGE}" \
         ProjectName="${PROJECT_NAME}" \
         CorsOrigin="${CORS_ORIGIN}" \
         LogLevel="${LOG_LEVEL}" \
+        JWTSecret="${JWT_SECRET}" \
+        SessionSecret="${SESSION_SECRET}" \
+        OriginVerifySecret="${ORIGIN_VERIFY_SECRET}" \
     --region "${REGION}" \
-    --tags \
-        Project="${PROJECT_NAME}" \
-        Environment="${ENVIRONMENT}" \
-        ManagedBy=CloudFormation
+    --no-fail-on-empty-changeset \
+    --tags Project="${PROJECT_NAME}" Environment="${STAGE}" ManagedBy=CloudFormation
 
-if [ $? -eq 0 ]; then
-    log_info "✓ SSM Parameters Stack deployed successfully"
-else
-    log_error "SSM Parameters Stack deployment failed"
-    exit 1
-fi
-
+log_info "✓ SSM Parameters Stack deployed"
 echo ""
 
 # ============================================================================
-# Deploy CodeDeploy Stack (Once for all environments)
+# 5. CodeDeploy Stack (global)
 # ============================================================================
 log_info "Deploying CodeDeploy Stack..."
 
-CODEDEPLOY_STACK_NAME="${PROJECT_NAME}-codedeploy"
+"${AWS[@]}" cloudformation deploy \
+    --template-file "${CFN_DIR}/codedeploy-stack.yml" \
+    --stack-name "${PROJECT_NAME}-codedeploy" \
+    --parameter-overrides ProjectName="${PROJECT_NAME}" \
+    --capabilities CAPABILITY_NAMED_IAM \
+    --region "${REGION}" \
+    --no-fail-on-empty-changeset \
+    --tags Project="${PROJECT_NAME}" Environment=global ManagedBy=CloudFormation
 
-# Check if stack already exists
-if aws cloudformation describe-stacks \
-    --stack-name "${CODEDEPLOY_STACK_NAME}" \
-    --region "${REGION}" &> /dev/null; then
-    log_info "CodeDeploy stack already exists, skipping..."
-else
-    aws cloudformation deploy \
-        --template-file "${CFN_DIR}/codedeploy-stack.yml" \
-        --stack-name "${CODEDEPLOY_STACK_NAME}" \
-        --parameter-overrides \
-            ProjectName="${PROJECT_NAME}" \
-        --capabilities CAPABILITY_NAMED_IAM \
-        --region "${REGION}" \
-        --tags \
-            Project="${PROJECT_NAME}" \
-            Environment=global \
-            ManagedBy=CloudFormation
-
-    if [ $? -eq 0 ]; then
-        log_info "✓ CodeDeploy Stack deployed successfully"
-    else
-        log_error "CodeDeploy Stack deployment failed"
-        exit 1
-    fi
-fi
-
+log_info "✓ CodeDeploy Stack deployed"
 echo ""
 
 # ============================================================================
-# Display Deployment Summary
+# Summary
 # ============================================================================
 log_info "Deployment Summary"
 echo ""
 echo "Stacks Deployed:"
 echo "  1. ${IAM_STACK_NAME}"
-echo "  2. ${SSM_STACK_NAME}"
-echo "  3. ${CODEDEPLOY_STACK_NAME}"
+echo "  2. ${PROJECT_NAME}-s3-${STAGE}"
+echo "  3. ${SSM_STACK_NAME}"
+echo "  4. ${PROJECT_NAME}-codedeploy"
 echo ""
-echo "IAM Resources:"
-echo "  Role: CodeDeployInstanceRole"
-echo "  User: ${BOOTSTRAP_USER}"
-echo "  Profile: bootstrap (configured in ~/.aws/credentials)"
-echo ""
-echo "SSM Parameters:"
-echo "  Path: /${PROJECT_NAME}/${ENVIRONMENT}/*"
-echo "  Count: ~20 parameters"
-echo ""
-echo "CodeDeploy Application:"
-echo "  Name: ${PROJECT_NAME}-app"
-echo "  Deployment Groups: ${PROJECT_NAME}-dev, ${PROJECT_NAME}-prod"
+echo "SSM Parameters: /${PROJECT_NAME}/${STAGE}/*"
+echo "CodeDeploy: app '${PROJECT_NAME}-app', groups '${PROJECT_NAME}-staging' / '${PROJECT_NAME}-prod'"
 echo ""
 echo "Next Steps:"
-echo "  1. Create Lightsail instance:"
-echo "     ./create-instance.sh --stage ${ENVIRONMENT}"
-echo ""
-echo "  2. Register instance with CodeDeploy:"
-echo "     aws deploy register-on-premises-instance \\"
-echo "       --instance-name ${PROJECT_NAME}-db-${ENVIRONMENT}-1"
-echo ""
-echo "  3. Deploy application"
+echo "  1. Create the Lightsail instance:"
+echo "     ./create-instance.sh --stage ${STAGE}${PROFILE:+ --profile ${PROFILE}}"
+echo "  2. First deployment (runbook Phase 3), then edge stack (Phase 4)."
 echo ""
 echo "=========================================="

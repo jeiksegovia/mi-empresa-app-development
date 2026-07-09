@@ -41,12 +41,15 @@ interface InstrumentDetail {
 // ─── Composables ──────────────────────────────────────────────────────────────
 const route = useRoute()
 const { apiFetch } = useApi()
+const authStore = useAuthStore()
+const { downloadFile } = useFileUpload()
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const instrument = ref<InstrumentDetail | null>(null)
 const loading = ref(true)
 const error = ref('')
 const activeTab = ref(0)
+const downloadingPlantilla = ref(false)
 
 const tabs = [
   { label: 'Información', icon: 'pi pi-info-circle' },
@@ -121,6 +124,17 @@ function formatShortDate(dateStr: string | null | undefined) {
   })
 }
 
+// ─── W7 GAP-2: plantilla download ──────────────────────────────────────────────
+async function handlePlantillaDownload() {
+  if (!instrument.value?.plantillaArchivo) return
+  downloadingPlantilla.value = true
+  try {
+    await downloadFile(instrument.value.plantillaArchivo)
+  } finally {
+    downloadingPlantilla.value = false
+  }
+}
+
 onMounted(fetchInstrument)
 </script>
 
@@ -159,10 +173,12 @@ onMounted(fetchInstrument)
             @click="navigateTo('/instrumentos')"
           />
           <Button
+            v-if="authStore.isAdmin"
             label="Editar"
             icon="pi pi-pencil"
             severity="info"
-            disabled
+            data-testid="instrument-edit-link"
+            @click="navigateTo(`/instrumentos/${route.params.id}/editar`)"
           />
         </template>
       </AppPageHeader>
@@ -267,6 +283,21 @@ onMounted(fetchInstrument)
               <div>
                 <p class="text-xs text-[var(--text-color-secondary)] mb-1">Versión Plantilla</p>
                 <p class="font-medium font-mono">{{ instrument.versionPlantilla }}</p>
+              </div>
+
+              <!-- W7 GAP-2: Descargar plantilla (only when plantillaArchivo is set) -->
+              <div v-if="instrument.plantillaArchivo">
+                <p class="text-xs text-[var(--text-color-secondary)] mb-1">Plantilla</p>
+                <Button
+                  label="Descargar plantilla"
+                  icon="pi pi-download"
+                  size="small"
+                  severity="info"
+                  outlined
+                  :loading="downloadingPlantilla"
+                  data-testid="instrument-download-plantilla"
+                  @click="handlePlantillaDownload"
+                />
               </div>
 
               <div>

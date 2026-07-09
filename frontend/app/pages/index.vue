@@ -4,36 +4,79 @@ definePageMeta({
   middleware: ['auth'],
 })
 
-const recentActivities = [
-  {
-    icon: 'pi pi-user-plus',
-    iconBg: 'rgba(139, 92, 246, 0.1)',
-    iconColor: '#8b5cf6',
-    title: 'Nuevo empleado registrado',
-    subtitle: 'Ana María Torres - Hace 2 horas',
-  },
-  {
-    icon: 'pi pi-exclamation-triangle',
-    iconBg: 'rgba(251, 146, 60, 0.1)',
-    iconColor: '#fb923c',
-    title: 'Certificado próximo a vencer',
-    subtitle: 'Juan Pérez - Trabajo en Alturas - Vence en 5 días',
-  },
-  {
-    icon: 'pi pi-check',
-    iconBg: 'rgba(34, 197, 94, 0.1)',
-    iconColor: '#22c55e',
-    title: 'Contrato renovado exitosamente',
-    subtitle: 'María López - Contrato a término fijo - Hace 1 día',
-  },
-  {
-    icon: 'pi pi-user-edit',
-    iconBg: 'rgba(59, 130, 246, 0.1)',
-    iconColor: '#3b82f6',
-    title: 'Nueva nota agregada a cliente',
-    subtitle: 'Cliente: Roberto Gómez - Hace 3 horas',
-  },
-]
+// --- Activity feed ---
+const { apiFetch } = useApi()
+
+interface ActivityItem {
+  type: 'ficha_completada' | 'patient_created' | 'employee_created'
+  date: string
+  description: string
+  actorName: string
+}
+
+const activities = ref<ActivityItem[]>([])
+const loadingActivities = ref(false)
+
+function activityIcon(type: ActivityItem['type']): string {
+  switch (type) {
+    case 'ficha_completada': return 'pi pi-file-check'
+    case 'patient_created':  return 'pi pi-user'
+    case 'employee_created': return 'pi pi-user-plus'
+    default:                 return 'pi pi-info-circle'
+  }
+}
+
+function activityIconColor(type: ActivityItem['type']): string {
+  switch (type) {
+    case 'ficha_completada': return '#22c55e'   // green-500
+    case 'patient_created':  return '#3b82f6'   // blue-500
+    case 'employee_created': return '#8b5cf6'   // violet-500
+    default:                 return '#6b7280'
+  }
+}
+
+function activityIconBg(type: ActivityItem['type']): string {
+  switch (type) {
+    case 'ficha_completada': return 'rgba(34, 197, 94, 0.1)'
+    case 'patient_created':  return 'rgba(59, 130, 246, 0.1)'
+    case 'employee_created': return 'rgba(139, 92, 246, 0.1)'
+    default:                 return 'rgba(107, 114, 128, 0.1)'
+  }
+}
+
+function formatDate(dateStr: string): string {
+  try {
+    return new Date(dateStr).toLocaleDateString('es-CO', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+  catch {
+    return dateStr
+  }
+}
+
+async function fetchActivities() {
+  loadingActivities.value = true
+  try {
+    const res = await apiFetch('/dashboard/activity')
+    activities.value = res.data || []
+  }
+  catch (e) {
+    console.error('Error fetching activities', e)
+    activities.value = []
+  }
+  finally {
+    loadingActivities.value = false
+  }
+}
+
+onMounted(() => {
+  fetchActivities()
+})
 </script>
 
 <template>
@@ -175,24 +218,50 @@ const recentActivities = [
         <h3 class="text-lg font-semibold text-[var(--text-color)] mb-6">
           Actividad Reciente
         </h3>
-        <div class="space-y-4">
+
+        <!-- Loading spinner -->
+        <div v-if="loadingActivities" class="flex justify-center items-center py-8">
+          <i class="pi pi-spin pi-spinner text-2xl text-[var(--primary-color)]" />
+        </div>
+
+        <!-- Empty state -->
+        <div
+          v-else-if="activities.length === 0"
+          class="flex flex-col items-center justify-center py-8 gap-2"
+        >
+          <i class="pi pi-inbox text-3xl text-[var(--text-color-secondary)]" />
+          <p class="text-sm text-[var(--text-color-secondary)]">
+            Sin actividad reciente
+          </p>
+        </div>
+
+        <!-- Activity list -->
+        <div v-else class="space-y-4">
           <div
-            v-for="activity in recentActivities"
-            :key="activity.title"
+            v-for="(activity, index) in activities"
+            :key="index"
             class="flex items-start gap-4 p-3 rounded-lg hover:bg-[var(--surface-hover)] transition-colors"
           >
             <div
               class="flex items-center justify-center w-10 h-10 rounded-lg flex-shrink-0"
-              :style="{ background: activity.iconBg }"
+              :style="{ background: activityIconBg(activity.type) }"
             >
-              <i :class="[activity.icon, 'text-base']" :style="{ color: activity.iconColor }" />
+              <i
+                :class="[activityIcon(activity.type), 'text-base']"
+                :style="{ color: activityIconColor(activity.type) }"
+              />
             </div>
             <div class="flex-1">
-              <p class="font-medium text-[var(--text-color)] mb-1">{{ activity.title }}</p>
-              <p class="text-sm text-[var(--text-color-secondary)]">{{ activity.subtitle }}</p>
+              <p class="font-medium text-[var(--text-color)] mb-1">
+                {{ activity.description }}
+              </p>
+              <p class="text-sm text-[var(--text-color-secondary)]">
+                {{ activity.actorName }} · {{ formatDate(activity.date) }}
+              </p>
             </div>
           </div>
         </div>
+
       </template>
     </Card>
   </div>
