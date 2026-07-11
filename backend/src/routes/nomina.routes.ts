@@ -2,8 +2,10 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { authMiddleware, requireRole } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
+import { forbidLegacy } from '../middleware/forbidLegacy.js'
 import * as nominaService from '../services/nominaService.js'
 import { logger } from '../config/logger.js'
+import { getPrisma } from '../config/database.js'
 
 const router = Router()
 router.use(authMiddleware())
@@ -13,6 +15,12 @@ const contratoSchema = z.object({
   fechaInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   fechaFin: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   archivoUrl: z.string().optional(),
+  // jul-9 D6
+  archivoFirmadoUrl: z.string().max(500).optional(),
+  // jul-10 D7 tighten: cargoId now REQUIRED (schema SET NOT NULL after backfill).
+  // Legacy `cargo: string` payload rejected by Zod (forbidLegacy + this schema
+  // intentionally omits the legacy field).
+  cargoId: z.number().int().positive(),
   activo: z.boolean().optional(),
 })
 
@@ -45,10 +53,19 @@ router.get('/employees/:id/contratos', async (req: Request, res: Response): Prom
   }
 })
 
-router.post('/employees/:id/contratos', requireRole('ADMIN'), validate(contratoSchema), async (req: Request, res: Response): Promise<void> => {
+router.post('/employees/:id/contratos', requireRole('ADMIN'), forbidLegacy(['cargo']), validate(contratoSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid employee ID' }); return }
+    // jul-9 D7 (QA GAP-1): pre-flight check on cargoId so an FK violation does
+    // not bubble up as a Prisma P2003 500. Contract §4.6.
+    if (req.body.cargoId !== undefined && req.body.cargoId !== null) {
+      const cargo = await getPrisma().cargoEmpresa.findUnique({ where: { id: req.body.cargoId } })
+      if (!cargo) {
+        res.status(400).json({ success: false, message: 'Cargo does not exist', field: 'cargoId' })
+        return
+      }
+    }
     const created = await nominaService.createContrato(id, req.body)
     res.status(201).json({ success: true, data: created })
   } catch (e: any) {
@@ -58,11 +75,19 @@ router.post('/employees/:id/contratos', requireRole('ADMIN'), validate(contratoS
   }
 })
 
-router.put('/employees/:id/contratos/:cid', requireRole('ADMIN'), validate(contratoSchema), async (req: Request, res: Response): Promise<void> => {
+router.put('/employees/:id/contratos/:cid', requireRole('ADMIN'), forbidLegacy(['cargo']), validate(contratoSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     const cid = parseInt(req.params.cid as string)
     if (isNaN(id) || isNaN(cid)) { res.status(400).json({ success: false, message: 'Invalid IDs' }); return }
+    // jul-9 D7 (QA GAP-1) — see POST above.
+    if (req.body.cargoId !== undefined && req.body.cargoId !== null) {
+      const cargo = await getPrisma().cargoEmpresa.findUnique({ where: { id: req.body.cargoId } })
+      if (!cargo) {
+        res.status(400).json({ success: false, message: 'Cargo does not exist', field: 'cargoId' })
+        return
+      }
+    }
     const updated = await nominaService.updateContrato(id, cid, req.body)
     res.json({ success: true, data: updated })
   } catch (e: any) {

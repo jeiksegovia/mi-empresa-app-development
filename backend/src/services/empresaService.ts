@@ -20,6 +20,28 @@ export interface UpdateEmpresaInput {
   email?: string
 }
 
+export interface CreateEmpresaInput {
+  nombre: string
+  nit: string
+  direccion?: string
+  telefono?: string
+  email?: string
+}
+
+// W6: single-empresa system — must match the 7 seeds from the
+// jul9_cargo_empresa migration so a fresh DB has the same catalog
+// after a bootstrap create. Keep this list in lockstep with the
+// migration SQL (`backend/prisma/migrations/20260710024928_jul9_cargo_empresa`).
+export const DEFAULT_CARGOS = [
+  'Fisioterapeuta',
+  'Terapeuta Ocupacional',
+  'Educador Físico',
+  'Manualidades',
+  'Auxiliar de Enfermería',
+  'Auxiliar de Servicios Generales',
+  'Otro',
+] as const
+
 export async function getEmpresa(): Promise<EmpresaDetail | null> {
   const prisma = getPrisma()
   const empresa = await prisma.empresa.findFirst({
@@ -27,6 +49,44 @@ export async function getEmpresa(): Promise<EmpresaDetail | null> {
     orderBy: { id: 'asc' },
   })
   return empresa
+}
+
+export async function createEmpresa(input: CreateEmpresaInput): Promise<EmpresaDetail> {
+  const prisma = getPrisma()
+
+  // Enforce single-empresa invariant at the service layer (defense in depth —
+  // route also checks). This system intentionally supports exactly one empresa.
+  const existing = await prisma.empresa.findFirst({ select: { id: true } })
+  if (existing) {
+    throw Object.assign(new Error('La empresa ya existe'), { status: 409, field: 'empresa' })
+  }
+
+  // Atomic: create empresa + seed default cargos together. createMany with
+  // skipDuplicates is safe even if cargos_empresa already has rows for this
+  // empresaId (the unique constraint (empresa_id, nombre) protects us).
+  const result = await prisma.$transaction(async (tx) => {
+    const empresa = await tx.empresa.create({
+      data: {
+        nombre: input.nombre,
+        nit: input.nit,
+        direccion: input.direccion ?? null,
+        telefono: input.telefono ?? null,
+        email: input.email ?? null,
+        activa: true,
+      },
+    })
+    await tx.cargoEmpresa.createMany({
+      data: DEFAULT_CARGOS.map((nombre) => ({
+        empresaId: empresa.id,
+        nombre,
+        activo: true,
+      })),
+      skipDuplicates: true,
+    })
+    return empresa
+  })
+
+  return result
 }
 
 export async function updateEmpresa(id: number, input: UpdateEmpresaInput): Promise<EmpresaDetail> {

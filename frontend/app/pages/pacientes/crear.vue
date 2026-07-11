@@ -14,6 +14,13 @@ const form = reactive({
   tipoDocumento: 'CC' as 'CC' | 'CE' | 'PASAPORTE' | 'REGISTRO_CIVIL',
   numeroDocumento: '',
   fechaNacimiento: '',
+  // B3/B4/B5: additive cliente fields (all optional).
+  fechaCumpleanos: '',
+  tipoSangre: '' as
+    | ''
+    | 'A_POS' | 'A_NEG' | 'B_POS' | 'B_NEG'
+    | 'AB_POS' | 'AB_NEG' | 'O_POS' | 'O_NEG',
+  eps: '',
   telefono: '',
   email: '',
   direccion: '',
@@ -95,6 +102,11 @@ async function handleSubmit() {
     if (form.telefono.trim()) payload.telefono = form.telefono.trim()
     if (form.email.trim()) payload.email = form.email.trim()
     if (form.direccion.trim()) payload.direccion = form.direccion.trim()
+    // B3/B4/B5: additive cliente fields. Only include when set — backend
+    // accepts nulls but we keep the payload tight.
+    if (form.fechaCumpleanos) payload.fechaCumpleanos = form.fechaCumpleanos
+    if (form.tipoSangre) payload.tipoSangre = form.tipoSangre
+    if (form.eps.trim()) payload.eps = form.eps.trim()
     if (form.informacionSeguro.trim()) payload.informacionSeguro = form.informacionSeguro.trim()
     if (form.observacionesEspeciales.trim()) payload.observacionesEspeciales = form.observacionesEspeciales.trim()
 
@@ -170,6 +182,19 @@ const parentescoOptions = [
   { label: 'Hijo/a', value: 'HIJO' },
   { label: 'Otro', value: 'OTRO' },
 ]
+
+// B4: TipoSangre enum (8 values from contract §2) — display as
+// Spanish-friendly notation, e.g. "A+", mapped to enum values like A_POS.
+const tipoSangreOptions = [
+  { label: 'A+', value: 'A_POS' },
+  { label: 'A-', value: 'A_NEG' },
+  { label: 'B+', value: 'B_POS' },
+  { label: 'B-', value: 'B_NEG' },
+  { label: 'AB+', value: 'AB_POS' },
+  { label: 'AB-', value: 'AB_NEG' },
+  { label: 'O+', value: 'O_POS' },
+  { label: 'O-', value: 'O_NEG' },
+]
 </script>
 
 <template>
@@ -196,7 +221,8 @@ const parentescoOptions = [
                   Nombre <span class="text-red-500">*</span>
                 </label>
                 <InputText
-                  v-model="form.nombre"
+                  :model-value="form.nombre"
+                  @update:model-value="(v) => form.nombre = (v ?? '').toUpperCase()"
                   class="w-full"
                   :class="{ 'p-invalid': formErrors.nombre }"
                   placeholder="Nombre completo"
@@ -295,6 +321,44 @@ const parentescoOptions = [
               <div class="md:col-span-2">
                 <label class="block text-sm font-medium mb-2">Dirección</label>
                 <InputText v-model="form.direccion" class="w-full" placeholder="Calle 123 # 45-67" />
+              </div>
+
+              <!-- B3/B4/B5: additive cliente fields. All optional. Positioned
+                   ABOVE "Información del seguro" per assignment spec. -->
+              <div>
+                <label class="block text-sm font-medium mb-2">
+                  Fecha de cumpleaños
+                  <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
+                </label>
+                <input
+                  type="date"
+                  v-model="form.fechaCumpleanos"
+                  class="w-full px-3 py-2 border border-[var(--surface-border)] rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-2">
+                  Tipo de sangre
+                  <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
+                </label>
+                <Select
+                  v-model="form.tipoSangre"
+                  :options="tipoSangreOptions"
+                  option-label="label"
+                  option-value="value"
+                  placeholder="—"
+                  class="w-full"
+                  show-clear
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-2">
+                  EPS
+                  <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
+                </label>
+                <InputText v-model="form.eps" class="w-full" placeholder="Sura Póliza 12345" />
               </div>
 
               <div class="md:col-span-2">

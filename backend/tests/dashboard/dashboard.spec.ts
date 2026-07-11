@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-const BASE_URL = 'http://localhost:3001/api/v1'
+const BASE_URL = `${process.env.TEST_API_URL || 'http://localhost:3101'}/api/v1`
 
 // Run serially to avoid concurrent login conflicts (409) on the same account
 test.describe.configure({ mode: 'serial' })

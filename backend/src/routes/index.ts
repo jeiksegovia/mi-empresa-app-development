@@ -8,6 +8,7 @@ import { instrumentRoutes } from './instruments.routes.js'
 import { empresaRoutes } from './empresa.routes.js'
 import { uploadRoutes } from './uploads.routes.js'
 import { certificateRoutes } from './certificates.routes.js'
+import { userRoutes } from './users.routes.js'
 
 const router = Router()
 
@@ -20,6 +21,7 @@ router.use('/instruments', instrumentRoutes)
 router.use('/empresa', empresaRoutes)
 router.use('/uploads', uploadRoutes)
 router.use('/certificates', certificateRoutes)
+router.use('/users', userRoutes)
 
 // Health check
 router.get('/health', (_req, res) => {

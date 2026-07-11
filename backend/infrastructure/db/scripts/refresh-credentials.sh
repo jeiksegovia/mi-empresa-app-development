@@ -268,4 +268,62 @@ echo "  Next refresh: ${NEXT_REFRESH}"
 echo "  CodeDeploy agent: Running"
 echo ""
 
+# === W8 stopgap (Option B): graceful pm2 reload after successful credential rotation. ===
+# Prevents the AWS SDK in-process credential cache from going stale (root cause
+# identified in W8: cache has no expiration field, so the SDK never re-reads the
+# credentials file). After this reload, the new process starts with fresh creds.
+#
+# IMPORTANT: This block was appended to the ON-INSTANCE script on 2026-07-11 by
+# W8 forensics. The repo copy at backend/infrastructure/db/scripts/refresh-credentials.sh
+# MUST be synced to include this block before the next instance rebuild --
+# tracked in W8 result.md §Stopgap-B and the W11/deploy wave checklist.
+
+echo "Reloading miempresa-api to pick up fresh credentials..."
+
+PM2_PID_BEFORE=$(sudo -u ec2-user bash -lc 'pm2 jlist 2>/dev/null' | python3 -c "
+import json, sys
+try:
+    procs = json.load(sys.stdin)
+    for p in procs:
+        if p['name'] == 'miempresa-api':
+            print(p.get('pid', '?'))
+            break
+except Exception:
+    print('?')
+" 2>/dev/null)
+echo "  PID before reload: ${PM2_PID_BEFORE}"
+
+sudo -u ec2-user bash -lc 'pm2 reload miempresa-api' > /tmp/pm2-reload.log 2>&1 || true
+
+PM2_PID_AFTER=""
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    sleep 1
+    PM2_PID_AFTER=$(sudo -u ec2-user bash -lc 'pm2 jlist 2>/dev/null' | python3 -c "
+import json, sys
+try:
+    procs = json.load(sys.stdin)
+    for p in procs:
+        if p['name'] == 'miempresa-api':
+            print(p.get('pid', '?'))
+            break
+except Exception:
+    print('?')
+" 2>/dev/null)
+    if [ -n "${PM2_PID_AFTER}" ] && [ "${PM2_PID_AFTER}" != "${PM2_PID_BEFORE}" ] && [ "${PM2_PID_AFTER}" != "?" ]; then
+        break
+    fi
+done
+
+if [ -n "${PM2_PID_AFTER}" ] && [ "${PM2_PID_AFTER}" != "${PM2_PID_BEFORE}" ] && [ "${PM2_PID_AFTER}" != "?" ]; then
+    echo "  [OK] miempresa-api reloaded (PID ${PM2_PID_BEFORE} -> ${PM2_PID_AFTER})"
+else
+    echo "  [WARN] pm2 reload did not produce a new PID within 10s"
+    echo "  Last seen PID: ${PM2_PID_AFTER:-?}"
+    echo "  See /tmp/pm2-reload.log for the pm2 reload output"
+    echo "  SDK cache may be stale until next manual reload or successful cron cycle"
+fi
+echo ""
+
+# === end W8 stopgap block ===
+
 exit 0

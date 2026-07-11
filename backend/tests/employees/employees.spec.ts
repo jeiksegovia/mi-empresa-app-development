@@ -169,8 +169,9 @@ test.describe('Employees API', () => {
       const body = await response.json();
       expect(body).toHaveProperty('success', true);
       expect(body.data).toHaveProperty('id');
-      expect(body.data.nombre).toBe('Juan');
-      expect(body.data.apellido).toBe('Perez');
+      // jul-10 E1: nombre + apellido are transformed to UPPERCASE on create.
+      expect(body.data.nombre).toBe('JUAN');
+      expect(body.data.apellido).toBe('PEREZ');
       expect(body.data.estado).toBe('ACTIVO');
       createdEmployeeId = body.data.id;
     });
@@ -334,7 +335,8 @@ test.describe('Employees API', () => {
       expect(response.status()).toBe(200);
       const body = await response.json();
       expect(body).toHaveProperty('success', true);
-      expect(body.data.nombre).toBe('JuanActualizado');
+      // jul-10 E1: nombre transform applies on update too.
+      expect(body.data.nombre).toBe('JUANACTUALIZADO');
       expect(body.data.telefono).toBe('3001112233');
     });
 

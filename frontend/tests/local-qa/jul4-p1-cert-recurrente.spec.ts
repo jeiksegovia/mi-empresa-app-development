@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAsAdmin } from '../helpers/auth'
+import { loginAsAdmin, getApiBase } from '../helpers/auth'
 
 /**
  * LOCAL: jul4 P1 — Empresa certificados recurrentes (periodicidad + comprobante + duplicate-for-month alert).
@@ -29,14 +29,15 @@ test('P1-1: create MENSUAL cert via API with comprobante, periodo persists; /cer
     periodo: currentPeriodoDate(),
     comprobantePagoUrl: `certificados/test-comprobante-${uniq}.pdf`,
   }
-  const create = await page.request.post('http://localhost:3101/api/v1/certificates', { data: body })
+  const API_URL = await getApiBase(page)
+  const create = await page.request.post(`${API_URL}/certificates`, { data: body })
   expect(create.status()).toBe(201)
   const created = await create.json()
   const id = created?.data?.id
   expect(id, 'POST returned id').toBeTruthy()
 
   // GET to verify persistence of new fields
-  const detail = await page.request.get(`http://localhost:3101/api/v1/certificates/${id}`)
+  const detail = await page.request.get(`${API_URL}/certificates/${id}`)
   const det = await detail.json()
   expect(det?.data?.periodicidad).toBe('MENSUAL')
   expect(det?.data?.periodo).toContain(currentPeriodoDate().slice(0, 7)) // YYYY-MM prefix
@@ -46,12 +47,16 @@ test('P1-1: create MENSUAL cert via API with comprobante, periodo persists; /cer
 test('P1-2: missing-month alert appears when a MENSUAL cert has no current-month row, and clears (for that name) after duplicate-for-month', async ({ page }) => {
   await loginAsAdmin(page)
   const uniq = `${Date.now()}`
-  const certName = `MensualAlertJul4 ${uniq}`
+  // jul-10 E1: the entity `nombre` is auto-uppercased on the server. The alert
+  // shows the STORED name (UPPERCASE), so we assert against the uppercased key.
+  const certNameSent = `MensualAlertJul4 ${uniq}`
+  const certNameStored = `MENSUALALERTJUL4 ${uniq}`
 
   // Step 1: Create a MENSUAL cert WITHOUT a row for current month (periodo in the past).
-  const create = await page.request.post('http://localhost:3101/api/v1/certificates', {
+  const API_URL = await getApiBase(page)
+  const create = await page.request.post(`${API_URL}/certificates`, {
     data: {
-      nombre: certName,
+      nombre: certNameSent,
       tipoCertificado: 'TRIBUTARIOS',
       periodicidad: 'MENSUAL',
       periodo: '2026-01-01',
@@ -66,13 +71,13 @@ test('P1-2: missing-month alert appears when a MENSUAL cert has no current-month
 
   const alert = page.getByTestId('cert-missing-month-alert')
   await expect(alert).toBeVisible({ timeout: 8000 })
-  await expect(alert).toContainText(certName)
+  await expect(alert).toContainText(certNameStored)
 
   // Step 3: Click the "Duplicar" button that is in the same row as our cert.
-  // We find the row containing our certName, then click its duplicate button.
+  // We find the row containing the stored certName, then click its duplicate button.
   const rowWithOurCert = page
     .locator('tr')
-    .filter({ has: page.locator('td', { hasText: certName }) })
+    .filter({ has: page.locator('td', { hasText: certNameStored }) })
     .first()
   await expect(rowWithOurCert).toBeVisible({ timeout: 5000 })
   await rowWithOurCert.getByTestId('cert-duplicate-btn').click()
@@ -83,13 +88,14 @@ test('P1-2: missing-month alert appears when a MENSUAL cert has no current-month
   // Step 4: Our specific cert name should no longer appear in the alert (a
   // current-month row was created). The alert itself may still show for
   // unrelated leftover rows from prior runs.
-  await expect(alert).not.toContainText(certName, { timeout: 8000 })
+  await expect(alert).not.toContainText(certNameStored, { timeout: 8000 })
 })
 
 test('P1-3: DRIFT-1 fixed — tipo_certificado is NOT NULL in DB after migration', async ({ page }) => {
   // Smoke test: simply attempt to POST a cert without tipoCertificado — should return 400.
   await loginAsAdmin(page)
-  const resp = await page.request.post('http://localhost:3101/api/v1/certificates', {
+  const API_URL = await getApiBase(page)
+  const resp = await page.request.post(`${API_URL}/certificates`, {
     data: { nombre: 'NoTipoTest', periodicidad: 'UNICA' },
   })
   expect(resp.status(), 'Zod requires tipoCertificado').toBe(400)

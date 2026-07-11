@@ -13,7 +13,7 @@ export async function auth(req: AuthRequest, res: Response, next: NextFunction):
   try {
     // Try to get token from cookie first, then from Authorization header
     const token = req.cookies?.session || req.get('Authorization')?.replace('Bearer ', '')
-    
+
     if (!token) {
       res.status(401).json({ success: false, message: 'Authentication required' })
       return
@@ -68,5 +68,59 @@ export function requireRole(...roles: string[]) {
     }
 
     next()
+  }
+}
+
+/**
+ * jul-10 C6 / L2: gate /instruments/* WRITE ops (POST/PUT/DELETE).
+ * Allows:
+ *   - ADMIN (always), OR
+ *   - EMPLEADO with tipoEmpleado='GERONTOLOGA'
+ * Denies: plain EMPLEADO, AUDITOR, OPERADOR → 403.
+ *
+ * The JWT payload has `rol` but NOT `tipoEmpleado`, so we look up the
+ * current Usuario record (one SELECT per request) and attach to req.
+ */
+export function requireInstrumentWriter() {
+  return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' })
+        return
+      }
+
+      const prisma = getPrisma()
+      const usuario = await prisma.usuario.findUnique({
+        where: { id: req.userId },
+        select: { id: true, rol: true, tipoEmpleado: true, activo: true },
+      })
+
+      if (!usuario || !usuario.activo) {
+        res.status(401).json({ success: false, message: 'User not found or inactive' })
+        return
+      }
+
+      // ADMIN bypass
+      if (usuario.rol === 'ADMIN') {
+        req.user = { ...(req.user || {}), rol: usuario.rol, tipoEmpleado: usuario.tipoEmpleado }
+        next()
+        return
+      }
+
+      // EMPLEADO + GERONTOLOGA bypass
+      if (usuario.rol === 'EMPLEADO' && usuario.tipoEmpleado === 'GERONTOLOGA') {
+        req.user = { ...(req.user || {}), rol: usuario.rol, tipoEmpleado: usuario.tipoEmpleado }
+        next()
+        return
+      }
+
+      res.status(403).json({
+        success: false,
+        message: 'Insufficient permissions: instrument writes require ADMIN or EMPLEADO+GERONTOLOGA',
+      })
+    } catch (error) {
+      logger.error('requireInstrumentWriter error:', error)
+      res.status(500).json({ success: false, message: 'Authorization check failed' })
+    }
   }
 }

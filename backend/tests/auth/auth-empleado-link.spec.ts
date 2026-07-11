@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-const API_URL = 'http://localhost:3001/api/v1'
+const API_URL = `${process.env.TEST_API_URL || 'http://localhost:3101'}/api/v1`
 
 test.describe.configure({ mode: 'serial' })
 

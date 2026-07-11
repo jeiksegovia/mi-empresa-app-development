@@ -45,6 +45,8 @@ export type UpdateCertificateInput = Partial<Omit<CreateCertificateInput, 'dupli
 
 export interface CertificateUpdateInput {
   archivoUrl?: string
+  // jul-9 A4: payment receipt URL
+  comprobantePagoUrl?: string
   notas?: string
   fechaEmision?: string
   fechaVencimiento?: string
@@ -54,6 +56,7 @@ export interface CertificateUpdateRecord {
   id: number
   certificadoId: number
   archivoUrl: string | null
+  comprobantePagoUrl: string | null
   notas: string | null
   fechaEmision: Date | null
   fechaVencimiento: Date | null
@@ -301,6 +304,7 @@ export async function addCertificateUpdate(
       data: {
         certificadoId: certId,
         archivoUrl: input.archivoUrl ?? null,
+        comprobantePagoUrl: input.comprobantePagoUrl ?? null,
         notas: input.notas ?? null,
         fechaEmision: input.fechaEmision ? new Date(input.fechaEmision) : null,
         fechaVencimiento: input.fechaVencimiento ? new Date(input.fechaVencimiento) : null,

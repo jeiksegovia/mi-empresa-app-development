@@ -236,7 +236,8 @@ test.describe('Instruments API', () => {
       const body = await response.json();
       expect(body).toHaveProperty('success', true);
       expect(body.data).toHaveProperty('id');
-      expect(body.data.nombreInstrumento).toBe('Instrumento de Prueba API');
+      // jul-10 E1: nombreInstrumento transformed to UPPERCASE on create.
+      expect(body.data.nombreInstrumento).toBe('INSTRUMENTO DE PRUEBA API');
       expect(body.data.estado).toBe('ACTIVO');
       expect(body.data).toHaveProperty('registros');
       createdInstrumentId = body.data.id;
@@ -312,7 +313,7 @@ test.describe('Instruments API', () => {
       expect(response.status()).toBe(200);
       const body = await response.json();
       expect(body.data).toHaveProperty('id', createdInstrumentId);
-      expect(body.data).toHaveProperty('nombreInstrumento', 'Instrumento de Prueba API');
+      expect(body.data).toHaveProperty('nombreInstrumento', 'INSTRUMENTO DE PRUEBA API');
     });
   });
 
@@ -353,7 +354,7 @@ test.describe('Instruments API', () => {
       });
       expect(response.status()).toBe(200);
       const body = await response.json();
-      expect(body.data.nombreInstrumento).toBe('Instrumento Actualizado');
+      expect(body.data.nombreInstrumento).toBe('INSTRUMENTO ACTUALIZADO');
       expect(body.data.versionPlantilla).toBe('v1.1');
     });
 

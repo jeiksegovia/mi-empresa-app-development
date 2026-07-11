@@ -28,6 +28,8 @@ model Usuario {
   empleadoId Int?    @map("empleado_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  // jul-10 C6/L2: sub-role specialization (nullable — only set for EMPLEADO accounts with a known specialization)
+  tipoEmpleado TipoEmpleado? @map("tipo_empleado")
 
   // Relations
   empleado                  Empleado?  @relation(fields: [empleadoId], references: [id], onDelete: SetNull)
@@ -87,6 +89,8 @@ model Empleado {
   estado               EstadoEmpleado @default(ACTIVO)
   fechaRegistro        DateTime  @default(now()) @map("fecha_registro")
   hojaVidaUrl          String?   @map("hoja_vida_url") @db.VarChar(500)
+  // jul-9 D3: identity-document file URL
+  documentoIdentificacionUrl String? @map("documento_identificacion_url") @db.VarChar(500)
 
   // Relations
   usuarios                     Usuario[]
@@ -106,6 +110,8 @@ model Empleado {
   novedades                    NovedadEmpleado[]
   contratos                    Contrato[]
   nominaPeriodos               NominaPeriodo[]
+  // jul-9 D2: repeatable education entries
+  educacionEmpleado            EducacionEmpleado[]
 
   @@index([numeroDocumento])
   @@index([estado])
@@ -180,11 +186,29 @@ model ExperienciaLaboralExterna {
   @@map("experiencias_laborales_externas")
 }
 
+model EducacionEmpleado {
+  id              Int       @id @default(autoincrement()) @map("educacion_empleado_id")
+  empleadoId      Int       @map("empleado_id")
+  profesion       String    @db.VarChar(200)
+  universidad     String?   @db.VarChar(200)
+  fechaGraduacion DateTime? @map("fecha_graduacion") @db.Date
+  diplomaUrl      String?   @map("diploma_url") @db.VarChar(500)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@map("educacion_empleado")
+}
+
 model EducacionIdiomas {
   id                 Int     @id @default(autoincrement()) @map("idioma_id")
   empleadoId         Int     @map("empleado_id")
   institucion        String  @db.VarChar(200)
-  nivelEscritura     String  @map("nivel_escritura") @db.VarChar(50)
+  // jul-9 D1: nivelEscritura nullable (was required) — column preserved, hide in UI, stop writing
+  nivelEscritura     String? @map("nivel_escritura") @db.VarChar(50)
   nivelHabla         String  @map("nivel_habla") @db.VarChar(50)
   capacidadTraducir  Boolean @map("capacidad_traducir") @default(false)
 
@@ -330,6 +354,11 @@ model Contrato {
   fechaInicio  DateTime     @map("fecha_inicio") @db.Date
   fechaFin     DateTime?    @map("fecha_fin") @db.Date
   archivoUrl   String?      @map("archivo_url") @db.VarChar(500)
+  // jul-9 D6: signed-contract file URL
+  archivoFirmadoUrl String? @map("archivo_firmado_url") @db.VarChar(500)
+  // jul-9 D7 (nullable in jul-9; jul-10 tighten: SET NOT NULL after backfill to "Otro")
+  cargoId       Int        @map("cargo_id")
+  cargo         CargoEmpresa @relation(fields: [cargoId], references: [id], onDelete: Restrict)
   activo       Boolean      @default(true)
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
@@ -338,7 +367,25 @@ model Contrato {
   periodos NominaPeriodo[]
 
   @@index([empleadoId])
+  @@index([cargoId])
   @@map("contratos")
+}
+
+model CargoEmpresa {
+  id        Int       @id @default(autoincrement()) @map("cargo_id")
+  empresaId Int       @map("empresa_id")
+  nombre    String    @db.VarChar(100)
+  activo    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  empresa   Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contratos Contrato[]
+
+  @@unique([empresaId, nombre])
+  @@index([empresaId])
+  @@map("cargos_empresa")
 }
 
 model NominaPeriodo {
@@ -476,6 +523,10 @@ model Cliente {
   notas                   String?   @db.Text
   informacionSeguro       String?   @map("informacion_seguro") @db.Text
   observacionesEspeciales String?   @map("observaciones_especiales") @db.Text
+  // jul-9 B3/B4/B5: personal-health metadata
+  fechaCumpleanos         DateTime? @map("fecha_cumpleanos") @db.Date
+  tipoSangre              TipoSangre? @map("tipo_sangre")
+  eps                     String?   @db.VarChar(200)
 
   // Relations
   contactosEmergencia     ContactoEmergenciaCliente[]
@@ -565,6 +616,8 @@ model NotaCliente {
   registroFichaId Int?             @map("registro_ficha_id")
   tipoNota        TipoNota         @map("tipo_nota")
   fecha           DateTime         @default(now())
+  // jul-9 B1: required date the incident occurred (backfilled from `fecha::date` for existing rows)
+  fechaIncidente  DateTime         @map("fecha_incidente") @db.Date
   autor           Int
   contenido       String           @db.Text
   prioridad       PrioridadNota    @default(MEDIA)
@@ -578,6 +631,7 @@ model NotaCliente {
   @@index([clienteId])
   @@index([registroFichaId])
   @@index([fecha])
+  @@index([fechaIncidente])
   @@map("notas_clientes")
 }
 
@@ -704,6 +758,8 @@ model CertificadoUpdate {
   id                Int                       @id @default(autoincrement()) @map("cert_update_id")
   certificadoId     Int                       @map("certificado_id")
   archivoUrl        String?                   @map("archivo_url") @db.VarChar(500)
+  // jul-9 A4: payment receipt URL alongside existing archivoUrl
+  comprobantePagoUrl String?                  @map("comprobante_pago_url") @db.VarChar(500)
   notas             String?                   @db.Text
   fechaEmision      DateTime?                 @map("fecha_emision") @db.Date
   fechaVencimiento  DateTime?                 @map("fecha_vencimiento") @db.Date
@@ -736,6 +792,8 @@ model Empresa {
 
   // Relations
   certificados CertificadoEmpresa[]
+  // jul-9 D7: per-empresa cargo catalog
+  cargosEmpresa  CargoEmpresa[]
 
   @@map("empresas")
 }
@@ -749,6 +807,13 @@ enum RolUsuario {
   EMPLEADO
   AUDITOR
   OPERADOR
+}
+
+// jul-10 C6/L2: sub-role specialization for EMPLEADO accounts.
+// Single value now (GERONTOLOGA) — enum rather than free-text so future
+// specializations (auxiliar, terapista, etc.) scale without a migration.
+enum TipoEmpleado {
+  GERONTOLOGA
 }
 
 enum TipoDocumentoEmpleado {
@@ -785,6 +850,18 @@ enum EstadoEmpleado {
 enum EstadoCliente {
   ACTIVO
   INACTIVO
+}
+
+// jul-9 B4: cliente blood-type enum (nullable on Cliente)
+enum TipoSangre {
+  A_POS
+  A_NEG
+  B_POS
+  B_NEG
+  AB_POS
+  AB_NEG
+  O_POS
+  O_NEG
 }
 
 enum TipoContrato {

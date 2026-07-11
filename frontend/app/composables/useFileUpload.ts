@@ -11,7 +11,22 @@ export function useFileUpload() {
         body: { contentType: file.type, folder },
       })
       const { uploadUrl, key } = res.data
-      await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+      // W11 ADDENDUM (urgent, blocking deploy): `fetch` does NOT throw on
+      // HTTP errors (4xx/5xx). The previous code returned the presigned
+      // `key` even when the S3 PUT itself returned 403/500/etc., which is
+      // the silent "saved without file" mechanism that drove S7. Check
+      // `putRes.ok` explicitly so the outer `catch` toasts + returns
+      // null, and the calling form never persists a bogus key.
+      // (Mirrors the explicit ok-check that pacientes/[id]/index.vue:726
+      // already does on its inline S3 PUT.)
+      const putRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      })
+      if (!putRes.ok) {
+        throw new Error(`Upload failed: ${putRes.status}`)
+      }
       return key
     } catch (e: any) {
       toast.add({

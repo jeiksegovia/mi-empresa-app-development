@@ -359,7 +359,18 @@ watch(selectedTipoFilter, () => { fetchRows() })
         <div v-for="slot in requiredSlotsForTipo(editingTipo)" :key="slot">
           <label class="block text-sm font-medium mb-1">{{ archivoLabel(slot) }}</label>
           <div class="space-y-1">
-            <input type="file" @change="(e: any) => onSlotFileChange(slot, e)" />
+            <label
+              class="inline-flex items-center gap-2 px-3 py-1.5 text-xs border border-[var(--surface-border)] rounded-md bg-[var(--surface-card)] cursor-pointer hover:bg-[var(--surface-hover)] hover:border-violet-300 transition-colors"
+            >
+              <i class="pi pi-upload text-violet-500" />
+              <span>Seleccionar archivo…</span>
+              <input
+                type="file"
+                class="hidden"
+                :data-testid="`nomina-slot-${slot}`"
+                @change="(e: any) => onSlotFileChange(slot, e)"
+              />
+            </label>
             <div v-for="(a, i) in dialogForm.archivos.filter((x) => x.tipoArchivo === slot)" :key="i" class="flex items-center gap-2 text-sm">
               <i class="pi pi-paperclip text-violet-500" />
               <span class="flex-1">{{ a.nombre }}</span>
@@ -381,7 +392,13 @@ watch(selectedTipoFilter, () => { fetchRows() })
 
         <div v-if="editingTipo === 'OPS' || editingTipo === 'OBRA_O_LABOR'">
           <label class="block text-sm font-medium mb-1">Agregar otro (opcional)</label>
-          <input type="file" @change="addOtroSlot" />
+          <label
+            class="inline-flex items-center gap-2 px-3 py-1.5 text-xs border border-[var(--surface-border)] rounded-md bg-[var(--surface-card)] cursor-pointer hover:bg-[var(--surface-hover)] hover:border-violet-300 transition-colors"
+          >
+            <i class="pi pi-plus text-violet-500" />
+            <span>Adjuntar otro archivo…</span>
+            <input type="file" class="hidden" @change="addOtroSlot" />
+          </label>
           <div v-for="(a, i) in dialogForm.archivos.filter((x) => x.tipoArchivo === 'OTRO')" :key="i" class="flex items-center gap-2 text-sm mt-1">
             <i class="pi pi-paperclip text-violet-500" />
             <span class="flex-1">{{ a.nombre }}</span>

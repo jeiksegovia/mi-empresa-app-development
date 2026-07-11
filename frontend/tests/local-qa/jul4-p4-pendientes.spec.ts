@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAsAdmin } from '../helpers/auth'
+import { loginAsAdmin, getApiBase } from '../helpers/auth'
 
 /**
  * LOCAL: jul4 P4 — Sección Pendientes
@@ -18,9 +18,10 @@ import { loginAsAdmin } from '../helpers/auth'
 
 test('P4-1: derived pendiente surfaces a "vencido hace" item when empleado has a cert with past fechaVencimiento', async ({ page }) => {
   await loginAsAdmin(page)
+  const API_URL = await getApiBase(page)
   // Create empleado, then PUT cert with fechaVencimiento in the past
   const uniq = `pendientes-test-${Date.now()}`
-  const empCreate = await page.request.post('http://localhost:3101/api/v1/employees', {
+  const empCreate = await page.request.post(`${API_URL}/employees`, {
     data: {
       nombre: 'PendJul4',
       apellido: 'TestVencido',
@@ -42,7 +43,7 @@ test('P4-1: derived pendiente surfaces a "vencido hace" item when empleado has a
   // Add a cert in the past
   const past = '2025-01-01'
   const exp = '2024-01-01'
-  await page.request.put(`http://localhost:3101/api/v1/employees/${id}/certificados`, {
+  await page.request.put(`${API_URL}/employees/${id}/certificados`, {
     data: {
       certificados: [
         {
@@ -55,7 +56,7 @@ test('P4-1: derived pendiente surfaces a "vencido hace" item when empleado has a
   })
 
   // GET pendientes — derived should include a CERT_VENCIDO item
-  const pend = await page.request.get(`http://localhost:3101/api/v1/employees/${id}/pendientes`)
+  const pend = await page.request.get(`${API_URL}/employees/${id}/pendientes`)
   const pj = await pend.json()
   expect(pj.success).toBe(true)
   const derivado = (pj?.derivados ?? []).find((d: any) => d.tipo === 'CERT_VENCIDO')
@@ -63,42 +64,44 @@ test('P4-1: derived pendiente surfaces a "vencido hace" item when empleado has a
   expect(derivado.descripcion).toContain('vencido hace')
 
   // Cleanup: delete the empleado (cascade removes the cert + pendientes)
-  await page.request.delete(`http://localhost:3101/api/v1/employees/${id}`).catch(() => {})
+  await page.request.delete(`${API_URL}/employees/${id}`).catch(() => {})
 })
 
 test('P4-2: full CRUD on manual pendientes — POST/PATCH/DELETE', async ({ page }) => {
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const id = (await list.json()).data[0].id
   expect(id).toBeTruthy()
 
   // Create
   const desc = `PendJul4-test-${Date.now()}`
-  const create = await page.request.post(`http://localhost:3101/api/v1/employees/${id}/pendientes`, {
+  const create = await page.request.post(`${API_URL}/employees/${id}/pendientes`, {
     data: { descripcion: desc },
   })
   expect(create.status()).toBe(201)
   const pid = (await create.json()).data.id
 
   // Read back from GET
-  const list1 = await page.request.get(`http://localhost:3101/api/v1/employees/${id}/pendientes`)
+  const list1 = await page.request.get(`${API_URL}/employees/${id}/pendientes`)
   const lj = await list1.json()
   expect(lj?.manuales?.some((m: any) => m.id === pid && m.descripcion === desc)).toBe(true)
 
   // Resolve
-  const patch = await page.request.patch(`http://localhost:3101/api/v1/employees/${id}/pendientes/${pid}`, {
+  const patch = await page.request.patch(`${API_URL}/employees/${id}/pendientes/${pid}`, {
     data: { estado: 'RESUELTO' },
   })
   expect(patch.status()).toBe(200)
 
   // Delete
-  const del = await page.request.delete(`http://localhost:3101/api/v1/employees/${id}/pendientes/${pid}`)
+  const del = await page.request.delete(`${API_URL}/employees/${id}/pendientes/${pid}`)
   expect(del.status()).toBe(200)
 })
 
 test('P4-3: /empleados/[id] shows the new Pendientes tab + add manual pendiente through UI', async ({ page }) => {
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const id = (await list.json()).data[0].id
   if (!id) {
     test.skip(true, 'no empleado rows')
@@ -138,6 +141,6 @@ test('P4-3: /empleados/[id] shows the new Pendientes tab + add manual pendiente 
   const idText = await manuals.filter({ hasText: uniq }).first().locator('[data-testid^="pendiente-resolve-"]').getAttribute('data-testid')
   if (idText) {
     const pid = idText.replace('pendiente-resolve-', '')
-    await page.request.delete(`http://localhost:3101/api/v1/employees/${id}/pendientes/${pid}`)
+    await page.request.delete(`${API_URL}/employees/${id}/pendientes/${pid}`)
   }
 })

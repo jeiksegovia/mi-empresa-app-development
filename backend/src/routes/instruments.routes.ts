@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express'
-import { authMiddleware } from '../middleware/auth.js'
+import { authMiddleware, requireInstrumentWriter } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
 import { z } from 'zod'
 import * as instrumentService from '../services/instrumentService.js'
@@ -22,7 +22,8 @@ function refineRolesPermitidos(val: unknown): val is string {
 }
 
 const baseInstrumentFields = {
-  nombreInstrumento: z.string().min(1).max(200),
+  // jul-10 E1: normalize to upper-case + trim
+  nombreInstrumento: z.string().min(1).max(200).transform((v) => v.trim().toUpperCase()),
   codigo: z.string().max(50).optional(),
   descripcion: z.string().optional(),
   tipo: z.enum(['VALORACION', 'NUTRICION', 'MATRICULA', 'ADMISION']),
@@ -38,7 +39,8 @@ const baseInstrumentFields = {
 const createInstrumentSchema = z.object(baseInstrumentFields)
 
 const updateInstrumentSchema = z.object({
-  nombreInstrumento: z.string().min(1).max(200).optional(),
+  // jul-10 E1: normalize to upper-case + trim
+  nombreInstrumento: z.string().min(1).max(200).transform((v) => v.trim().toUpperCase()).optional(),
   codigo: z.string().max(50).optional(),
   descripcion: z.string().optional(),
   tipo: z.enum(['VALORACION', 'NUTRICION', 'MATRICULA', 'ADMISION']).optional(),
@@ -133,8 +135,8 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   }
 })
 
-// POST /instruments
-router.post('/', validate(createInstrumentSchema), async (req: Request, res: Response): Promise<void> => {
+// POST /instruments — jul-10 C6 gated: ADMIN OR EMPLEADO+GERONTOLOGA
+router.post('/', requireInstrumentWriter(), validate(createInstrumentSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id
     const instrument = await instrumentService.createInstrument(req.body, userId)
@@ -149,8 +151,8 @@ router.post('/', validate(createInstrumentSchema), async (req: Request, res: Res
   }
 })
 
-// PUT /instruments/:id
-router.put('/:id', validate(updateInstrumentSchema), async (req: Request, res: Response): Promise<void> => {
+// PUT /instruments/:id — jul-10 C6 gated: ADMIN OR EMPLEADO+GERONTOLOGA
+router.put('/:id', requireInstrumentWriter(), validate(updateInstrumentSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) {
@@ -170,8 +172,8 @@ router.put('/:id', validate(updateInstrumentSchema), async (req: Request, res: R
   }
 })
 
-// DELETE /instruments/:id (soft delete → INACTIVO)
-router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+// DELETE /instruments/:id (soft delete → INACTIVO) — jul-10 C6 gated
+router.delete('/:id', requireInstrumentWriter(), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) {

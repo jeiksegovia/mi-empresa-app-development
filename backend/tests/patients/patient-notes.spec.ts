@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-const API_URL = 'http://localhost:3001/api/v1'
+const API_URL = `${process.env.TEST_API_URL || 'http://localhost:3101'}/api/v1`
 
 test.describe.configure({ mode: 'serial' })
 
@@ -33,10 +33,12 @@ test.describe('Patient Notes API', () => {
   })
 
   test('should create note for patient', async ({ request }) => {
+    // jul-9 B1: fechaIncidente is REQUIRED (L3 2-business-day rule).
     const noteData = {
       tipo: 'POSITIVA',
       prioridad: 'MEDIA',
       contenido: 'Paciente presenta mejoría en síntomas',
+      fechaIncidente: new Date().toISOString().slice(0, 10),
     }
 
     const res = await request.post(`${API_URL}/patients/${patientId}/notes`, {
@@ -60,6 +62,7 @@ test.describe('Patient Notes API', () => {
       tipo: 'NEUTRAL',
       prioridad: 'BAJA',
       contenido: 'Test content',
+      fechaIncidente: new Date().toISOString().slice(0, 10),
     }
 
     const res = await request.post(`${API_URL}/patients/999999/notes`, {
@@ -78,6 +81,7 @@ test.describe('Patient Notes API', () => {
       tipo: 'NEUTRAL',
       prioridad: 'BAJA',
       contenido: 'Test content',
+      fechaIncidente: new Date().toISOString().slice(0, 10),
     }
 
     const res = await request.post(`${API_URL}/patients/${patientId}/notes`, {

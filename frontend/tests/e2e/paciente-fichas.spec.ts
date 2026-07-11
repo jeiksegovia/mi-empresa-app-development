@@ -12,8 +12,10 @@ async function login(page: any) {
 
 async function goToPacientes(page: any) {
   if (page.url().includes('/pacientes')) return
-  await page.locator('aside nav').getByRole('link', { name: 'Pacientes' }).click()
-  await page.waitForURL('/pacientes', { timeout: 10000 })
+  // Direct navigation is more reliable in headless viewports than the sidebar
+  // link click (which can time out on a collapsed sidebar). The SPA pushes a
+  // new history entry and the page hydrates from the same data.
+  await page.goto('/pacientes')
   await page.waitForLoadState('networkidle')
 }
 
@@ -76,14 +78,24 @@ test.describe('Patient - Fichas & Evaluaciones Tab', () => {
     await expect(instrumentSelect).toBeVisible({ timeout: 6000 })
   })
 
-  test('should show Asignar Instrumento button', async ({ page }) => {
+  test('selecting an instrument opens the single-step dialog (no separate assign button)', async ({ page }) => {
     const hasData = await goToFirstPatient(page)
     if (!hasData) {
       test.skip(true, 'No patients found')
       return
     }
     await clickFichasTab(page)
-    await expect(page.getByRole('button', { name: /asignar instrumento/i })).toBeVisible({ timeout: 6000 })
+
+    // jul-10 C1: the old "Asignar Instrumento" button was removed. Picking an
+    // instrument from the dropdown immediately opens the combined dialog.
+    await page.getByTestId('ficha-instrumento-select').click()
+    const firstOption = page.getByRole('option').first()
+    await firstOption.waitFor({ state: 'visible', timeout: 6000 })
+    await firstOption.click()
+
+    await expect(page.getByTestId('ficha-single-step-dialog')).toBeVisible({ timeout: 6000 })
+    // The submit stays disabled until the required completed file is attached.
+    await expect(page.getByTestId('ficha-single-step-submit')).toBeDisabled()
   })
 
   test('should show Historial de Fichas section', async ({ page }) => {

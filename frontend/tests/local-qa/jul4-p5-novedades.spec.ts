@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAsAdmin } from '../helpers/auth'
+import { loginAsAdmin, getApiBase } from '../helpers/auth'
 
 /**
  * LOCAL: jul4 P5 — Módulo Novedades
@@ -14,7 +14,8 @@ import { loginAsAdmin } from '../helpers/auth'
 
 test('P5-1: POST /employees/:id/novedades creates a MEMORANDO with adjunto + GET reflects it', async ({ page }) => {
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const id = (await list.json()).data[0].id
   expect(id).toBeTruthy()
 
@@ -26,23 +27,24 @@ test('P5-1: POST /employees/:id/novedades creates a MEMORANDO with adjunto + GET
     fechaFin: '2026-07-05',
     archivos: [{ nombre: 'memo.pdf', url: `novedades/memo-${Date.now()}.pdf` }],
   }
-  const create = await page.request.post(`http://localhost:3101/api/v1/employees/${id}/novedades`, {
+  const create = await page.request.post(`${API_URL}/employees/${id}/novedades`, {
     data: input,
   })
   expect(create.status()).toBe(201)
   const created = (await create.json()).data
 
-  const get = await page.request.get(`http://localhost:3101/api/v1/employees/${id}/novedades`)
+  const get = await page.request.get(`${API_URL}/employees/${id}/novedades`)
   const gj = await get.json()
   expect(gj?.data?.some((n: any) => n.id === created.id && n.archivos?.[0]?.nombre === 'memo.pdf')).toBe(true)
 
   // Cleanup
-  await page.request.delete(`http://localhost:3101/api/v1/employees/${id}/novedades/${created.id}`)
+  await page.request.delete(`${API_URL}/employees/${id}/novedades/${created.id}`)
 })
 
 test('P5-2: VACACIONES novedad with date range persists fechaFin', async ({ page }) => {
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const id = (await list.json()).data[0].id
 
   const input = {
@@ -51,7 +53,7 @@ test('P5-2: VACACIONES novedad with date range persists fechaFin', async ({ page
     fechaInicio: '2026-08-01',
     fechaFin: '2026-08-15',
   }
-  const create = await page.request.post(`http://localhost:3101/api/v1/employees/${id}/novedades`, {
+  const create = await page.request.post(`${API_URL}/employees/${id}/novedades`, {
     data: input,
   })
   expect(create.status()).toBe(201)
@@ -59,16 +61,17 @@ test('P5-2: VACACIONES novedad with date range persists fechaFin', async ({ page
   expect(created.tipo).toBe('VACACIONES')
   expect(created.fechaFin).toBeTruthy()
 
-  await page.request.delete(`http://localhost:3101/api/v1/employees/${id}/novedades/${created.id}`)
+  await page.request.delete(`${API_URL}/employees/${id}/novedades/${created.id}`)
 })
 
 test('P5-3: /empleados/[id] shows the Novedades tab + timeline', async ({ page }) => {
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const id = (await list.json()).data[0].id
 
   // Seed a PERMISO novedad via API so it shows up in the timeline
-  const seed = await page.request.post(`http://localhost:3101/api/v1/employees/${id}/novedades`, {
+  const seed = await page.request.post(`${API_URL}/employees/${id}/novedades`, {
     data: {
       tipo: 'PERMISO',
       titulo: `Permiso Jul4 ${Date.now()}`,
@@ -93,16 +96,17 @@ test('P5-3: /empleados/[id] shows the Novedades tab + timeline', async ({ page }
   expect(hasItem, 'seeded PERMISO novedad must appear').toBe(true)
 
   // Cleanup
-  await page.request.delete(`http://localhost:3101/api/v1/employees/${id}/novedades/${sid}`)
+  await page.request.delete(`${API_URL}/employees/${id}/novedades/${sid}`)
 })
 
 test('P5-4: FIX-1 — PUT /employees/:id/novedades/:nid without archivos preserves adjuntos', async ({ page }) => {
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const id = (await list.json()).data[0].id
 
   // Create a novedad with 1 adjunto
-  const create = await page.request.post(`http://localhost:3101/api/v1/employees/${id}/novedades`, {
+  const create = await page.request.post(`${API_URL}/employees/${id}/novedades`, {
     data: {
       tipo: 'MEMORANDO',
       titulo: `FIX-1 Adjuntos ${Date.now()}`,
@@ -114,13 +118,13 @@ test('P5-4: FIX-1 — PUT /employees/:id/novedades/:nid without archivos preserv
   const nid = (await create.json()).data.id
 
   // PUT without `archivos` key — only update titulo
-  const upd = await page.request.put(`http://localhost:3101/api/v1/employees/${id}/novedades/${nid}`, {
+  const upd = await page.request.put(`${API_URL}/employees/${id}/novedades/${nid}`, {
     data: { tipo: 'MEMORANDO', titulo: `FIX-1 Edited ${Date.now()}`, fechaInicio: '2026-07-05' },
   })
   expect(upd.status()).toBe(200)
 
   // GET — adjunto must still be present (regression for FIX-1)
-  const get = await page.request.get(`http://localhost:3101/api/v1/employees/${id}/novedades`)
+  const get = await page.request.get(`${API_URL}/employees/${id}/novedades`)
   expect(get.status()).toBe(200)
   const items = (await get.json()).data ?? []
   const updated = items.find((n: any) => n.id === nid)
@@ -128,5 +132,5 @@ test('P5-4: FIX-1 — PUT /employees/:id/novedades/:nid without archivos preserv
   expect(updated.archivos?.[0]?.nombre).toBe('adjunto-fijo.pdf')
 
   // Cleanup
-  await page.request.delete(`http://localhost:3101/api/v1/employees/${id}/novedades/${nid}`)
+  await page.request.delete(`${API_URL}/employees/${id}/novedades/${nid}`)
 })

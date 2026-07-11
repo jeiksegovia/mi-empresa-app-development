@@ -6,6 +6,11 @@ export interface ContratoInput {
   fechaInicio: string
   fechaFin?: string
   archivoUrl?: string
+  // jul-9 D6: signed-contract file URL
+  archivoFirmadoUrl?: string | null
+  // jul-10 D7 tighten: cargoId is REQUIRED (the underlying column is NOT NULL);
+  // a Zod `.optional()` upstream has been removed in nomina.routes.ts.
+  cargoId: number
   activo?: boolean
 }
 
@@ -28,6 +33,7 @@ export async function listContratos(empleadoId: number) {
   return prisma.contrato.findMany({
     where: { empleadoId },
     orderBy: { createdAt: 'desc' },
+    include: { cargo: true },
   })
 }
 
@@ -60,8 +66,12 @@ export async function createContrato(
         fechaInicio: new Date(input.fechaInicio),
         fechaFin: input.fechaFin ? new Date(input.fechaFin) : null,
         archivoUrl: input.archivoUrl ?? null,
+        archivoFirmadoUrl: input.archivoFirmadoUrl ?? null,
+        // jul-10: cargoId is REQUIRED now (jul-10 migration tightened NOT NULL).
+        cargoId: input.cargoId,
         activo: wantsActivo,
       },
+      include: { cargo: true },
     })
   })
 }
@@ -94,8 +104,12 @@ export async function updateContrato(
         fechaInicio: new Date(input.fechaInicio),
         fechaFin: input.fechaFin ? new Date(input.fechaFin) : null,
         archivoUrl: input.archivoUrl ?? null,
+        archivoFirmadoUrl: input.archivoFirmadoUrl ?? null,
+        // jul-10: cargoId required (not null)
+        cargoId: input.cargoId,
         activo: wantsActivo,
       },
+      include: { cargo: true },
     })
   })
 }

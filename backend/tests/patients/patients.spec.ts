@@ -196,7 +196,8 @@ test.describe('Patients API', () => {
       const body = await response.json();
       expect(body).toHaveProperty('success', true);
       expect(body.data).toHaveProperty('id');
-      expect(body.data.nombre).toBe('Carlos Paciente');
+      // jul-10 E1: nombre transformed to UPPERCASE on create.
+      expect(body.data.nombre).toBe('CARLOS PACIENTE');
       expect(body.data.estado).toBe('ACTIVO');
       expect(body.data).toHaveProperty('contactosEmergencia');
       expect(body.data).toHaveProperty('registrosFichas');
@@ -379,7 +380,8 @@ test.describe('Patients API', () => {
       expect(response.status()).toBe(200);
       const body = await response.json();
       expect(body).toHaveProperty('success', true);
-      expect(body.data.nombre).toBe('Carlos Actualizado');
+      // jul-10 E1: nombre transform applies on update too.
+      expect(body.data.nombre).toBe('CARLOS ACTUALIZADO');
       expect(body.data.telefono).toBe('3009998877');
       expect(body.data.notas).toBe('Nota actualizada en el test');
     });

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const API_BASE = process.env.TEST_API_URL || 'http://localhost:3001';
+const API_BASE = process.env.TEST_API_URL || 'http://localhost:3101';
 const ADMIN_EMAIL = 'admin@miempresa.com';
 const ADMIN_PASSWORD = 'password123';
 

@@ -35,11 +35,13 @@ export const useAuthStore = defineStore('auth', () => {
       const config = useRuntimeConfig()
       const baseURL = config.public.apiBase
 
-      // Use plain $fetch without error interceptor to avoid redirect loops
-      const response = await $fetch<{ success: boolean; data: EmpresaData }>(`${baseURL}/empresa`, {
+      // W6: GET /empresa is now normalized to 200 { data: null } on empty DB.
+      // We coerce null/undefined to null explicitly so consumers can rely on
+      // `auth.empresa === null` as the "create mode" signal without surprises.
+      const response = await $fetch<{ success: boolean; data: EmpresaData | null }>(`${baseURL}/empresa`, {
         credentials: 'include',
       })
-      empresa.value = response.data
+      empresa.value = response?.data ?? null
     } catch {
       // Silently fail - empresa data is optional and shouldn't affect login flow
       empresa.value = null

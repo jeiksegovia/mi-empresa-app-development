@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAsAdmin } from '../helpers/auth'
+import { loginAsAdmin, getApiBase } from '../helpers/auth'
 
 /**
  * LOCAL: jul4 P6 — Nómina foundation
@@ -12,70 +12,86 @@ import { loginAsAdmin } from '../helpers/auth'
  */
 
 
+async function fetchActiveCargoId(page: any, API_URL: string): Promise<number> {
+  const cargosRes = await page.request.get(`${API_URL}/empresa/cargos?activo=true`)
+  expect(cargosRes.status()).toBe(200)
+  const cargosBody = await cargosRes.json()
+  expect(cargosBody.data?.length).toBeGreaterThan(0)
+  return cargosBody.data[0].id
+}
+
 test('P6-1: Contrato POST TERMINO_INDEFINIDO without fechaFin is accepted', async ({ page }) => {
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const id = (await list.json()).data[0].id
+  const cargoId = await fetchActiveCargoId(page, API_URL)
 
-  const r = await page.request.post(`http://localhost:3101/api/v1/nomina/employees/${id}/contratos`, {
-    data: { tipoContrato: 'TERMINO_INDEFINIDO', fechaInicio: '2026-02-01' },
+  const r = await page.request.post(`${API_URL}/nomina/employees/${id}/contratos`, {
+    data: { tipoContrato: 'TERMINO_INDEFINIDO', fechaInicio: '2026-02-01', cargoId },
   })
   expect(r.status()).toBe(201)
   const cid = (await r.json()).data.id
 
   // Cleanup
-  await page.request.delete(`http://localhost:3101/api/v1/nomina/employees/${id}/contratos/${cid}`)
+  await page.request.delete(`${API_URL}/nomina/employees/${id}/contratos/${cid}`)
 })
 
 test('P6-2: Contrato POST TERMINO_FIJO without fechaFin returns 400', async ({ page }) => {
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const id = (await list.json()).data[0].id
+  const cargoId = await fetchActiveCargoId(page, API_URL)
 
-  const r = await page.request.post(`http://localhost:3101/api/v1/nomina/employees/${id}/contratos`, {
-    data: { tipoContrato: 'TERMINO_FIJO', fechaInicio: '2026-02-01' },
+  const r = await page.request.post(`${API_URL}/nomina/employees/${id}/contratos`, {
+    data: { tipoContrato: 'TERMINO_FIJO', fechaInicio: '2026-02-01', cargoId },
   })
   expect(r.status()).toBe(400)
 })
 
 test('P6-3: only one Contrato activo per empleado — creating a new activo deactivates old', async ({ page }) => {
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const id = (await list.json()).data[0].id
+  const cargoId = await fetchActiveCargoId(page, API_URL)
 
   // Create two contracts back-to-back
-  const c1 = await page.request.post(`http://localhost:3101/api/v1/nomina/employees/${id}/contratos`, {
-    data: { tipoContrato: 'OPS', fechaInicio: '2026-01-01', fechaFin: '2026-12-31' },
+  const c1 = await page.request.post(`${API_URL}/nomina/employees/${id}/contratos`, {
+    data: { tipoContrato: 'OPS', fechaInicio: '2026-01-01', fechaFin: '2026-12-31', cargoId },
   })
   expect(c1.status()).toBe(201)
   const c1id = (await c1.json()).data.id
 
-  const c2 = await page.request.post(`http://localhost:3101/api/v1/nomina/employees/${id}/contratos`, {
-    data: { tipoContrato: 'OPS', fechaInicio: '2026-02-01', fechaFin: '2026-12-31' },
+  const c2 = await page.request.post(`${API_URL}/nomina/employees/${id}/contratos`, {
+    data: { tipoContrato: 'OPS', fechaInicio: '2026-02-01', fechaFin: '2026-12-31', cargoId },
   })
   expect(c2.status()).toBe(201)
   const c2id = (await c2.json()).data.id
 
   // Verify only one activo
-  const listR = await page.request.get(`http://localhost:3101/api/v1/nomina/employees/${id}/contratos`)
+  const listR = await page.request.get(`${API_URL}/nomina/employees/${id}/contratos`)
   const lj = await listR.json()
   const activos = (lj.data ?? []).filter((c: any) => c.activo)
   expect(activos.length).toBe(1)
   expect(activos[0].id).toBe(c2id)
 
   // Cleanup
-  await page.request.delete(`http://localhost:3101/api/v1/nomina/employees/${id}/contratos/${c1id}`)
-  await page.request.delete(`http://localhost:3101/api/v1/nomina/employees/${id}/contratos/${c2id}`)
+  await page.request.delete(`${API_URL}/nomina/employees/${id}/contratos/${c1id}`)
+  await page.request.delete(`${API_URL}/nomina/employees/${id}/contratos/${c2id}`)
 })
 
 test('P6-4: duplicate NominaPeriodo for same (empleadoId, periodo) returns 409', async ({ page }) => {
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const id = (await list.json()).data[0].id
+  const cargoId = await fetchActiveCargoId(page, API_URL)
 
   // Make sure activo contrato exists
-  const c = await page.request.post(`http://localhost:3101/api/v1/nomina/employees/${id}/contratos`, {
-    data: { tipoContrato: 'OPS', fechaInicio: '2026-03-01', fechaFin: '2026-12-31' },
+  const c = await page.request.post(`${API_URL}/nomina/employees/${id}/contratos`, {
+    data: { tipoContrato: 'OPS', fechaInicio: '2026-03-01', fechaFin: '2026-12-31', cargoId },
   })
   expect(c.status()).toBe(201)
   const cid = (await c.json()).data.id
@@ -89,16 +105,16 @@ test('P6-4: duplicate NominaPeriodo for same (empleadoId, periodo) returns 409',
       { tipoArchivo: 'COMPROBANTE_APORTES', nombre: 'a.pdf', url: 'nomina/a.pdf' },
     ],
   }
-  const p1 = await page.request.post('http://localhost:3101/api/v1/nomina/periodos', { data: payload })
+  const p1 = await page.request.post(`${API_URL}/nomina/periodos`, { data: payload })
   expect(p1.status()).toBe(201)
   const pid = (await p1.json()).data.id
 
-  const p2 = await page.request.post('http://localhost:3101/api/v1/nomina/periodos', { data: payload })
+  const p2 = await page.request.post(`${API_URL}/nomina/periodos`, { data: payload })
   expect(p2.status()).toBe(409)
 
   // Cleanup
-  await page.request.delete(`http://localhost:3101/api/v1/nomina/periodos/${pid}`)
-  await page.request.delete(`http://localhost:3101/api/v1/nomina/employees/${id}/contratos/${cid}`)
+  await page.request.delete(`${API_URL}/nomina/periodos/${pid}`)
+  await page.request.delete(`${API_URL}/nomina/employees/${id}/contratos/${cid}`)
 })
 
 test('P6-5: /nomina page reachable from sidebar (disabled flag removed)', async ({ page }) => {
@@ -123,17 +139,19 @@ test('P6-6: /nomina table renders for a current month', async ({ page }) => {
   // Look for one of the known empleados from API.
   const month = new Date()
   const periodo = `${month.getUTCFullYear()}-${String(month.getUTCMonth() + 1).padStart(2, '0')}`
-  const resp = await page.request.get(`http://localhost:3101/api/v1/nomina?periodo=${periodo}`)
+  const API_URL = await getApiBase(page)
+  const resp = await page.request.get(`${API_URL}/nomina?periodo=${periodo}`)
   const j = await resp.json()
   expect(j.success).toBe(true)
   expect(j.data?.length).toBeGreaterThan(0)
 })
 test('P6-7 REVISION-1: create OPS contrato from /empleados/[id]/editar Info Laboral → appears in /nomina', async ({ page }) => {
   await loginAsAdmin(page)
+  const API_URL = await getApiBase(page)
 
   // Pick (or create) a clean empleado so the assertion is stable.
   const uniq = `contrato-ui-${Date.now()}`
-  const empCreate = await page.request.post('http://localhost:3101/api/v1/employees', {
+  const empCreate = await page.request.post(`${API_URL}/employees`, {
     data: {
       nombre: 'ContratoJul4',
       apellido: 'UITest',
@@ -152,13 +170,14 @@ test('P6-7 REVISION-1: create OPS contrato from /empleados/[id]/editar Info Labo
   expect(empCreate.status()).toBe(201)
   const id = (await empCreate.json()).data.id
 
-  // Visit /empleados/[id]/editar and click the Info. Laboral tab.
+  // Visit /empleados/[id]/editar and click the Contrato laboral tab
+  // (jul-9 restructure moved Contrato to its own dedicated tab).
   await page.goto(`/empleados/${id}/editar`)
   await page.waitForLoadState('networkidle')
-  await page.locator('button').filter({ hasText: /^Info\. Laboral$/ }).first().click()
+  await page.locator('button').filter({ hasText: /Contrato laboral/ }).first().click()
   await page.waitForTimeout(700)
 
-  // The Contrato card is in the Info Laboral tab.
+  // The Contrato card is in its own tab now.
   const card = page.getByTestId('contrato-card')
   await expect(card).toBeVisible({ timeout: 5000 })
 
@@ -167,16 +186,22 @@ test('P6-7 REVISION-1: create OPS contrato from /empleados/[id]/editar Info Labo
   await page.waitForTimeout(300)
 
   // Pick OPS from the Select via the dropdown.
-  const tipoSelect = page.getByTestId('contrato-tipo').locator('xpath=ancestor::div[contains(@class, "p-select")][1]').first()
-  // Fallback: locate by index inside the dialog
-  const dialogSelects = page.locator('.p-dialog .p-select')
-  await dialogSelects.first().click()
+  await page.getByTestId('contrato-tipo').click()
   await page.waitForTimeout(300)
   await page.locator('li[role="option"]', { hasText: /OPS/ }).first().click()
   await page.waitForTimeout(200)
 
   // Fill dates (ya viene con fechaInicio por default)
   await page.getByTestId('contrato-fecha-fin').fill('2026-12-31')
+
+  // jul-10 D7 tighten: cargoId is REQUIRED. The cargoEmpresaOptions list
+  // starts with a "— Sin cargo —" sentinel (value=null) and ends with the
+  // "➕ Agregar otro cargo…" sentinel, so the first *real* cargo is option
+  // index 1.
+  await page.getByTestId('contrato-cargo').click()
+  await page.waitForTimeout(400)
+  await page.locator('li[role="option"]').nth(1).click()
+  await page.waitForTimeout(200)
 
   // Save
   await page.getByTestId('contrato-save').click()
@@ -190,7 +215,7 @@ test('P6-7 REVISION-1: create OPS contrato from /empleados/[id]/editar Info Labo
   // And /nomina month view no longer reports "Sin contrato" for this empleado.
   const month = new Date()
   const periodo = `${month.getUTCFullYear()}-${String(month.getUTCMonth() + 1).padStart(2, '0')}`
-  const nominaResp = await page.request.get(`http://localhost:3101/api/v1/nomina?periodo=${periodo}`)
+  const nominaResp = await page.request.get(`${API_URL}/nomina?periodo=${periodo}`)
   const nj = await nominaResp.json()
   const row = (nj.data ?? []).find((r: any) => r.empleado.id === id)
   expect(row, 'empleado row in /nomina').toBeTruthy()
@@ -212,5 +237,5 @@ test('P6-7 REVISION-1: create OPS contrato from /empleados/[id]/editar Info Labo
   await page.waitForTimeout(300)
 
   // Cleanup
-  await page.request.delete(`http://localhost:3101/api/v1/employees/${id}`).catch(() => {})
+  await page.request.delete(`${API_URL}/employees/${id}`).catch(() => {})
 })

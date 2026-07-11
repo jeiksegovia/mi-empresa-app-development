@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAsAdmin } from '../helpers/auth'
+import { loginAsAdmin, getApiBase } from '../helpers/auth'
 
 /**
  * LOCAL: jul4 P2 — Archivo en certificados de empleado
@@ -17,9 +17,10 @@ import { loginAsAdmin } from '../helpers/auth'
 
 test('P2-1: PUT /employees/:id/certificados persists archivoUrl per row', async ({ page }) => {
   await loginAsAdmin(page)
+  const API_URL = await getApiBase(page)
 
   // Find an existing empleado
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const listJson = await list.json()
   const empId = listJson?.data?.[0]?.id
   expect(empId, 'need an existing empleado').toBeTruthy()
@@ -38,13 +39,13 @@ test('P2-1: PUT /employees/:id/certificados persists archivoUrl per row', async 
     },
   ]
   const put = await page.request.put(
-    `http://localhost:3101/api/v1/employees/${empId}/certificados`,
+    `${API_URL}/employees/${empId}/certificados`,
     { data: { certificados: certsPayload } }
   )
   expect(put.status()).toBe(200)
 
   // Verify persistence
-  const detail = await page.request.get(`http://localhost:3101/api/v1/employees/${empId}`)
+  const detail = await page.request.get(`${API_URL}/employees/${empId}`)
   const det = await detail.json()
   const persistido = det?.data?.certificados?.find(
     (c: any) => c.tipo === 'ALTURAS' && c.archivoUrl === certsPayload[0].archivoUrl
@@ -55,7 +56,8 @@ test('P2-1: PUT /employees/:id/certificados persists archivoUrl per row', async 
 
 test('P2-2: /empleados/[id]/editar tab 5 exposes the EmpleadoCertificadosEditor file input (parity)', async ({ page }) => {
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const listJson = await list.json()
   const empId = listJson?.data?.[0]?.id
   if (!empId) {
@@ -129,11 +131,12 @@ test('P2-3: /empleados/nuevo wizard renders the shared editor with v-model:certi
 
 test('P2-4: FIX-2 — detail page TAB 3 (Certificados) shows the cert tipo label after a cert is saved', async ({ page }) => {
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const id = (await list.json()).data[0].id
 
   // Seed a cert via API
-  await page.request.put(`http://localhost:3101/api/v1/employees/${id}/certificados`, {
+  await page.request.put(`${API_URL}/employees/${id}/certificados`, {
     data: {
       certificados: [
         {
@@ -163,7 +166,8 @@ test('P2-5: real browser upload — the S3 PUT itself must return 200 (bucket ex
   // bucket doesn't exist (it's local signing), so asserting only the form
   // submit lets broken uploads slip through — this test pins the actual PUT.
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const empId = (await list.json()).data[0].id
 
   await page.goto(`/empleados/${empId}/editar`)

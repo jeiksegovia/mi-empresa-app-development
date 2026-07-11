@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { assertPresignRoundtripFresh } from '../helpers/upload-persistence';
 
 /**
  * Staging upload e2e — proves the FULL storage chain against the live stage:
@@ -74,6 +75,13 @@ test('real upload on staging: S3 PUT to the staging uploads bucket returns 200',
       resp.status(),
       'S3 PUT to the staging bucket failed — check bucket CORS + AWS_S3_BUCKET SSM param',
     ).toBe(200);
+
+    // W10 BS-2 adoption: the UI PUT above is necessary but NOT sufficient — it
+    // never exercises the DOWNLOAD presign, the gap that let S3/S4/S6/S9 (the
+    // "expired token" cascade) through QA. Assert the full presign→PUT→GET
+    // round-trip through the app's own endpoints, which also asserts the GET
+    // (born-expired creds surface here, not in the PUT).
+    await assertPresignRoundtripFresh(page.request, API_BASE, { folder: 'qa-upload-roundtrip' });
   } finally {
     await page.request.delete(`${API_BASE}/employees/${empId}`);
   }

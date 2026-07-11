@@ -21,6 +21,7 @@ const steps = [
 ]
 
 // ─── Step 1 – Datos Personales ───────────────────────────────────────────────
+const { uploadFile } = useFileUpload()
 const step1 = reactive({
   nombre: '',
   apellido: '',
@@ -36,8 +37,36 @@ const step1 = reactive({
   email: '',
   permisoTrabajo: false,
   estado: 'ACTIVO' as 'ACTIVO' | 'INACTIVO',
+  // D3: documentoIdentificacionUrl — local-only until upload completes.
+  documentoIdentificacionUrl: '',
+  documentoFile: null as File | null,
+  documentoFilename: '',
 })
 const step1Errors = reactive<Record<string, string>>({})
+const documentoUploading = ref(false)
+const documentoFileInputRef = ref<HTMLInputElement | null>(null)
+async function onDocumentoChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files || !input.files[0]) return
+  documentoUploading.value = true
+  try {
+    const key = await uploadFile(input.files[0], 'empleado-documentos')
+    if (key) {
+      step1.documentoIdentificacionUrl = key
+      step1.documentoFile = input.files[0]
+      step1.documentoFilename = input.files[0].name
+      toast.add({
+        severity: 'success',
+        summary: 'Documento subido',
+        detail: 'El documento se subió correctamente.',
+        life: 3000,
+      })
+    }
+  } finally {
+    documentoUploading.value = false
+    if (documentoFileInputRef.value) documentoFileInputRef.value.value = ''
+  }
+}
 
 function validateStep1() {
   Object.keys(step1Errors).forEach((k) => delete step1Errors[k])
@@ -112,9 +141,22 @@ function removeEmergencyContact(i: number) {
 // ─── Step 4 – Educación y Vehículos ──────────────────────────────────────────
 interface EducacionForm {
   institucion: string
-  nivelEscritura: string
   nivelHabla: string
   capacidadTraducir: boolean
+}
+
+// D2: EducacionEmpleado rows collected locally during wizard. The
+// empleado POST doesn't accept nested educacionEmpleado, so we POST
+// each row after the empleado creation succeeds (mirrors how the
+// contactosEmergencia pattern is used — local collection, batch on submit).
+interface EducacionEmpleadoForm {
+  profesion: string
+  universidad: string
+  fechaGraduacion: string
+  diplomaUrl: string
+  diplomaFile: File | null
+  diplomaFilename: string
+  diplomaUploading: boolean
 }
 
 interface VehiculoForm {
@@ -125,14 +167,45 @@ interface VehiculoForm {
 }
 
 const educaciones = ref<EducacionForm[]>([])
+const educacionEmpleados = ref<EducacionEmpleadoForm[]>([])
 const vehiculos = ref<VehiculoForm[]>([])
 
 function addEducacion() {
-  educaciones.value.push({ institucion: '', nivelEscritura: '', nivelHabla: '', capacidadTraducir: false })
+  educaciones.value.push({ institucion: '', nivelHabla: '', capacidadTraducir: false })
 }
 
 function removeEducacion(i: number) {
   educaciones.value.splice(i, 1)
+}
+
+function addEducacionEmpleado() {
+  educacionEmpleados.value.push({
+    profesion: '', universidad: '', fechaGraduacion: '',
+    diplomaUrl: '', diplomaFile: null, diplomaFilename: '',
+    diplomaUploading: false,
+  })
+}
+
+function removeEducacionEmpleado(i: number) {
+  educacionEmpleados.value.splice(i, 1)
+}
+
+async function onEducacionDiplomaChange(event: Event, i: number) {
+  const input = event.target as HTMLInputElement
+  if (!input.files || !input.files[0]) return
+  const file = input.files[0]
+  educacionEmpleados.value[i].diplomaUploading = true
+  try {
+    const key = await uploadFile(file, 'empleado-documentos')
+    if (key) {
+      educacionEmpleados.value[i].diplomaUrl = key
+      educacionEmpleados.value[i].diplomaFile = file
+      educacionEmpleados.value[i].diplomaFilename = file.name
+    }
+  } finally {
+    educacionEmpleados.value[i].diplomaUploading = false
+    input.value = ''
+  }
 }
 
 function addVehiculo() {
@@ -150,6 +223,8 @@ const certificados = ref<
     nombre?: string
     fechaExpedicion: string
     fechaVencimiento: string
+    // W11 P1: archivoUrl is the S3 key written into the create payload.
+    archivoUrl?: string | null
   }>
 >([])
 
@@ -199,6 +274,10 @@ async function submit() {
     if (step1.direccion.trim()) payload.direccion = step1.direccion.trim()
     if (step1.telefono.trim()) payload.telefono = step1.telefono.trim()
     if (step1.email.trim()) payload.email = step1.email.trim()
+    // D3: include documentoIdentificacionUrl on the create payload if set.
+    if (step1.documentoIdentificacionUrl) {
+      payload.documentoIdentificacionUrl = step1.documentoIdentificacionUrl
+    }
 
     const validFamily = familyMembers.value.filter((f) => f.nombre.trim() && f.apellido.trim() && f.fechaNacimiento && f.genero && f.parentesco)
     if (validFamily.length) {
@@ -236,11 +315,13 @@ async function submit() {
     }
 
     // Step 4 — Educación & Vehículos
-    const validEducaciones = educaciones.value.filter(e => e.institucion.trim() && e.nivelEscritura.trim() && e.nivelHabla.trim())
+    // D1: nivelEscritura removed from the UI. Send null so the legacy
+    // concept is dropped on the new empleado per assignment.
+    const validEducaciones = educaciones.value.filter(e => e.institucion.trim() && e.nivelHabla.trim())
     if (validEducaciones.length) {
       payload.educacionIdiomas = validEducaciones.map(e => ({
         institucion: e.institucion.trim(),
-        nivelEscritura: e.nivelEscritura.trim(),
+        nivelEscritura: null,
         nivelHabla: e.nivelHabla.trim(),
         capacidadTraducir: e.capacidadTraducir,
       }))
@@ -266,6 +347,9 @@ async function submit() {
         nombre: c.tipo === 'OTRO' ? c.nombre?.trim() || undefined : undefined,
         fechaExpedicion: c.fechaExpedicion,
         fechaVencimiento: c.fechaVencimiento,
+        // W11 P1: include the uploaded S3 key (frontend bug that lost the
+        // file on the create flow too — same root cause as S7).
+        archivoUrl: c.archivoUrl || undefined,
       }))
     }
 
@@ -284,9 +368,29 @@ async function submit() {
       method: 'POST',
       body: payload,
     })
+    const newEmpleadoId = res.data.id
+
+    // D2: persist the collected EducacionEmpleado rows now that we have
+    // an id. Each row is POST'd to /employees/:id/educacion.
+    const validEmpleadoEdu = educacionEmpleados.value.filter((e) => e.profesion.trim())
+    if (validEmpleadoEdu.length) {
+      await Promise.all(
+        validEmpleadoEdu.map((e) =>
+          apiFetch(`/employees/${newEmpleadoId}/educacion`, {
+            method: 'POST',
+            body: {
+              profesion: e.profesion.trim(),
+              universidad: e.universidad.trim() || undefined,
+              fechaGraduacion: e.fechaGraduacion || undefined,
+              diplomaUrl: e.diplomaUrl || undefined,
+            },
+          })
+        )
+      )
+    }
 
     toast.add({ severity: 'success', summary: 'Empleado creado', detail: `${step1.nombre} ${step1.apellido} registrado correctamente`, life: 4000 })
-    await navigateTo(`/empleados/${res.data.id}`)
+    await navigateTo(`/empleados/${newEmpleadoId}`)
   } catch (e: any) {
     const msg = e?.data?.message || e?.message || 'Error al crear el empleado'
     toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 5000 })
@@ -404,13 +508,13 @@ const tiposVehiculo = [
             <!-- Nombre -->
             <div class="flex flex-col gap-1">
               <label class="text-sm font-medium">Nombre <span class="text-red-500">*</span></label>
-              <InputText v-model="step1.nombre" placeholder="Nombres" :class="{ 'p-invalid': step1Errors.nombre }" />
+              <InputText :model-value="step1.nombre" @update:model-value="(v) => step1.nombre = (v ?? '').toUpperCase()" placeholder="Nombres" :class="{ 'p-invalid': step1Errors.nombre }" />
               <small v-if="step1Errors.nombre" class="text-red-500">{{ step1Errors.nombre }}</small>
             </div>
             <!-- Apellido -->
             <div class="flex flex-col gap-1">
               <label class="text-sm font-medium">Apellido <span class="text-red-500">*</span></label>
-              <InputText v-model="step1.apellido" placeholder="Apellidos" :class="{ 'p-invalid': step1Errors.apellido }" />
+              <InputText :model-value="step1.apellido" @update:model-value="(v) => step1.apellido = (v ?? '').toUpperCase()" placeholder="Apellidos" :class="{ 'p-invalid': step1Errors.apellido }" />
               <small v-if="step1Errors.apellido" class="text-red-500">{{ step1Errors.apellido }}</small>
             </div>
             <!-- Tipo Documento -->
@@ -480,6 +584,45 @@ const tiposVehiculo = [
             <div class="flex items-center gap-2 pt-2 sm:col-span-2 lg:col-span-3">
               <Checkbox v-model="step1.permisoTrabajo" :binary="true" input-id="permisoTrabajo" />
               <label for="permisoTrabajo" class="text-sm">Tiene permiso de trabajo</label>
+            </div>
+
+            <!-- D3: documentoIdentificacionUrl upload (PDF/imagen).
+                 Same label/hidden-file pattern as hoja-vida and contrato
+                 (jul-9 D4 lesson). -->
+            <div class="flex flex-col gap-1 sm:col-span-2 lg:col-span-3">
+              <label class="text-sm font-medium">
+                Documento de identificación
+                <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
+              </label>
+              <div v-if="step1.documentoIdentificacionUrl" class="flex items-center gap-3 px-3 py-2 border border-[var(--surface-border)] rounded-md bg-[var(--surface-ground)]">
+                <i class="pi pi-id-card text-violet-500" />
+                <span class="flex-1 truncate text-sm">{{ step1.documentoFilename || step1.documentoIdentificacionUrl }}</span>
+                <Button
+                  icon="pi pi-times"
+                  size="small"
+                  severity="danger"
+                  text
+                  rounded
+                  @click="step1.documentoIdentificacionUrl = ''; step1.documentoFile = null; step1.documentoFilename = ''"
+                />
+              </div>
+              <label
+                v-else
+                class="inline-flex items-center gap-2 px-3 py-2 text-xs border border-[var(--surface-border)] rounded-md bg-[var(--surface-card)] cursor-pointer hover:bg-[var(--surface-hover)] hover:border-violet-300 transition-colors w-fit"
+              >
+                <i class="pi pi-upload text-violet-500" />
+                <span>Seleccionar archivo…</span>
+                <input
+                  ref="documentoFileInputRef"
+                  type="file"
+                  class="hidden"
+                  accept="application/pdf,image/*"
+                  :disabled="documentoUploading"
+                  data-testid="documento-input"
+                  @change="onDocumentoChange"
+                />
+              </label>
+              <i v-if="documentoUploading" class="pi pi-spin pi-spinner text-violet-500 ml-2" />
             </div>
           </div>
         </template>
@@ -698,12 +841,9 @@ const tiposVehiculo = [
                   <label class="text-xs text-[var(--text-color-secondary)]">Institución / Idioma</label>
                   <InputText v-model="edu.institucion" placeholder="Ej: Universidad Nacional / Inglés" size="small" />
                 </div>
-                <div class="flex flex-col gap-1">
-                  <label class="text-xs text-[var(--text-color-secondary)]">Nivel Escritura</label>
-                  <Select v-model="edu.nivelEscritura" :options="nivelesIdioma" option-label="label" option-value="value"
-                    placeholder="Nivel" size="small" />
-                </div>
-                <div class="flex flex-col gap-1">
+                <!-- D1: nivelEscritura removed from the form. Backend
+                     still accepts the legacy string + null per contract. -->
+                <div class="flex flex-col gap-1 sm:col-span-2">
                   <label class="text-xs text-[var(--text-color-secondary)]">Nivel Habla</label>
                   <Select v-model="edu.nivelHabla" :options="nivelesIdioma" option-label="label" option-value="value"
                     placeholder="Nivel" size="small" />
@@ -711,6 +851,76 @@ const tiposVehiculo = [
                 <div class="flex items-center gap-2 pt-1">
                   <Checkbox v-model="edu.capacidadTraducir" :binary="true" :input-id="`traducir-${i}`" />
                   <label :for="`traducir-${i}`" class="text-sm">Puede traducir</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </Card>
+
+      <!-- D2: Formación Académica — repeat rows here, persisted AFTER
+           empleado create (the empleado POST doesn't accept nested
+           educacionEmpleado, so we POST each row to
+           /employees/:id/educacion once the new id is in hand). -->
+      <Card>
+        <template #header>
+          <div class="px-6 pt-5 pb-0 flex items-center justify-between">
+            <h3 class="text-base font-semibold flex items-center gap-2 text-[var(--text-color)]">
+              <i class="pi pi-graduation-cap text-violet-500" /> Formación Académica
+              <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
+            </h3>
+            <Button label="Agregar" icon="pi pi-plus" size="small" severity="secondary" outlined @click="addEducacionEmpleado" />
+          </div>
+        </template>
+        <template #content>
+          <div v-if="educacionEmpleados.length === 0"
+            class="text-center py-8 text-[var(--text-color-secondary)] text-sm">
+            <i class="pi pi-graduation-cap text-3xl mb-2 block opacity-40" />
+            Sin formación académica. Haz clic en "Agregar" para añadir.
+          </div>
+          <div v-else class="space-y-4">
+            <div v-for="(row, i) in educacionEmpleados" :key="`new-edu-${i}`"
+              class="border border-[var(--surface-border)] rounded-lg p-4">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-sm font-medium text-[var(--text-color-secondary)]">Formación {{ i + 1 }}</span>
+                <Button icon="pi pi-trash" size="small" severity="danger" text rounded @click="removeEducacionEmpleado(i)" />
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="flex flex-col gap-1 sm:col-span-2">
+                  <label class="text-xs text-[var(--text-color-secondary)]">Profesión *</label>
+                  <InputText v-model="row.profesion" placeholder="Ej: Fisioterapeuta" size="small" />
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="text-xs text-[var(--text-color-secondary)]">Universidad</label>
+                  <InputText v-model="row.universidad" placeholder="Ej: Universidad Nacional" size="small" />
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="text-xs text-[var(--text-color-secondary)]">Fecha de graduación</label>
+                  <InputText v-model="row.fechaGraduacion" type="date" size="small" />
+                </div>
+                <div class="flex flex-col gap-1 sm:col-span-2">
+                  <label class="text-xs text-[var(--text-color-secondary)]">Diploma</label>
+                  <div v-if="row.diplomaUrl" class="flex items-center gap-2 px-3 py-2 border border-[var(--surface-border)] rounded-md bg-[var(--surface-ground)]">
+                    <i class="pi pi-paperclip text-violet-500" />
+                    <span class="flex-1 truncate text-sm">{{ row.diplomaFilename || row.diplomaUrl }}</span>
+                    <Button icon="pi pi-times" size="small" severity="danger" text rounded
+                      @click="row.diplomaUrl = ''; row.diplomaFilename = ''; row.diplomaFile = null" />
+                  </div>
+                  <label
+                    v-else
+                    class="inline-flex items-center gap-2 px-3 py-1.5 text-xs border border-[var(--surface-border)] rounded-md bg-[var(--surface-card)] cursor-pointer hover:bg-[var(--surface-hover)] hover:border-violet-300 transition-colors w-fit"
+                  >
+                    <i class="pi pi-upload text-violet-500" />
+                    <span>{{ row.diplomaUploading ? 'Subiendo…' : 'Adjuntar diploma' }}</span>
+                    <input
+                      type="file"
+                      class="hidden"
+                      accept="application/pdf,image/*"
+                      :disabled="row.diplomaUploading"
+                      :data-testid="`educacion-diploma-input-new-${i}`"
+                      @change="(e) => onEducacionDiplomaChange(e, i)"
+                    />
+                  </label>
                 </div>
               </div>
             </div>

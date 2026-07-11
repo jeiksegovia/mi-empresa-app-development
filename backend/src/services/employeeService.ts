@@ -195,6 +195,9 @@ const ALL_RELATIONS = {
   },
   experienciasLaborales: true,
   educacionIdiomas: true,
+  // jul-9 D2 (QA GAP-2): embed educacion rows on GET /employees/:id for
+  // a single round-trip on empleado detail loads.
+  educacionEmpleado: { orderBy: { createdAt: 'asc' as const } },
   vehiculos: true,
   certificados: { orderBy: { fechaExpedicion: 'desc' as const } },
   datosMigracion: true,

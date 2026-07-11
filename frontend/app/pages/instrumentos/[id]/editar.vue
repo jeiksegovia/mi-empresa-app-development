@@ -382,7 +382,8 @@ onMounted(async () => {
                 Nombre del Instrumento <span class="text-red-500">*</span>
               </label>
               <InputText
-                v-model="form.nombreInstrumento"
+                :model-value="form.nombreInstrumento"
+                @update:model-value="(v) => form.nombreInstrumento = (v ?? '').toUpperCase()"
                 placeholder="Ej: Ficha de Valoración Inicial"
                 class="w-full"
                 :invalid="!!errors.nombreInstrumento"

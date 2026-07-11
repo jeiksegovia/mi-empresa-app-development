@@ -12,7 +12,13 @@ router.use(authMiddleware())
 const baseCertificateFields = {
   empresaId: z.number().int().positive().optional(),
   tipoCertificado: z.enum(['ALCALDIA', 'GOBERNACION', 'SECRETARIAS', 'TRIBUTARIOS', 'REGISTRO_MERCANTIL', 'OTRO']).optional(),
-  nombre: z.string().min(1).max(200).optional(),
+  // jul-10 E1: normalize entity name to upper-case + trim (applied to both create and update via .partial())
+  nombre: z
+    .string()
+    .min(1)
+    .max(200)
+    .transform((v) => v.trim().toUpperCase())
+    .optional(),
   descripcion: z.string().optional(),
   estado: z.enum(['VIGENTE', 'VENCIDO', 'PENDIENTE']).optional(),
   fechaEmision: z.string().optional(),
@@ -41,16 +47,19 @@ const updateCertificateSchema = z.object(baseCertificateFields).partial()
 
 const addCertificateUpdateSchema = z.object({
   archivoUrl: z.string().min(1).max(500).optional(),
+  // jul-9 A4: payment receipt URL alongside existing archivoUrl (L5 decision)
+  comprobantePagoUrl: z.string().min(1).max(500).optional(),
   notas: z.string().optional(),
   fechaEmision: z.string().optional(),
   fechaVencimiento: z.string().optional(),
 }).refine(
   (d) =>
     d.archivoUrl !== undefined ||
+    d.comprobantePagoUrl !== undefined ||
     d.notas !== undefined ||
     d.fechaEmision !== undefined ||
     d.fechaVencimiento !== undefined,
-  { message: 'At least one of archivoUrl, notas, fechaEmision, fechaVencimiento is required', path: ['archivoUrl'] }
+  { message: 'At least one of archivoUrl, comprobantePagoUrl, notas, fechaEmision, fechaVencimiento is required', path: ['archivoUrl'] }
 )
 
 // GET /certificates/stats

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAsAdmin } from '../helpers/auth'
+import { loginAsAdmin, getApiBase } from '../helpers/auth'
 
 /**
  * LOCAL: jul4 P3 — Hoja de vida
@@ -14,25 +14,27 @@ import { loginAsAdmin } from '../helpers/auth'
 
 test('P3-1: PUT /employees/:id persists hojaVidaUrl on Empleado', async ({ page }) => {
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const lj = await list.json()
   const id = lj?.data?.[0]?.id
   expect(id, 'need an existing empleado').toBeTruthy()
 
   const key = `hojas-vida/jul4-test-${Date.now()}.pdf`
-  const put = await page.request.put(`http://localhost:3101/api/v1/employees/${id}`, {
+  const put = await page.request.put(`${API_URL}/employees/${id}`, {
     data: { hojaVidaUrl: key },
   })
   expect(put.status(), 'PUT status').toBe(200)
 
-  const detail = await page.request.get(`http://localhost:3101/api/v1/employees/${id}`)
+  const detail = await page.request.get(`${API_URL}/employees/${id}`)
   const det = await detail.json()
   expect(det?.data?.hojaVidaUrl, 'hojaVidaUrl persisted').toBe(key)
 })
 
 test('P3-2: /empleados/[id]/editar tab 3 shows the Hoja de Vida upload card', async ({ page }) => {
   await loginAsAdmin(page)
-  const list = await page.request.get('http://localhost:3101/api/v1/employees?limit=1')
+  const API_URL = await getApiBase(page)
+  const list = await page.request.get(`${API_URL}/employees?limit=1`)
   const lj = await list.json()
   const id = lj?.data?.[0]?.id
   if (!id) {

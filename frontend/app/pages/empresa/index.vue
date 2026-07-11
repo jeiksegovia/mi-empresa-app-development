@@ -7,6 +7,12 @@ definePageMeta({
 const authStore = useAuthStore()
 const empresa = computed(() => authStore.empresa)
 
+// W6: distinguish "still loading" from "loaded but empresa doesn't exist".
+// After the load completes and empresa is still null, we render the empty-state
+// CTA (not the spinner). This avoids the dev-reported bug where the spinner
+// would spin forever on staging with 0 empresas.
+const loaded = ref(false)
+
 onMounted(async () => {
   if (!authStore.isAdmin) {
     await navigateTo('/')
@@ -15,6 +21,7 @@ onMounted(async () => {
   if (!empresa.value) {
     await authStore.fetchEmpresa()
   }
+  loaded.value = true
 })
 </script>
 
@@ -25,16 +32,40 @@ onMounted(async () => {
       subtitle="Información de la empresa"
     >
       <template #actions>
-        <NuxtLink v-if="authStore.role === 'ADMIN'" to="/empresa/editar">
+        <NuxtLink v-if="empresa && authStore.role === 'ADMIN'" to="/empresa/editar">
           <Button label="Editar" icon="pi pi-pencil" severity="secondary" outlined />
         </NuxtLink>
       </template>
     </AppPageHeader>
 
-    <div v-if="!empresa" class="text-center py-20 text-[var(--text-color-secondary)]">
+    <div v-if="!loaded" class="text-center py-20 text-[var(--text-color-secondary)]">
       <i class="pi pi-spin pi-spinner text-4xl mb-3 block" />
       <p>Cargando información de empresa...</p>
     </div>
+
+    <!-- W6: empty-state CTA. Surfaces when GET /empresa returns 200 { data: null }
+         (the new normalized contract). The same /empresa/editar page handles
+         the create form in create-mode (single-empresa system). -->
+    <Card v-else-if="!empresa" data-testid="empresa-empty-state">
+      <template #content>
+        <div class="text-center py-10 max-w-md mx-auto">
+          <i class="pi pi-building text-5xl text-violet-400 mb-4 block" />
+          <h3 class="text-lg font-semibold mb-2">Aún no hay una empresa registrada</h3>
+          <p class="text-sm text-[var(--text-color-secondary)] mb-5">
+            Este sistema soporta una sola empresa. Cree la primera para empezar a
+            gestionar empleados, pacientes y contratos.
+          </p>
+          <NuxtLink to="/empresa/editar">
+            <Button
+              label="Crear Empresa"
+              icon="pi pi-plus"
+              severity="success"
+              data-testid="empresa-crear-cta"
+            />
+          </NuxtLink>
+        </div>
+      </template>
+    </Card>
 
     <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <Card>

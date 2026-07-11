@@ -21,7 +21,12 @@ interface ExperienciaLaboral {
   sector: string | null; periodoInicio: string; periodoFin: string | null; funcionesLogros: string | null
 }
 interface EducacionIdioma {
-  id: number; institucion: string; nivelEscritura: string; nivelHabla: string; capacidadTraducir: boolean
+  id: number; institucion: string; nivelEscritura: string | null; nivelHabla: string; capacidadTraducir: boolean
+}
+// D2: new EducacionEmpleado model exposed via /employees/:id/educacion.
+interface EducacionEmpleado {
+  id: number; profesion: string; universidad: string | null
+  fechaGraduacion: string | null; diplomaUrl: string | null
 }
 interface Vehiculo {
   id: number; tipoVehiculo: string; placas: string; tipoLicencia: string; numeroLicencia: string
@@ -45,11 +50,14 @@ interface EmployeeDetail {
   estratoSocioeconomico: number | null; estadoCivil: string | null
   telefono: string | null; email: string | null; estado: 'ACTIVO' | 'INACTIVO'
   fechaRegistro: string
+  // D3: nullable VARCHAR(500) for the identification document.
+  documentoIdentificacionUrl: string | null
   nucleoFamiliar: FamilyMember[]
   contactosEmergencia: EmergencyContact[]
   cargos: Cargo[]
   experienciasLaborales: ExperienciaLaboral[]
   educacionIdiomas: EducacionIdioma[]
+  educacionEmpleado: EducacionEmpleado[]
   vehiculos: Vehiculo[]
   certificados: Certificado[]
   datosMigracion: DatosMigracion | null
@@ -73,6 +81,11 @@ const tabs = [
 
   { label: 'Pendientes', icon: 'pi pi-exclamation-circle' },
 
+  // W11 C6: Contrato tab — read-only display for parity with the edit
+  // screen. Active management (add/edit/activate) stays on
+  // /empleados/[id]/editar.
+  { label: 'Contrato laboral', icon: 'pi pi-file-edit' },
+
   { label: 'Novedades', icon: 'pi pi-bell' },
 ]
 
@@ -84,6 +97,17 @@ async function fetchEmployee() {
       `/employees/${route.params.id}`
     )
     employee.value = res.data
+    // D2: also pull EducacionEmpleado rows from the dedicated endpoint
+    // (separate model from educacionIdiomas — different table).
+    try {
+      const eduRes = await apiFetch<{ success: boolean; data: EducacionEmpleado[] }>(
+        `/employees/${route.params.id}/educacion`
+      )
+      if (employee.value) employee.value.educacionEmpleado = eduRes.data ?? []
+    } catch {
+      // Endpoint may 404 if the empleado has none — leave as empty array.
+      if (employee.value) employee.value.educacionEmpleado = []
+    }
   } catch (e: any) {
     if (e?.response?.status === 404) {
       error.value = 'Empleado no encontrado'
@@ -97,6 +121,16 @@ async function fetchEmployee() {
 
 function formatShortDate(dateStr: string | null | undefined) {
   return formatDate(dateStr, 'short')
+}
+
+// D2: diploma download via the shared useFileUpload().downloadFile().
+async function downloadDiploma(key: string) {
+  await downloadFile(key)
+}
+
+// D3: documentoIdentificacionUrl download.
+async function downloadDocumentoIdentificacion(key: string) {
+  await downloadFile(key)
 }
 
 function isCertExpired(vencimiento: string) {
@@ -129,7 +163,9 @@ const currentCargo = computed(() => {
 
 onMounted(async () => {
   await fetchEmployee()
-  await Promise.all([fetchPendientes(), fetchNovedades()])
+  // W11 C6: contratos live on a separate endpoint + service, not in the
+  // employee detail payload; fetch in parallel with the other side panels.
+  await Promise.all([fetchPendientes(), fetchNovedades(), fetchContratos()])
 })
 
 // ─── 
@@ -267,6 +303,48 @@ const novedadTipoLabels: Record<Novedad['tipo'], string> = {
   VACACIONES: 'Vacaciones',
   OTRA: 'Otra',
 }
+
+// ─── W11 C6: Contrato laboral read-only display (parity with edit screen) ────
+interface ContratoEmpleado {
+  id: number
+  tipoContrato: 'OPS' | 'OBRA_O_LABOR' | 'TERMINO_FIJO' | 'TERMINO_INDEFINIDO'
+  fechaInicio: string
+  fechaFin: string | null
+  archivoUrl: string | null
+  archivoFirmadoUrl: string | null
+  cargoId: number | null
+  cargo?: { id: number; nombre: string; activo: boolean } | null
+  activo: boolean
+  createdAt: string
+}
+const contratos = ref<ContratoEmpleado[]>([])
+const contratosLoading = ref(false)
+async function fetchContratos() {
+  contratosLoading.value = true
+  try {
+    const res = await apiFetch<{ success: boolean; data: ContratoEmpleado[] }>(
+      `/nomina/employees/${route.params.id}/contratos`
+    )
+    contratos.value = res.data ?? []
+  } catch {
+    contratos.value = []
+  } finally {
+    contratosLoading.value = false
+  }
+}
+async function downloadContratoArchivo(c: ContratoEmpleado) {
+  if (!c.archivoUrl) return
+  await downloadFile(c.archivoUrl)
+}
+// C4 (W11): download affordance for the SIGNED contract file. The
+// edit screen has the upload slot for archivoFirmadoUrl but no
+// download button — the read-only detail view adds one here too,
+// so users can fetch the firmado PDF from either surface.
+async function downloadContratoFirmado(c: ContratoEmpleado) {
+  if (!c.archivoFirmadoUrl) return
+  await downloadFile(c.archivoFirmadoUrl)
+}
+
 const novedadTipoSeverity: Record<Novedad['tipo'], 'danger' | 'warn' | 'info' | 'success' | 'secondary'> = {
   LLAMADO_ATENCION: 'danger',
   MEMORANDO: 'warn',
@@ -382,6 +460,18 @@ async function deleteNovedad(nid: number) {
                 <span><i class="pi pi-id-card mr-1" />{{ employee.tipoDocumento }} {{ employee.numeroDocumento }}</span>
                 <span v-if="employee.telefono"><i class="pi pi-phone mr-1" />{{ employee.telefono }}</span>
                 <span v-if="employee.email"><i class="pi pi-envelope mr-1" />{{ employee.email }}</span>
+                <!-- D3: link to the uploaded identification document. -->
+                <span v-if="employee.documentoIdentificacionUrl">
+                  <Button
+                    icon="pi pi-paperclip"
+                    size="small"
+                    severity="info"
+                    text
+                    label="Documento"
+                    data-testid="documento-empleado-link"
+                    @click="downloadDocumentoIdentificacion(employee.documentoIdentificacionUrl)"
+                  />
+                </span>
               </div>
             </div>
           </div>
@@ -582,12 +672,48 @@ async function deleteNovedad(nid: number) {
               <div v-for="e in employee.educacionIdiomas" :key="e.id" class="py-3">
                 <p class="font-medium">{{ e.institucion }}</p>
                 <div class="flex flex-wrap gap-3 mt-1 text-sm text-[var(--text-color-secondary)]">
-                  <span>Escritura: <strong>{{ e.nivelEscritura }}</strong></span>
+                  <!-- D1: nivelEscritura may now be null; hide gracefully. -->
+                  <span v-if="e.nivelEscritura">Escritura: <strong>{{ e.nivelEscritura }}</strong></span>
                   <span>Habla: <strong>{{ e.nivelHabla }}</strong></span>
                   <span v-if="e.capacidadTraducir" class="text-green-600">
                     <i class="pi pi-check text-xs mr-1" />Puede traducir
                   </span>
                 </div>
+              </div>
+            </div>
+          </template>
+        </Card>
+
+        <!-- D2: Formación Académica (new EducacionEmpleado model). -->
+        <Card v-if="employee.educacionEmpleado?.length">
+          <template #header>
+            <div class="px-6 pt-5 pb-0">
+              <h3 class="text-base font-semibold text-[var(--text-color)] flex items-center gap-2">
+                <i class="pi pi-graduation-cap text-violet-500" /> Formación Académica
+              </h3>
+            </div>
+          </template>
+          <template #content>
+            <div class="divide-y divide-[var(--surface-border)]">
+              <div v-for="row in employee.educacionEmpleado" :key="row.id" class="py-3 flex flex-wrap items-start gap-3">
+                <div class="flex-1 min-w-0">
+                  <p class="font-medium">{{ row.profesion }}</p>
+                  <p class="text-sm text-[var(--text-color-secondary)]">
+                    <span v-if="row.universidad">{{ row.universidad }}</span>
+                    <span v-if="row.fechaGraduacion">
+                      · {{ formatShortDate(row.fechaGraduacion) }}
+                    </span>
+                  </p>
+                </div>
+                <Button
+                  v-if="row.diplomaUrl"
+                  icon="pi pi-download"
+                  size="small"
+                  severity="info"
+                  outlined
+                  label="Diploma"
+                  @click="downloadDiploma(row.diplomaUrl)"
+                />
               </div>
             </div>
           </template>
@@ -811,8 +937,81 @@ async function deleteNovedad(nid: number) {
           </template>
         </Dialog>
       </div>
-      <!-- TAB: Pendientes -->
-      <div v-show="activeTab === 4" class="space-y-4" data-testid="novedades-tab">
+      <!-- W11 C6: Contrato laboral tab (read-only) -->
+      <div v-show="activeTab === 4" class="space-y-4" data-testid="contrato-detail-tab">
+        <Card data-testid="contrato-detail-card">
+          <template #header>
+            <div class="px-6 pt-5 pb-0">
+              <h3 class="text-base font-semibold text-[var(--text-color)] flex items-center gap-2">
+                <i class="pi pi-file-edit text-violet-500" /> Contratos del empleado
+              </h3>
+            </div>
+          </template>
+          <template #content>
+            <div v-if="contratosLoading" class="flex items-center justify-center py-6">
+              <i class="pi pi-spin pi-spinner text-2xl text-violet-500" />
+            </div>
+            <div v-else-if="contratos.length === 0" class="text-center py-6 text-sm text-[var(--text-color-secondary)]" data-testid="contrato-empty">
+              Sin contratos registrados.
+            </div>
+            <div v-else class="space-y-3" data-testid="contrato-detail-list">
+              <div
+                v-for="c in contratos"
+                :key="c.id"
+                class="border border-[var(--surface-border)] rounded-lg p-4 space-y-2"
+                :class="c.activo ? 'border-violet-400 bg-violet-50/30 dark:bg-violet-900/10' : ''"
+                data-testid="contrato-detail-row"
+              >
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-sm">{{ c.tipoContrato }}</span>
+                  <Tag v-if="c.activo" value="Activo" severity="success" />
+                  <Tag v-else value="Inactivo" severity="secondary" />
+                </div>
+                <p class="text-xs text-[var(--text-color-secondary)]">
+                  Desde {{ formatShortDate(c.fechaInicio) }}
+                  <span v-if="c.fechaFin"> · Hasta {{ formatShortDate(c.fechaFin) }}</span>
+                  <span v-else class="italic">(sin fecha de fin)</span>
+                </p>
+                <p v-if="c.cargo?.nombre" class="text-xs text-[var(--text-color-secondary)]">
+                  <i class="pi pi-briefcase mr-1" />{{ c.cargo.nombre }}
+                </p>
+                <p v-if="c.archivoUrl" class="text-xs text-[var(--text-color-secondary)] truncate">
+                  <i class="pi pi-paperclip" /> {{ filenameFromKey(c.archivoUrl) }}
+                </p>
+                <p v-if="c.archivoFirmadoUrl" class="text-xs text-[var(--text-color-secondary)] truncate">
+                  <i class="pi pi-file-edit mr-1" />Firmado: {{ filenameFromKey(c.archivoFirmadoUrl) }}
+                </p>
+                <div class="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    v-if="c.archivoUrl"
+                    icon="pi pi-download"
+                    label="Descargar contrato"
+                    size="small"
+                    severity="info"
+                    outlined
+                    data-testid="contrato-detail-download-blank"
+                    @click="downloadContratoArchivo(c)"
+                  />
+                  <!-- W11 C4: download the SIGNED contract (archivoFirmadoUrl) -->
+                  <Button
+                    v-if="c.archivoFirmadoUrl"
+                    icon="pi pi-file-edit"
+                    label="Descargar firmado"
+                    size="small"
+                    severity="success"
+                    outlined
+                    data-testid="contrato-detail-download-firmado"
+                    @click="downloadContratoFirmado(c)"
+                  />
+                </div>
+              </div>
+            </div>
+          </template>
+        </Card>
+      </div>
+
+      <!-- TAB: Novedades -->
+      <div v-show="activeTab === 5" class="space-y-4" data-testid="novedades-tab">
         <Card>
           <template #header>
             <div class="px-6 pt-5 pb-0 flex items-center justify-between">
@@ -929,7 +1128,18 @@ async function deleteNovedad(nid: number) {
             </div>
             <div>
               <label class="block text-sm font-medium mb-1">Archivos adjuntos</label>
-              <input type="file" :disabled="uploadingNovedadArchivo" @change="onNovedadArchivoChange" />
+              <label
+                class="inline-flex items-center gap-2 px-3 py-2 text-xs border border-[var(--surface-border)] rounded-md bg-[var(--surface-card)] cursor-pointer hover:bg-[var(--surface-hover)] hover:border-violet-300 transition-colors"
+              >
+                <i class="pi pi-upload text-violet-500" />
+                <span>Seleccionar archivo…</span>
+                <input
+                  type="file"
+                  class="hidden"
+                  :disabled="uploadingNovedadArchivo"
+                  @change="onNovedadArchivoChange"
+                />
+              </label>
               <div v-if="novedadForm.archivos.length" class="mt-2 space-y-1">
                 <div v-for="(a, i) in novedadForm.archivos" :key="i" class="flex items-center gap-2 text-sm">
                   <i class="pi pi-paperclip text-violet-500" />

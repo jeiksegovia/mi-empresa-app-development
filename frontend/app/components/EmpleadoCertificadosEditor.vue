@@ -28,7 +28,7 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
-const { uploadFile } = useFileUpload()
+const { uploadFile, downloadFile } = useFileUpload()
 
 const tipoOptions = [
   { label: 'Trabajo en Alturas', value: 'ALTURAS' },
@@ -92,6 +92,20 @@ function onArchivoChange(rowIndex: number, event: Event) {
 
 function removeArchivo(rowIndex: number) {
   patchRow(rowIndex, { archivoUrl: '' })
+}
+
+// W11 P1 (S7 second half): download affordance for an existing key.
+// Mirrors the diploma path on empleados/[id]/editar → EducacionEmpleado
+// rows (`downloadEducacionDiploma`). Without this, the certificado row
+// shows "adjuntado" but offers no way to re-view the file — the QA
+// transcript explicitly flagged the inconsistency with the diploma UI.
+async function downloadArchivo(key: string) {
+  if (!key) return
+  try {
+    await downloadFile(key)
+  } catch {
+    // downloadFile already toasts on error; nothing else to do here.
+  }
 }
 </script>
 
@@ -189,6 +203,18 @@ function removeArchivo(rowIndex: number) {
           <span class="flex-1 text-xs truncate">{{ filenameFromKey(cert.archivoUrl) }}</span>
           <Button
             type="button"
+            icon="pi pi-download"
+            size="small"
+            severity="info"
+            text
+            rounded
+            v-tooltip.top="'Descargar certificado'"
+            :aria-label="`Descargar certificado ${i + 1}`"
+            :data-testid="`cert-descargar-${i}`"
+            @click="downloadArchivo(cert.archivoUrl!)"
+          />
+          <Button
+            type="button"
             icon="pi pi-times"
             size="small"
             severity="secondary"
@@ -199,13 +225,20 @@ function removeArchivo(rowIndex: number) {
           />
         </div>
         <div v-else class="flex items-center gap-2">
-          <input
-            :id="`cert-archivo-${i}`"
-            type="file"
-            class="text-xs"
-            :disabled="uploadingRow === i"
-            @change="(e: any) => onArchivoChange(i, e)"
-          />
+          <label
+            :for="`cert-archivo-${i}`"
+            class="flex items-center gap-2 px-3 py-1.5 text-xs border border-[var(--surface-border)] rounded-md bg-[var(--surface-card)] cursor-pointer hover:bg-[var(--surface-hover)] hover:border-violet-300 transition-colors"
+          >
+            <i class="pi pi-upload text-violet-500" />
+            <span>Seleccionar archivo…</span>
+            <input
+              :id="`cert-archivo-${i}`"
+              type="file"
+              class="hidden"
+              :disabled="uploadingRow === i"
+              @change="(e: any) => onArchivoChange(i, e)"
+            />
+          </label>
           <i v-if="uploadingRow === i" class="pi pi-spin pi-spinner text-violet-500 text-sm" />
         </div>
       </div>

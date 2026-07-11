@@ -8,6 +8,7 @@ definePageMeta({
 
 const { apiFetch } = useApi()
 const toast = useToast()
+const route = useRoute()
 const { uploadFile } = useFileUpload()
 const { stash: stashFile, restore: restoreFile, clear: clearFile } = useFileStash()
 
@@ -157,7 +158,14 @@ async function onSubmit() {
     clearInstCrearDraft()
     await clearFile('instrumento-crear:plantilla')
 
-    await navigateTo(`/instrumentos/${res.data.id}`)
+    // C3: if we arrived here via the "crear instrumento nuevo" shortcut,
+    // return to the originating page (e.g. the patient's fichas tab).
+    const returnTo = route.query.return
+    if (typeof returnTo === 'string' && returnTo.startsWith('/')) {
+      await navigateTo(returnTo)
+    } else {
+      await navigateTo(`/instrumentos/${res.data.id}`)
+    }
   } catch (e: any) {
     const detail =
       e?.data?.message || e?.message || 'Ocurrió un error al crear el instrumento.'
@@ -287,7 +295,8 @@ onMounted(async () => {
                 Nombre del Instrumento <span class="text-red-500">*</span>
               </label>
               <InputText
-                v-model="form.nombreInstrumento"
+                :model-value="form.nombreInstrumento"
+                @update:model-value="(v) => form.nombreInstrumento = (v ?? '').toUpperCase()"
                 placeholder="Ej: Ficha de Valoración Inicial"
                 class="w-full"
                 :invalid="!!errors.nombreInstrumento"

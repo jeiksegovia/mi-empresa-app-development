@@ -3,6 +3,7 @@ import { authMiddleware, requireRole } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
 import { z } from 'zod'
 import * as employeeService from '../services/employeeService.js'
+import * as educacionService from '../services/educacionEmpleadoService.js'
 import { logger } from '../config/logger.js'
 import { getPrisma } from '../config/database.js'
 
@@ -13,8 +14,9 @@ router.use(authMiddleware())
 
 // Zod schemas for validation
 const createEmployeeSchema = z.object({
-  nombre: z.string().min(1).max(100),
-  apellido: z.string().min(1).max(100),
+  // jul-10 E1: normalize to upper-case + trim on entity nombre/apellido
+  nombre: z.string().min(1).max(100).transform((v) => v.trim().toUpperCase()),
+  apellido: z.string().min(1).max(100).transform((v) => v.trim().toUpperCase()),
   tipoDocumento: z.enum(['CC', 'CE', 'PASAPORTE']),
   numeroDocumento: z.string().min(1).max(50),
   genero: z.string().min(1).max(20),
@@ -28,6 +30,8 @@ const createEmployeeSchema = z.object({
   email: z.string().email().optional().or(z.literal('')),
   estado: z.enum(['ACTIVO', 'INACTIVO']).optional(),
   hojaVidaUrl: z.string().optional(),
+  // jul-9 D3: identity-document file URL
+  documentoIdentificacionUrl: z.string().max(500).optional(),
   cargos: z
     .array(
       z.object({
@@ -74,7 +78,8 @@ const createEmployeeSchema = z.object({
   })).optional(),
   educacionIdiomas: z.array(z.object({
     institucion: z.string().min(1),
-    nivelEscritura: z.string().min(1),
+    // jul-9 D1: nivelEscritura now optional (column is nullable since M1)
+    nivelEscritura: z.string().optional().nullable(),
     nivelHabla: z.string().min(1),
     capacidadTraducir: z.boolean(),
   })).optional(),
@@ -478,7 +483,73 @@ router.put('/:id/certificados', requireRole('ADMIN'), validate(certificadosPutSc
   }
 })
 
-// ─── 
+// ───
+
+// ─── jul-9 D2: EducacionEmpleado CRUD ───
+
+const createEducacionSchema = z.object({
+  profesion: z.string().min(1).max(200),
+  universidad: z.string().max(200).optional().nullable(),
+  fechaGraduacion: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  diplomaUrl: z.string().max(500).optional().nullable(),
+})
+
+const updateEducacionSchema = createEducacionSchema.partial()
+
+router.get('/:id/educacion', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const empleadoId = parseInt(req.params.id as string)
+    if (isNaN(empleadoId)) { res.status(400).json({ success: false, message: 'Invalid empleado ID' }); return }
+    const data = await educacionService.listEducacion(empleadoId)
+    res.json({ success: true, data })
+  } catch (error: any) {
+    logger.error('List educacion empleado error:', error)
+    if (error.message === 'Empleado not found') { res.status(404).json({ success: false, message: 'Empleado not found' }); return }
+    res.status(500).json({ success: false, message: 'Error listing educacion' })
+  }
+})
+
+router.post('/:id/educacion', requireRole('ADMIN'), validate(createEducacionSchema), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const empleadoId = parseInt(req.params.id as string)
+    if (isNaN(empleadoId)) { res.status(400).json({ success: false, message: 'Invalid empleado ID' }); return }
+    const data = await educacionService.createEducacion(empleadoId, req.body)
+    res.status(201).json({ success: true, data })
+  } catch (error: any) {
+    logger.error('Create educacion empleado error:', error)
+    if (error.message === 'Empleado not found') { res.status(404).json({ success: false, message: 'Empleado not found' }); return }
+    res.status(500).json({ success: false, message: 'Error creating educacion' })
+  }
+})
+
+router.patch('/:id/educacion/:eduId', requireRole('ADMIN'), validate(updateEducacionSchema), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const empleadoId = parseInt(req.params.id as string)
+    const eduId = parseInt(req.params.eduId as string)
+    if (isNaN(empleadoId) || isNaN(eduId)) { res.status(400).json({ success: false, message: 'Invalid IDs' }); return }
+    const data = await educacionService.updateEducacion(empleadoId, eduId, req.body)
+    res.json({ success: true, data })
+  } catch (error: any) {
+    logger.error('Update educacion empleado error:', error)
+    if (error.message === 'EducacionEmpleado not found') { res.status(404).json({ success: false, message: 'EducacionEmpleado not found' }); return }
+    res.status(500).json({ success: false, message: 'Error updating educacion' })
+  }
+})
+
+router.delete('/:id/educacion/:eduId', requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const empleadoId = parseInt(req.params.id as string)
+    const eduId = parseInt(req.params.eduId as string)
+    if (isNaN(empleadoId) || isNaN(eduId)) { res.status(400).json({ success: false, message: 'Invalid IDs' }); return }
+    await educacionService.deleteEducacion(empleadoId, eduId)
+    // jul-9 D2 (QA GAP-3): contract §3.1 calls for 204 No Content on DELETE.
+    res.status(204).end()
+  } catch (error: any) {
+    logger.error('Delete educacion empleado error:', error)
+    if (error.message === 'EducacionEmpleado not found') { res.status(404).json({ success: false, message: 'EducacionEmpleado not found' }); return }
+    res.status(500).json({ success: false, message: 'Error deleting educacion' })
+  }
+})
 
 // GET /employees/:id/pendientes — manual + derived
 router.get('/:id/pendientes', async (req: Request, res: Response): Promise<void> => {

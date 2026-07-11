@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { useFileStash, useFileStashTitleGuard } from '~/composables/useFileStash'
+import CertificateUpdateForm from '~/components/certificate/CertificateUpdateForm.vue'
+import type { CertificateUpdateFormValue } from '~/components/certificate/CertificateUpdateForm.vue'
 
 definePageMeta({
   middleware: 'auth',
@@ -29,6 +30,7 @@ interface CertificateUpdateRecord {
   id: number
   certificadoId: number
   archivoUrl: string | null
+  comprobantePagoUrl: string | null
   notas: string | null
   fechaEmision: string | null
   fechaVencimiento: string | null
@@ -41,13 +43,12 @@ const route = useRoute()
 const { apiFetch } = useApi()
 const toast = useToast()
 const authStore = useAuthStore()
-const { downloadFile, uploadFile } = useFileUpload()
-const { stash: stashFile, restore: restoreFile, clear: clearFile } = useFileStash()
+const { downloadFile } = useFileUpload()
 
-// W7: stash key + title guard scoped per cert id.
-const updateStashKey = computed(() => `cert-agregar:${route.params.id}:file`)
-const updateFileGuard = useFileStashTitleGuard('Adjuntar archivo de actualización')
-const addUpdateDraftKey = computed(() => `cert-agregar-draft:${route.params.id}`)
+// Per-cert prefix passed to the shared CertificateUpdateForm so its IDB +
+// sessionStorage keys stay scoped to THIS certificado (jul-9 W9 lesson —
+// wrong-file-leak risk if a user has two dialogs open).
+const updateStashPrefix = computed(() => `cert-agregar:${route.params.id}`)
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const certificate = ref<CertificateDetail | null>(null)
@@ -73,17 +74,19 @@ const updates = ref<CertificateUpdateRecord[]>([])
 const updatesLoading = ref(false)
 
 // ─── Agregar actualización dialog state ──────────────────────────────────────
+// Form fields + file URLs live in the shared component; this parent keeps a
+// reactive mirror so the submit handler can read the latest values without
+// query DOM or ref dancing.
 const showAddUpdateDialog = ref(false)
 const savingUpdate = ref(false)
-const addUpdateForm = reactive({
+const addUpdateForm = reactive<CertificateUpdateFormValue>({
   notas: '',
   fechaEmision: '',
   fechaVencimiento: '',
+  archivoUrl: null,
+  comprobantePagoUrl: null,
 })
-const selectedUpdateFile = ref<File | null>(null)
-const updateFileInputRef = ref<HTMLInputElement | null>(null)
-const uploadUpdateFileProgress = ref<'idle' | 'uploading' | 'done' | 'error'>('idle')
-const uploadedUpdateFileKey = ref<string | null>(null)
+const addUpdateFormRef = ref<InstanceType<typeof CertificateUpdateForm> | null>(null)
 const updateErrors = reactive<Record<string, string>>({})
 
 // ─── Label maps ───────────────────────────────────────────────────────────────
@@ -241,129 +244,34 @@ async function saveEdit() {
   }
 }
 
-// ─── Agregar actualización (D2) ──────────────────────────────────────────────
-function readAddUpdateDraft(): {
-  notas?: string
-  fechaEmision?: string
-  fechaVencimiento?: string
-  ts?: number
-} | null {
-  if (!import.meta.client) return null
-  try {
-    const raw = sessionStorage.getItem(addUpdateDraftKey.value)
-    if (!raw) return null
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
-}
-
-function writeAddUpdateDraft() {
-  if (!import.meta.client) return
-  try {
-    sessionStorage.setItem(
-      addUpdateDraftKey.value,
-      JSON.stringify({
-        notas: addUpdateForm.notas,
-        fechaEmision: addUpdateForm.fechaEmision,
-        fechaVencimiento: addUpdateForm.fechaVencimiento,
-        ts: Date.now(),
-      })
-    )
-  } catch { /* noop */ }
-}
-
-function clearAddUpdateDraft() {
-  if (!import.meta.client) return
-  try { sessionStorage.removeItem(addUpdateDraftKey.value) } catch { /* noop */ }
-}
-
-async function openAddUpdateDialog() {
-  // W9: clear the underlying HTML file input so re-opening the dialog
-  // after a cancel doesn't retain a stale File object in input.files.
-  if (updateFileInputRef.value) updateFileInputRef.value.value = ''
-  // Try to restore from sessionStorage + IDB stash first.
-  const draft = readAddUpdateDraft()
-  addUpdateForm.notas = draft?.notas ?? ''
-  addUpdateForm.fechaEmision = draft?.fechaEmision ?? ''
-  addUpdateForm.fechaVencimiento = draft?.fechaVencimiento ?? ''
-  selectedUpdateFile.value = null
-  uploadedUpdateFileKey.value = null
-  uploadUpdateFileProgress.value = 'idle'
+// ─── Agregar actualización (D2) — body of dialog renders <CertificateUpdateForm> ──
+// The form owns file upload, IDB stash + sessionStorage draft via its exposed
+// ref. The page only opens / submits / clears.
+function openAddUpdateDialog() {
+  // Reset the in-memory mirror so re-opening a dialog after a cancel doesn't
+  // leak stale data; the form's onMounted will then rehydrate from
+  // sessionStorage + IDB.
+  addUpdateForm.notas = ''
+  addUpdateForm.fechaEmision = ''
+  addUpdateForm.fechaVencimiento = ''
+  addUpdateForm.archivoUrl = null
+  addUpdateForm.comprobantePagoUrl = null
   Object.keys(updateErrors).forEach((k) => delete updateErrors[k])
-
-  if (import.meta.client) {
-    const restored = await restoreFile(updateStashKey.value)
-    if (restored) {
-      selectedUpdateFile.value = restored
-      toast.add({
-        severity: 'success',
-        summary: 'Archivo restaurado',
-        detail: `«${restored.name}» se restauró automáticamente.`,
-        life: 4000,
-      })
-    } else if (draft && (draft.notas || draft.fechaEmision || draft.fechaVencimiento)) {
-      toast.add({
-        severity: 'info',
-        summary: 'Borrador restaurado',
-        detail: 'Se recuperaron las notas y fechas de tu sesión anterior.',
-        life: 4000,
-      })
-    }
-  }
-
   showAddUpdateDialog.value = true
-}
-
-async function onUpdateFileChange(event: Event) {
-  updateFileGuard.disarm()
-  const input = event.target as HTMLInputElement
-  if (input.files && input.files[0]) {
-    selectedUpdateFile.value = input.files[0]
-    uploadedUpdateFileKey.value = null
-    uploadUpdateFileProgress.value = 'idle'
-    await stashFile(updateStashKey.value, input.files[0])
-    writeAddUpdateDraft()
-  }
-}
-
-function clearUpdateFile() {
-  selectedUpdateFile.value = null
-  uploadedUpdateFileKey.value = null
-  uploadUpdateFileProgress.value = 'idle'
-  if (updateFileInputRef.value) updateFileInputRef.value.value = ''
-  clearFile(updateStashKey.value).catch(() => { /* noop */ })
-}
-
-async function uploadUpdateFileIfNeeded(): Promise<string | null> {
-  if (!selectedUpdateFile.value) return uploadedUpdateFileKey.value
-  uploadUpdateFileProgress.value = 'uploading'
-  try {
-    const key = await uploadFile(selectedUpdateFile.value, 'certificados')
-    if (!key) {
-      uploadUpdateFileProgress.value = 'error'
-      return null
-    }
-    uploadedUpdateFileKey.value = key
-    uploadUpdateFileProgress.value = 'done'
-    return key
-  } catch {
-    uploadUpdateFileProgress.value = 'error'
-    return null
-  }
 }
 
 function validateAddUpdate(): boolean {
   Object.keys(updateErrors).forEach((k) => delete updateErrors[k])
+  const v = addUpdateForm
   const hasContent = Boolean(
-    selectedUpdateFile.value ||
-      uploadedUpdateFileKey.value ||
-      addUpdateForm.notas.trim() ||
-      addUpdateForm.fechaEmision ||
-      addUpdateForm.fechaVencimiento,
+    v.archivoUrl ||
+      v.comprobantePagoUrl ||
+      v.notas.trim() ||
+      v.fechaEmision ||
+      v.fechaVencimiento,
   )
   if (!hasContent) {
-    updateErrors.global = 'Debes proporcionar al menos archivo, notas o una fecha.'
+    updateErrors.global = 'Debes proporcionar al menos archivo, comprobante, notas o una fecha.'
   }
   return Object.keys(updateErrors).length === 0
 }
@@ -373,18 +281,11 @@ async function submitAddUpdate() {
 
   savingUpdate.value = true
   try {
-    // Upload file first if selected and not yet uploaded
-    let archivoKey: string | null = uploadedUpdateFileKey.value
-    if (selectedUpdateFile.value && !uploadedUpdateFileKey.value) {
-      archivoKey = await uploadUpdateFileIfNeeded()
-      if (uploadUpdateFileProgress.value === 'error' || !archivoKey) {
-        savingUpdate.value = false
-        return
-      }
-    }
-
     const payload: Record<string, unknown> = {}
-    if (archivoKey) payload.archivoUrl = archivoKey
+    if (addUpdateForm.archivoUrl) payload.archivoUrl = addUpdateForm.archivoUrl
+    if (addUpdateForm.comprobantePagoUrl) {
+      payload.comprobantePagoUrl = addUpdateForm.comprobantePagoUrl
+    }
     if (addUpdateForm.notas.trim()) payload.notas = addUpdateForm.notas.trim()
     if (addUpdateForm.fechaEmision) payload.fechaEmision = addUpdateForm.fechaEmision
     if (addUpdateForm.fechaVencimiento) payload.fechaVencimiento = addUpdateForm.fechaVencimiento
@@ -400,9 +301,8 @@ async function submitAddUpdate() {
     // Update local state from response — parent snapshot was mutated server-side.
     certificate.value = res.data.certificate
     showAddUpdateDialog.value = false
-    // W7: clear draft + IDB stash on successful submit
-    clearAddUpdateDraft()
-    await clearFile(updateStashKey.value)
+    // W7: clear sessionStorage draft through the form
+    addUpdateFormRef.value?.clearDraft()
     await fetchUpdates()
 
     toast.add({
@@ -419,16 +319,15 @@ async function submitAddUpdate() {
   }
 }
 
+async function downloadComprobanteUpdate(update: CertificateUpdateRecord) {
+  if (!update.comprobantePagoUrl) return
+  await downloadFile(update.comprobantePagoUrl)
+}
+
 onMounted(async () => {
   await fetchCertificate()
   if (certificate.value) await fetchUpdates()
 })
-
-// W7: persist draft on every change while dialog is open
-watch(
-  () => [addUpdateForm.notas, addUpdateForm.fechaEmision, addUpdateForm.fechaVencimiento],
-  () => { if (showAddUpdateDialog.value) writeAddUpdateDraft() }
-)
 </script>
 
 <template>
@@ -672,15 +571,28 @@ watch(
                       {{ formatDate(upd.createdAt) }}
                     </span>
                   </div>
-                  <Button
-                    v-if="upd.archivoUrl"
-                    icon="pi pi-download"
-                    size="small"
-                    severity="info"
-                    outlined
-                    label="Archivo"
-                    @click="downloadUpdateFile(upd)"
-                  />
+                  <div class="flex flex-wrap items-center gap-2">
+                    <Button
+                      v-if="upd.archivoUrl"
+                      icon="pi pi-download"
+                      size="small"
+                      severity="info"
+                      outlined
+                      label="Archivo"
+                      data-testid="cert-update-file-download"
+                      @click="downloadUpdateFile(upd)"
+                    />
+                    <Button
+                      v-if="upd.comprobantePagoUrl"
+                      icon="pi pi-receipt"
+                      size="small"
+                      severity="info"
+                      outlined
+                      label="Comprobante"
+                      data-testid="cert-update-comprobante-download"
+                      @click="downloadComprobanteUpdate(upd)"
+                    />
+                  </div>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
@@ -700,6 +612,9 @@ watch(
 
                 <div v-if="upd.archivoUrl" class="mt-2 text-xs text-[var(--text-color-secondary)] truncate">
                   <i class="pi pi-paperclip" /> {{ filenameFromKey(upd.archivoUrl) }}
+                </div>
+                <div v-if="upd.comprobantePagoUrl" class="mt-1 text-xs text-[var(--text-color-secondary)] truncate">
+                  <i class="pi pi-receipt" /> {{ filenameFromKey(upd.comprobantePagoUrl) }}
                 </div>
               </div>
             </div>
@@ -814,7 +729,7 @@ watch(
       </div>
     </template>
 
-    <!-- D2: Agregar actualización dialog -->
+    <!-- D2: Agregar actualización dialog (now renders the shared A5 form) -->
     <Dialog
       v-model:visible="showAddUpdateDialog"
       header="Agregar actualización"
@@ -829,90 +744,12 @@ watch(
           Esta entrada quedará registrada en el historial y actualizará la versión actual del certificado.
         </p>
 
-        <div>
-          <label class="block text-sm font-medium text-[var(--text-color)] mb-1">
-            Archivo <span class="text-xs text-[var(--text-color-secondary)]">(opcional)</span>
-          </label>
-          <div
-            v-if="!selectedUpdateFile"
-            class="border-2 border-dashed border-[var(--surface-border)] rounded-lg p-4 text-center cursor-pointer hover:border-violet-400 transition-colors"
-            @click="() => { updateFileGuard.arm(); updateFileInputRef?.click() }"
-            data-testid="cert-update-file-dropzone"
-          >
-            <i class="pi pi-upload text-2xl text-[var(--text-color-secondary)] mb-1 block" />
-            <p class="text-xs text-[var(--text-color-secondary)]">Haz clic para seleccionar un archivo</p>
-          </div>
-          <div
-            v-else
-            class="flex items-center gap-3 px-3 py-2 border border-[var(--surface-border)] rounded-lg bg-[var(--surface-ground)]"
-          >
-            <i class="pi pi-file text-violet-500 text-lg flex-shrink-0" />
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-medium text-[var(--text-color)] truncate">{{ selectedUpdateFile.name }}</p>
-              <p class="text-xs text-[var(--text-color-secondary)]">{{ (selectedUpdateFile.size / 1024).toFixed(1) }} KB</p>
-            </div>
-            <div v-if="uploadUpdateFileProgress === 'uploading'" class="flex-shrink-0">
-              <i class="pi pi-spin pi-spinner text-violet-500" />
-            </div>
-            <div v-else-if="uploadUpdateFileProgress === 'done'" class="flex-shrink-0">
-              <i class="pi pi-check-circle text-green-500" />
-            </div>
-            <div v-else-if="uploadUpdateFileProgress === 'error'" class="flex-shrink-0">
-              <i class="pi pi-times-circle text-red-500" />
-            </div>
-            <Button
-              v-if="uploadUpdateFileProgress !== 'uploading'"
-              icon="pi pi-times"
-              size="small"
-              severity="secondary"
-              text
-              rounded
-              @click="clearUpdateFile"
-            />
-          </div>
-          <input
-            ref="updateFileInputRef"
-            type="file"
-            class="hidden"
-            accept="*/*"
-            @change="onUpdateFileChange"
-          />
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-[var(--text-color)] mb-1">
-            Notas <span class="text-xs text-[var(--text-color-secondary)]">(opcional)</span>
-          </label>
-          <Textarea
-            v-model="addUpdateForm.notas"
-            rows="2"
-            placeholder="Notas de esta actualización..."
-            class="w-full"
-          />
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label class="block text-sm font-medium text-[var(--text-color)] mb-1">
-              Fecha Emisión <span class="text-xs text-[var(--text-color-secondary)]">(opcional)</span>
-            </label>
-            <input
-              type="date"
-              v-model="addUpdateForm.fechaEmision"
-              class="w-full px-3 py-2 border border-[var(--surface-border)] rounded-lg bg-[var(--surface-ground)] text-[var(--text-color)] text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-[var(--text-color)] mb-1">
-              Fecha Vencimiento <span class="text-xs text-[var(--text-color-secondary)]">(opcional)</span>
-            </label>
-            <input
-              type="date"
-              v-model="addUpdateForm.fechaVencimiento"
-              class="w-full px-3 py-2 border border-[var(--surface-border)] rounded-lg bg-[var(--surface-ground)] text-[var(--text-color)] text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-            />
-          </div>
-        </div>
+        <CertificateUpdateForm
+          ref="addUpdateFormRef"
+          v-model="addUpdateForm"
+          :stash-key-prefix="updateStashPrefix"
+          test-id-prefix="cert-update"
+        />
 
         <Message
           v-if="updateErrors.global"
