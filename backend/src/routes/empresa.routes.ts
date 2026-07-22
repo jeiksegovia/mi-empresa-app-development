@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, requireRole } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
+import { requireDomain } from '../middleware/domainAccess.js'
 import { z } from 'zod'
 import * as empresaService from '../services/empresaService.js'
 import * as cargoService from '../services/cargoEmpresaService.js'
@@ -9,6 +10,12 @@ import { logger } from '../config/logger.js'
 const router = Router()
 
 router.use(authMiddleware())
+
+// fixes-jul17-2 §1.2: empresa domain — matrix is false for BOTH GERONTOLOGA and
+// CONTRATOS, so for EMPLEADO + sub-role this returns 403. null-EMPLEADO legacy
+// allow still works. ADMIN/AUDITOR/OPERADOR fall through (requireRole on each
+// route continues to gate the actual access).
+router.use(requireDomain('empresa'))
 
 const updateEmpresaSchema = z.object({
   // jul-10 E1: normalize to upper-case + trim

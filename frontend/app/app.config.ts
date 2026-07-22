@@ -9,6 +9,7 @@ export default defineAppConfig({
     items: [
       { label: 'Inicio', icon: 'pi pi-home', to: '/' },
       { label: 'Empleados', icon: 'pi pi-users', to: '/empleados' },
+      { label: 'Asistencia', icon: 'pi pi-calendar', to: '/asistencia' },
       { label: 'Pacientes', icon: 'pi pi-user', to: '/pacientes' },
       { label: 'Instrumentos', icon: 'pi pi-clipboard', to: '/instrumentos' },
       { label: 'Certificados', icon: 'pi pi-file', to: '/certificados' },

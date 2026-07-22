@@ -19,6 +19,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "instruments:upgrade": "tsx scripts/instruments-upgrade.ts",
     "db:studio": "prisma studio",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",

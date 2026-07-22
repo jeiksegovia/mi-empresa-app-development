@@ -201,7 +201,20 @@ function clearDraft() {
   try { sessionStorage.removeItem(draftKey.value) } catch { /* noop */ }
 }
 
-defineExpose({ clearDraft, hasContent, hasFileContent })
+/**
+ * QA jul-11 B4a: full reset — files, model, IDB stash AND sessionStorage
+ * draft. clearDraft() alone left the IDB blobs behind, so the next mount
+ * restored a stale file chip with a null archivoUrl (silent no-op on submit).
+ * Parents MUST call this on successful submit and on cancel/dismiss.
+ */
+function reset() {
+  clearArchivo()
+  clearComprobante()
+  patchModel({ notas: '', fechaEmision: '', fechaVencimiento: '' })
+  clearDraft()
+}
+
+defineExpose({ clearDraft, reset, hasContent, hasFileContent })
 
 watch(
   () => [localValue.value.notas, localValue.value.fechaEmision, localValue.value.fechaVencimiento],
@@ -218,14 +231,48 @@ onMounted(async () => {
     })
   }
 
+  // QA jul-11 B4a: a restored stash entry may predate its upload (Android
+  // tab discarded mid-flow) — archivoUrl is NOT part of the draft, so it is
+  // null here. Previously we showed the chip anyway, and the user submitted
+  // believing the file was attached while nothing was sent. Now: if there is
+  // no uploaded key for a restored file, RE-UPLOAD it so the visible chip
+  // always corresponds to a persisted S3 key.
   const restoredArchivo = await restoreFile(archivoStashKey.value)
   if (restoredArchivo) {
     archivoFile.value = restoredArchivo
-    // file already uploaded in a prior session; let parent keep the existing
-    // archivoUrl as-is (it remains in localValue). No second upload.
+    if (localValue.value.archivoUrl) {
+      archivoProgress.value = 'done'
+    } else {
+      archivoProgress.value = 'uploading'
+      archivoUploading.value = true
+      const key = await uploadFile(restoredArchivo, 'certificados')
+      archivoUploading.value = false
+      if (key) {
+        patchModel({ archivoUrl: key })
+        archivoProgress.value = 'done'
+      } else {
+        archivoProgress.value = 'error'
+      }
+    }
   }
   const restoredComp = await restoreFile(comprobanteStashKey.value)
-  if (restoredComp) comprobanteFile.value = restoredComp
+  if (restoredComp) {
+    comprobanteFile.value = restoredComp
+    if (localValue.value.comprobantePagoUrl) {
+      comprobanteProgress.value = 'done'
+    } else {
+      comprobanteProgress.value = 'uploading'
+      comprobanteUploading.value = true
+      const key = await uploadFile(restoredComp, 'certificados')
+      comprobanteUploading.value = false
+      if (key) {
+        patchModel({ comprobantePagoUrl: key })
+        comprobanteProgress.value = 'done'
+      } else {
+        comprobanteProgress.value = 'error'
+      }
+    }
+  }
 })
 </script>
 

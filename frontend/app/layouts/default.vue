@@ -35,5 +35,11 @@ watch(() => route.path, () => {
         <slot />
       </main>
     </div>
+
+    <!-- QA jul-11 B3: single global toast outlet. Pages must NOT render their
+         own <Toast /> — duplicates make every toast.add() fire twice, and
+         pages without one (e.g. pacientes detalle) silently swallowed all
+         error feedback. -->
+    <Toast />
   </div>
 </template>

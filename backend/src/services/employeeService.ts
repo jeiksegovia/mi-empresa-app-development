@@ -1,5 +1,19 @@
 import { getPrisma } from '../config/database.js'
 
+/** Exact pendiente text for missing medio de pago (contract). */
+export const PENDIENTE_MEDIO_PAGO = 'Falta medio de pago de nómina'
+
+export type MedioPagoTipo = 'NEQUI' | 'TRANSFERENCIA_BANCARIA'
+export type TipoCuentaBanco = 'AHORRO' | 'CORRIENTE'
+
+export interface MedioPagoFields {
+  medioPagoTipo?: MedioPagoTipo | null
+  medioPagoNequi?: string | null
+  bancoNombre?: string | null
+  bancoTipoCuenta?: TipoCuentaBanco | null
+  bancoNumeroCuenta?: string | null
+}
+
 // List params and result types
 export interface EmployeeListParams {
   page?: number
@@ -182,10 +196,129 @@ export interface CreateEmployeeInput {
     visaExpedicion?: string
     visaVencimiento?: string
   }
+  // nomina-asistencia-jul-18
+  medioPagoTipo?: MedioPagoTipo | null
+  medioPagoNequi?: string | null
+  bancoNombre?: string | null
+  bancoTipoCuenta?: TipoCuentaBanco | null
+  bancoNumeroCuenta?: string | null
 }
 
 // Update input - top-level fields only
 export interface UpdateEmployeeInput extends Partial<Omit<CreateEmployeeInput, 'cargos' | 'contactosEmergencia' | 'nucleoFamiliar'>> {}
+
+/** Returns true when medio is fully valid for payroll. */
+export function isMedioPagoComplete(fields: MedioPagoFields): boolean {
+  if (!fields.medioPagoTipo) return false
+  if (fields.medioPagoTipo === 'NEQUI') {
+    return !!(fields.medioPagoNequi && String(fields.medioPagoNequi).trim())
+  }
+  if (fields.medioPagoTipo === 'TRANSFERENCIA_BANCARIA') {
+    return !!(
+      fields.bancoNombre &&
+      String(fields.bancoNombre).trim() &&
+      fields.bancoTipoCuenta &&
+      fields.bancoNumeroCuenta &&
+      String(fields.bancoNumeroCuenta).trim()
+    )
+  }
+  return false
+}
+
+/**
+ * Normalize medio fields for storage: clear opposite channel fields.
+ * Does not throw — Zod already enforced conditionals at the route layer.
+ */
+export function normalizeMedioPagoFields(input: MedioPagoFields): MedioPagoFields {
+  const tipo = input.medioPagoTipo ?? null
+  if (!tipo) {
+    return {
+      medioPagoTipo: null,
+      medioPagoNequi: null,
+      bancoNombre: null,
+      bancoTipoCuenta: null,
+      bancoNumeroCuenta: null,
+    }
+  }
+  if (tipo === 'NEQUI') {
+    return {
+      medioPagoTipo: 'NEQUI',
+      medioPagoNequi: input.medioPagoNequi ?? null,
+      bancoNombre: null,
+      bancoTipoCuenta: null,
+      bancoNumeroCuenta: null,
+    }
+  }
+  return {
+    medioPagoTipo: 'TRANSFERENCIA_BANCARIA',
+    medioPagoNequi: null,
+    bancoNombre: input.bancoNombre ?? null,
+    bancoTipoCuenta: input.bancoTipoCuenta ?? null,
+    bancoNumeroCuenta: input.bancoNumeroCuenta ?? null,
+  }
+}
+
+/**
+ * Open or resolve the medio-pago pendiente (idempotent).
+ * Incomplete medio → ensure one open pendiente with PENDIENTE_MEDIO_PAGO.
+ * Complete medio → resolve matching open pendientes.
+ */
+export async function syncMedioPagoPendiente(empleadoId: number, userId: number): Promise<void> {
+  const prisma = getPrisma()
+  const emp = await prisma.empleado.findUnique({
+    where: { id: empleadoId },
+    select: {
+      id: true,
+      medioPagoTipo: true,
+      medioPagoNequi: true,
+      bancoNombre: true,
+      bancoTipoCuenta: true,
+      bancoNumeroCuenta: true,
+    },
+  })
+  if (!emp) return
+
+  const complete = isMedioPagoComplete({
+    medioPagoTipo: emp.medioPagoTipo as MedioPagoTipo | null,
+    medioPagoNequi: emp.medioPagoNequi,
+    bancoNombre: emp.bancoNombre,
+    bancoTipoCuenta: emp.bancoTipoCuenta as TipoCuentaBanco | null,
+    bancoNumeroCuenta: emp.bancoNumeroCuenta,
+  })
+
+  const open = await prisma.pendienteEmpleado.findMany({
+    where: {
+      empleadoId,
+      estado: 'PENDIENTE',
+      OR: [
+        { descripcion: PENDIENTE_MEDIO_PAGO },
+        { descripcion: { startsWith: PENDIENTE_MEDIO_PAGO } },
+      ],
+    },
+  })
+
+  if (complete) {
+    if (open.length) {
+      await prisma.pendienteEmpleado.updateMany({
+        where: { id: { in: open.map((p) => p.id) } },
+        data: { estado: 'RESUELTO', fechaResuelto: new Date() },
+      })
+    }
+    return
+  }
+
+  // Incomplete — ensure exactly one open matching pendiente
+  if (open.length === 0) {
+    await prisma.pendienteEmpleado.create({
+      data: {
+        empleadoId,
+        creadoPor: userId,
+        descripcion: PENDIENTE_MEDIO_PAGO,
+        estado: 'PENDIENTE',
+      },
+    })
+  }
+}
 
 const ALL_RELATIONS = {
   nucleoFamiliar: true,
@@ -273,14 +406,41 @@ export async function getEmployee(id: number): Promise<EmployeeDetail | null> {
   return emp as EmployeeDetail | null
 }
 
-export async function createEmployee(input: CreateEmployeeInput): Promise<EmployeeDetail> {
+export async function createEmployee(
+  input: CreateEmployeeInput,
+  userId?: number,
+): Promise<EmployeeDetail> {
   const prisma = getPrisma()
 
-  const { cargos, contactosEmergencia, nucleoFamiliar, experienciasLaborales, educacionIdiomas, vehiculos, certificados, datosMigracion, ...baseFields } = input
+  const {
+    cargos,
+    contactosEmergencia,
+    nucleoFamiliar,
+    experienciasLaborales,
+    educacionIdiomas,
+    vehiculos,
+    certificados,
+    datosMigracion,
+    medioPagoTipo,
+    medioPagoNequi,
+    bancoNombre,
+    bancoTipoCuenta,
+    bancoNumeroCuenta,
+    ...baseFields
+  } = input
+
+  const medio = normalizeMedioPagoFields({
+    medioPagoTipo,
+    medioPagoNequi,
+    bancoNombre,
+    bancoTipoCuenta,
+    bancoNumeroCuenta,
+  })
 
   const emp = await prisma.empleado.create({
     data: {
       ...baseFields,
+      ...medio,
       fechaNacimiento: new Date(baseFields.fechaNacimiento),
       permisoTrabajo: baseFields.permisoTrabajo ?? false,
       tipoVivienda: baseFields.tipoVivienda as any,
@@ -389,10 +549,19 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
     include: ALL_RELATIONS,
   })
 
+  // nomina-asistencia-jul-18: open pendiente when medio incomplete
+  if (userId !== undefined) {
+    await syncMedioPagoPendiente(emp.id, userId)
+  }
+
   return emp as unknown as EmployeeDetail
 }
 
-export async function updateEmployee(id: number, input: UpdateEmployeeInput): Promise<EmployeeDetail> {
+export async function updateEmployee(
+  id: number,
+  input: UpdateEmployeeInput,
+  userId?: number,
+): Promise<EmployeeDetail> {
   const prisma = getPrisma()
 
   const existing = await prisma.empleado.findUnique({ where: { id } })
@@ -400,7 +569,16 @@ export async function updateEmployee(id: number, input: UpdateEmployeeInput): Pr
     throw new Error('Employee not found')
   }
 
-  const updateData: Record<string, unknown> = { ...input }
+  const {
+    medioPagoTipo,
+    medioPagoNequi,
+    bancoNombre,
+    bancoTipoCuenta,
+    bancoNumeroCuenta,
+    ...rest
+  } = input
+
+  const updateData: Record<string, unknown> = { ...rest }
 
   if (input.fechaNacimiento) {
     updateData.fechaNacimiento = new Date(input.fechaNacimiento)
@@ -410,11 +588,44 @@ export async function updateEmployee(id: number, input: UpdateEmployeeInput): Pr
     updateData.tipoVivienda = input.tipoVivienda as any
   }
 
+  // Only touch medio columns when at least one medio field is present in the payload
+  const medioTouched =
+    medioPagoTipo !== undefined ||
+    medioPagoNequi !== undefined ||
+    bancoNombre !== undefined ||
+    bancoTipoCuenta !== undefined ||
+    bancoNumeroCuenta !== undefined
+
+  if (medioTouched) {
+    const merged = normalizeMedioPagoFields({
+      medioPagoTipo:
+        medioPagoTipo !== undefined
+          ? medioPagoTipo
+          : (existing.medioPagoTipo as MedioPagoTipo | null),
+      medioPagoNequi:
+        medioPagoNequi !== undefined ? medioPagoNequi : existing.medioPagoNequi,
+      bancoNombre: bancoNombre !== undefined ? bancoNombre : existing.bancoNombre,
+      bancoTipoCuenta:
+        bancoTipoCuenta !== undefined
+          ? bancoTipoCuenta
+          : (existing.bancoTipoCuenta as TipoCuentaBanco | null),
+      bancoNumeroCuenta:
+        bancoNumeroCuenta !== undefined
+          ? bancoNumeroCuenta
+          : existing.bancoNumeroCuenta,
+    })
+    Object.assign(updateData, merged)
+  }
+
   const emp = await prisma.empleado.update({
     where: { id },
     data: updateData,
     include: ALL_RELATIONS,
   })
+
+  if (userId !== undefined) {
+    await syncMedioPagoPendiente(emp.id, userId)
+  }
 
   return emp as unknown as EmployeeDetail
 }

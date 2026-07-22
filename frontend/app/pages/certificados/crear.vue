@@ -157,9 +157,11 @@ async function onSubmit() {
       })
     }
 
-    // W7: clear drafts on successful submit (child owns its own IDB + sessionStorage)
+    // W7 + QA jul-11 B4a: full reset on successful submit — the child's
+    // reset() clears the IDB file stash too, not just the sessionStorage
+    // draft, so the next visit starts with empty file fields.
     clearCertCrearDraft()
-    firstUpdateFormRef.value?.clearDraft()
+    firstUpdateFormRef.value?.reset()
 
     await navigateTo(`/certificados/${newId}`)
   } catch (e: any) {
@@ -237,6 +239,14 @@ watch(
   () => writeTopDraft()
 )
 
+// QA jul-11 B4a: cancelling must also wipe drafts + stashed files, otherwise
+// they re-hydrate on the next visit and confuse the user.
+function onCancel() {
+  firstUpdateFormRef.value?.reset()
+  clearCertCrearDraft()
+  navigateTo('/certificados')
+}
+
 onMounted(async () => {
   await restoreTopDraft()
 })
@@ -251,12 +261,11 @@ onMounted(async () => {
           icon="pi pi-times"
           severity="secondary"
           outlined
-          @click="navigateTo('/certificados')"
+          @click="onCancel"
         />
       </template>
     </AppPageHeader>
 
-    <Toast />
 
     <div class="max-w-2xl">
       <Card>
@@ -371,11 +380,17 @@ onMounted(async () => {
                     </p>
                   </div>
 
+                  <!-- QA jul-11 B4a ROOT CAUSE: `v-model` on a `const reactive`
+                       binding compiles to a reassignment that silently no-ops,
+                       so the child's emitted archivoUrl/comprobantePagoUrl
+                       never reached this parent (files "attached" but never
+                       sent). Bind explicitly and merge into the reactive. -->
                   <CertificateUpdateForm
                     ref="firstUpdateFormRef"
-                    v-model="firstUpdate"
+                    :model-value="firstUpdate"
                     stash-key-prefix="cert-crear"
                     test-id-prefix="cert-first-update"
+                    @update:model-value="(v) => Object.assign(firstUpdate, v)"
                   />
                 </div>
               </template>
@@ -389,7 +404,7 @@ onMounted(async () => {
                 icon="pi pi-times"
                 severity="secondary"
                 outlined
-                @click="navigateTo('/certificados')"
+                @click="onCancel"
               />
               <Button
                 type="submit"

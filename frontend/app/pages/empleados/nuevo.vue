@@ -41,8 +41,24 @@ const step1 = reactive({
   documentoIdentificacionUrl: '',
   documentoFile: null as File | null,
   documentoFilename: '',
+  // nomina-asistencia-jul-18: medio de pago de nómina (optional on create).
+  // '' = Sin definir (null on wire).
+  medioPagoTipo: '' as '' | 'NEQUI' | 'TRANSFERENCIA_BANCARIA',
+  medioPagoNequi: '',
+  bancoNombre: '',
+  bancoTipoCuenta: '' as '' | 'AHORRO' | 'CORRIENTE',
+  bancoNumeroCuenta: '',
 })
 const step1Errors = reactive<Record<string, string>>({})
+const medioPagoTipoOptions = [
+  { label: 'Sin definir', value: '' },
+  { label: 'Nequi', value: 'NEQUI' },
+  { label: 'Transferencia bancaria', value: 'TRANSFERENCIA_BANCARIA' },
+]
+const bancoTipoCuentaOptions = [
+  { label: 'Ahorro', value: 'AHORRO' },
+  { label: 'Corriente', value: 'CORRIENTE' },
+]
 const documentoUploading = ref(false)
 const documentoFileInputRef = ref<HTMLInputElement | null>(null)
 async function onDocumentoChange(event: Event) {
@@ -277,6 +293,18 @@ async function submit() {
     // D3: include documentoIdentificacionUrl on the create payload if set.
     if (step1.documentoIdentificacionUrl) {
       payload.documentoIdentificacionUrl = step1.documentoIdentificacionUrl
+    }
+
+    // nomina-asistencia-jul-18: optional medio de pago.
+    // Omit when Sin definir; when set, send tipo + conditional fields.
+    if (step1.medioPagoTipo === 'NEQUI') {
+      payload.medioPagoTipo = 'NEQUI'
+      payload.medioPagoNequi = step1.medioPagoNequi.trim() || undefined
+    } else if (step1.medioPagoTipo === 'TRANSFERENCIA_BANCARIA') {
+      payload.medioPagoTipo = 'TRANSFERENCIA_BANCARIA'
+      if (step1.bancoNombre.trim()) payload.bancoNombre = step1.bancoNombre.trim()
+      if (step1.bancoTipoCuenta) payload.bancoTipoCuenta = step1.bancoTipoCuenta
+      if (step1.bancoNumeroCuenta.trim()) payload.bancoNumeroCuenta = step1.bancoNumeroCuenta.trim()
     }
 
     const validFamily = familyMembers.value.filter((f) => f.nombre.trim() && f.apellido.trim() && f.fechaNacimiento && f.genero && f.parentesco)
@@ -623,6 +651,74 @@ const tiposVehiculo = [
                 />
               </label>
               <i v-if="documentoUploading" class="pi pi-spin pi-spinner text-violet-500 ml-2" />
+            </div>
+
+            <!-- nomina-asistencia-jul-18: Medio de pago de nómina (optional) -->
+            <div
+              class="flex flex-col gap-3 sm:col-span-2 lg:col-span-3 border-t border-[var(--surface-border)] pt-4 mt-1"
+              data-testid="medio-pago-section"
+            >
+              <h4 class="text-sm font-semibold flex items-center gap-2 text-[var(--text-color)]">
+                <i class="pi pi-wallet text-violet-500" /> Medio de pago de nómina
+                <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
+              </h4>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="flex flex-col gap-1">
+                  <label class="text-sm font-medium" for="medio-pago-tipo">Tipo de medio</label>
+                  <Select
+                    id="medio-pago-tipo"
+                    v-model="step1.medioPagoTipo"
+                    :options="medioPagoTipoOptions"
+                    option-label="label"
+                    option-value="value"
+                    placeholder="Sin definir"
+                    class="w-full"
+                    data-testid="medio-pago-tipo"
+                  />
+                </div>
+                <div v-if="step1.medioPagoTipo === 'NEQUI'" class="flex flex-col gap-1">
+                  <label class="text-sm font-medium" for="medio-pago-nequi">Número Nequi</label>
+                  <InputText
+                    id="medio-pago-nequi"
+                    v-model="step1.medioPagoNequi"
+                    placeholder="Número Nequi"
+                    data-testid="medio-pago-nequi"
+                  />
+                </div>
+                <template v-if="step1.medioPagoTipo === 'TRANSFERENCIA_BANCARIA'">
+                  <div class="flex flex-col gap-1">
+                    <label class="text-sm font-medium" for="medio-pago-banco">Banco</label>
+                    <InputText
+                      id="medio-pago-banco"
+                      v-model="step1.bancoNombre"
+                      placeholder="Nombre del banco"
+                      data-testid="medio-pago-banco"
+                    />
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-sm font-medium" for="medio-pago-tipo-cuenta">Tipo de cuenta</label>
+                    <Select
+                      id="medio-pago-tipo-cuenta"
+                      v-model="step1.bancoTipoCuenta"
+                      :options="bancoTipoCuentaOptions"
+                      option-label="label"
+                      option-value="value"
+                      placeholder="Seleccionar"
+                      class="w-full"
+                      data-testid="medio-pago-tipo-cuenta"
+                    />
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-sm font-medium" for="medio-pago-numero-cuenta">Número de cuenta</label>
+                    <InputText
+                      id="medio-pago-numero-cuenta"
+                      v-model="step1.bancoNumeroCuenta"
+                      placeholder="Número de cuenta"
+                      data-testid="medio-pago-numero-cuenta"
+                    />
+                  </div>
+                </template>
+              </div>
             </div>
           </div>
         </template>
@@ -1081,6 +1177,5 @@ const tiposVehiculo = [
       </div>
     </div>
 
-    <Toast />
   </div>
 </template>

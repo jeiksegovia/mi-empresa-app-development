@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
+import { requireDomain } from '../middleware/domainAccess.js'
 import { z } from 'zod'
 import * as patientService from '../services/patientService.js'
 import { logger } from '../config/logger.js'
@@ -12,13 +13,22 @@ const router = Router()
 // Apply auth to all routes
 router.use(authMiddleware())
 
+// QA jul-11 B1/B2: PrimeVue DatePicker v-models are Date objects that
+// JSON-serialize to full ISO timestamps ("2026-08-04T05:00:00.000Z"), which
+// the anchored YYYY-MM-DD regexes rejected with an invisible 400. Normalize
+// any ISO-like string down to its date part before validating.
+const dateYMD = z.preprocess(
+  (v) => (typeof v === 'string' && v.length > 10 ? v.slice(0, 10) : v),
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+)
+
 // Zod schemas for validation
 const createPatientSchema = z.object({
   // jul-10 E1: normalize to upper-case + trim (descripcion/notas preserved as-is per user spec)
   nombre: z.string().min(1).max(100).transform((v) => v.trim().toUpperCase()),
   tipoDocumento: z.enum(['CC', 'CE', 'PASAPORTE', 'REGISTRO_CIVIL']),
   numeroDocumento: z.string().min(1).max(50),
-  fechaNacimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  fechaNacimiento: dateYMD,
   genero: z.string().min(1).max(20),
   telefono: z.string().optional(),
   email: z.string().email().optional().or(z.literal('')),
@@ -27,7 +37,7 @@ const createPatientSchema = z.object({
   informacionSeguro: z.string().optional(),
   observacionesEspeciales: z.string().optional(),
   // jul-9 B3/B4/B5
-  fechaCumpleanos: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  fechaCumpleanos: dateYMD.optional(),
   tipoSangre: z.enum(['A_POS', 'A_NEG', 'B_POS', 'B_NEG', 'AB_POS', 'AB_NEG', 'O_POS', 'O_NEG']).optional(),
   eps: z.string().max(200).optional(),
   contactosEmergencia: z
@@ -41,15 +51,33 @@ const createPatientSchema = z.object({
     .optional(),
 })
 
-// jul-10 C1: single-step ficha create (atomic assign + first update).
-// Presence of `archivoCompletado` flips the path from the legacy PENDIENTE
-// flow to a single Prisma `$transaction` that ends with estado=COMPLETADO.
+// jul-10 C1 (legacy) → W4 §4.3 (evolved): single-step ficha create (atomic assign + first update).
+// Presence of `respuestas` flips the path from the legacy PENDIENTE flow to a single
+// Prisma `$transaction` that ends with estado=COMPLETADO and the scoring fields
+// (respuestas, subtotales, puntajeTotal, clasificacion) populated by the scoring
+// engine.
+//
+// `instrumentoVersionId` is optional — defaults to the currently active version
+// (looked up by the service layer).
+//
+// `versionRegistro` is OPTIONAL (G2-12, 2026-07-17): clients SHOULD omit it. The
+// service layer server-derives it from the resolved active version as `v{version}`
+// (e.g., `"v1"`). Clients that send it are honored (backward compat).
+//
+// The legacy `archivoCompletado` field is REMOVED in W4 — file-flow is gone.
 const createFichaSchema = z.object({
   instrumentoId: z.number().int().positive(),
-  versionRegistro: z.string().min(1).max(20),
-  archivoCompletado: z.string().min(1).optional(),
+  instrumentoVersionId: z.number().int().positive().optional(),
+  versionRegistro: z.string().min(1).max(20).optional(),
+  respuestas: z.record(z.string(), z.any()).optional(),
   notasObservaciones: z.string().optional(),
-  fechaVencimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  fechaVencimiento: dateYMD.optional(),
+})
+
+// W4 §4.3b: PATCH /patients/:id/fichas/:fichaId/completar
+const completarFichaSchema = z.object({
+  respuestas: z.record(z.string(), z.any()),
+  notasObservaciones: z.string().optional(),
 })
 
 // jul-10 C7: weekly vencimientos report query
@@ -68,19 +96,21 @@ const createNoteSchema = z.object({
   tipo: z.enum(['POSITIVA', 'NEGATIVA', 'NEUTRAL', 'ALERTA']),
   prioridad: z.enum(['ALTA', 'MEDIA', 'BAJA']),
   contenido: z.string().min(1),
-  fechaIncidente: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'fechaIncidente must be YYYY-MM-DD'),
+  fechaIncidente: dateYMD,
 })
 
-// PATCH /patients/:id/fichas/:fichaId/status — body shape
+// PATCH /patients/:id/fichas/:fichaId/status — body shape.
+// W4: archivoCompletado removed (file flow gone). To complete a PENDIENTE ficha
+// with answers, use PATCH /:id/fichas/:fichaId/completar (§4.3b) instead.
 const updateFichaStatusSchema = z.object({
   estado: z.enum(['PENDIENTE', 'COMPLETADO', 'VENCIDO']),
-  archivoCompletado: z.string().min(1).optional(),
   notasObservaciones: z.string().optional(),
   fechaVencimiento: z.string().optional(),
 })
 
 // GET /patients - list with pagination/search/filter
-router.get('/', async (req: Request, res: Response): Promise<void> => {
+// fixes-jul17-2 §1.2: pacientes domain. CONTRATOS create-only → GET allowed.
+router.get('/', requireDomain('pacientes'), async (req: Request, res: Response): Promise<void> => {
   try {
     const page = parseInt(req.query.page as string) || 1
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 100)
@@ -98,7 +128,8 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 // jul-10 C7: GET /patients/fichas/vencimientos?days=N — weekly vencimientos report.
 // Placed BEFORE /:id only for readability; :id can't capture this path anyway
 // (two segments), but ordering keeps the report-route adjacent to the fichas tree.
-router.get('/fichas/vencimientos', validate(vencimientosQuerySchema, 'query'), async (req: Request, res: Response): Promise<void> => {
+// fixes-jul17-2 §1.2: fichas domain — CONTRATOS denied (matrix false).
+router.get('/fichas/vencimientos', requireDomain('fichas'), validate(vencimientosQuerySchema, 'query'), async (req: Request, res: Response): Promise<void> => {
   try {
     // validate() has already coerced `days` to a number via Zod preprocess.
     const { days } = req.query as unknown as { days: number }
@@ -111,7 +142,8 @@ router.get('/fichas/vencimientos', validate(vencimientosQuerySchema, 'query'), a
 })
 
 // GET /patients/:id
-router.get('/:id', async (req: Request, res: Response): Promise<void> => {
+// fixes-jul17-2 §1.2: pacientes domain.
+router.get('/:id', requireDomain('pacientes'), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) {
@@ -131,7 +163,8 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
 })
 
 // POST /patients
-router.post('/', validate(createPatientSchema), async (req: Request, res: Response): Promise<void> => {
+// fixes-jul17-2 §1.2: pacientes domain. CONTRATOS create-only → POST allowed.
+router.post('/', requireDomain('pacientes'), validate(createPatientSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const patient = await patientService.createPatient(req.body)
     res.status(201).json({ success: true, data: patient })
@@ -146,7 +179,8 @@ router.post('/', validate(createPatientSchema), async (req: Request, res: Respon
 })
 
 // PUT /patients/:id
-router.put('/:id', validate(updatePatientSchema), async (req: Request, res: Response): Promise<void> => {
+// fixes-jul17-2 §1.2: pacientes domain. CONTRATOS create-only → PUT 403.
+router.put('/:id', requireDomain('pacientes'), validate(updatePatientSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) {
@@ -170,7 +204,8 @@ router.put('/:id', validate(updatePatientSchema), async (req: Request, res: Resp
 })
 
 // DELETE /patients/:id (soft delete)
-router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+// fixes-jul17-2 §1.2: pacientes domain. CONTRATOS create-only → DELETE 403.
+router.delete('/:id', requireDomain('pacientes'), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) {
@@ -190,7 +225,8 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
 })
 
 // POST /patients/:id/notes - Create note for patient
-router.post('/:id/notes', validate(createNoteSchema), async (req: Request, res: Response): Promise<void> => {
+// fixes-jul17-2 §1.2: notas domain — only GERONTOLOGA / null-EMPLEADO have access.
+router.post('/:id/notes', requireDomain('notas'), validate(createNoteSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const patientId = parseInt(req.params.id as string)
     if (isNaN(patientId)) {
@@ -224,15 +260,16 @@ router.post('/:id/notes', validate(createNoteSchema), async (req: Request, res: 
   }
 })
 
-// POST /patients/:id/fichas — assign instrument (legacy PENDIENTE) OR
-// jul-10 C1 single-step (atomic create+complete when archivoCompletado is present)
-router.post('/:id/fichas', validate(createFichaSchema), async (req: Request, res: Response): Promise<void> => {
+// POST /patients/:id/fichas — W4 §4.3 (evolved).
+// `respuestas` absent → legacy PENDIENTE assign.
+// `respuestas` present → validate + score + persist as COMPLETADO.
+// fixes-jul17-2 §1.2: fichas domain — CONTRATOS denied (matrix false).
+router.post('/:id/fichas', requireDomain('fichas'), validate(createFichaSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const patientId = parseInt(req.params.id as string)
     if (isNaN(patientId)) { res.status(400).json({ success: false, message: 'Invalid patient ID' }); return }
 
     const prisma = getPrisma()
-    // Verify patient exists
     const patient = await prisma.cliente.findUnique({ where: { id: patientId } })
     if (!patient) { res.status(404).json({ success: false, message: 'Patient not found' }); return }
 
@@ -240,8 +277,16 @@ router.post('/:id/fichas', validate(createFichaSchema), async (req: Request, res
     res.status(201).json({ success: true, data: ficha })
   } catch (error: any) {
     logger.error('Create patient ficha error:', error)
+    if (error instanceof patientService.InstrumentScoringError) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+        code: error.code,
+        field: error.field,
+      })
+      return
+    }
     if (error.code === 'P2003') {
-      // FK violation — instrumentoId not found
       res.status(404).json({ success: false, message: 'Instrument not found' })
       return
     }
@@ -249,12 +294,89 @@ router.post('/:id/fichas', validate(createFichaSchema), async (req: Request, res
       res.status(404).json({ success: false, message: 'Patient not found' })
       return
     }
+    if (error.message === 'Instrument not found') {
+      res.status(404).json({ success: false, message: 'Instrument not found' })
+      return
+    }
+    if (error.message === 'NO_ACTIVE_VERSION') {
+      res.status(404).json({
+        success: false,
+        message: 'El instrumento no tiene una versión activa',
+        code: 'NO_ACTIVE_VERSION',
+      })
+      return
+    }
     res.status(500).json({ success: false, message: 'Error creating ficha' })
   }
 })
 
+// W4 §4.4: GET /patients/:id/fichas/:fichaId — full detail incl. respuestas/scoring/version
+// fixes-jul17-2 §1.2: fichas domain.
+router.get('/:id/fichas/:fichaId', requireDomain('fichas'), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const patientId = parseInt(req.params.id as string)
+    const fichaId = parseInt(req.params.fichaId as string)
+    if (isNaN(patientId) || isNaN(fichaId)) {
+      res.status(400).json({ success: false, message: 'Invalid IDs' })
+      return
+    }
+
+    const ficha = await patientService.getFicha(patientId, fichaId)
+    if (!ficha) {
+      res.status(404).json({ success: false, message: 'Ficha not found' })
+      return
+    }
+    res.json({ success: true, data: ficha })
+  } catch (error) {
+    logger.error('Get patient ficha error:', error)
+    res.status(500).json({ success: false, message: 'Error fetching ficha' })
+  }
+})
+
+// W4 §4.3b: PATCH /patients/:id/fichas/:fichaId/completar
+// Completes a PENDIENTE or VENCIDO ficha with answers. Returns 400 INVALID_STATE if already COMPLETADO.
+// fixes-jul17-2 §1.2: fichas domain — CONTRATOS denied.
+router.patch('/:id/fichas/:fichaId/completar', requireDomain('fichas'), validate(completarFichaSchema), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const patientId = parseInt(req.params.id as string)
+    const fichaId = parseInt(req.params.fichaId as string)
+    if (isNaN(patientId) || isNaN(fichaId)) {
+      res.status(400).json({ success: false, message: 'Invalid IDs' })
+      return
+    }
+
+    const ficha = await patientService.completeFichaAtomic(patientId, fichaId, req.body)
+    res.json({ success: true, data: ficha })
+  } catch (error: any) {
+    logger.error('Complete patient ficha error:', error)
+    if (error instanceof patientService.InstrumentScoringError) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+        code: error.code,
+        field: error.field,
+      })
+      return
+    }
+    if (error instanceof patientService.InvalidStateError) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+        code: error.code,
+      })
+      return
+    }
+    if (error.message === 'Ficha not found') {
+      res.status(404).json({ success: false, message: 'Ficha not found' })
+      return
+    }
+    res.status(500).json({ success: false, message: 'Error completing ficha' })
+  }
+})
+
 // DELETE /patients/:id/fichas/:fichaId — remove assignment (only if PENDIENTE)
-router.delete('/:id/fichas/:fichaId', async (req: Request, res: Response): Promise<void> => {
+// fixes-jul17-2 §1.2: fichas domain.
+router.delete('/:id/fichas/:fichaId', requireDomain('fichas'), async (req: Request, res: Response): Promise<void> => {
   try {
     const patientId = parseInt(req.params.id as string)
     const fichaId = parseInt(req.params.fichaId as string)
@@ -282,8 +404,11 @@ router.delete('/:id/fichas/:fichaId', async (req: Request, res: Response): Promi
   }
 })
 
-// PATCH /patients/:id/fichas/:fichaId/status — update status with transition validation
-router.patch('/:id/fichas/:fichaId/status', validate(updateFichaStatusSchema), async (req: Request, res: Response): Promise<void> => {
+// PATCH /patients/:id/fichas/:fichaId/status — update status with transition validation.
+// W4: archivoCompletado removed from this path. Use PATCH .../completar (§4.3b)
+// to complete a ficha with answers.
+// fixes-jul17-2 §1.2: fichas domain — CONTRATOS denied.
+router.patch('/:id/fichas/:fichaId/status', requireDomain('fichas'), validate(updateFichaStatusSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const patientId = parseInt(req.params.id as string)
     const fichaId = parseInt(req.params.fichaId as string)
@@ -292,9 +417,8 @@ router.patch('/:id/fichas/:fichaId/status', validate(updateFichaStatusSchema), a
       return
     }
 
-    const { estado, archivoCompletado, notasObservaciones, fechaVencimiento } = req.body as {
+    const { estado, notasObservaciones, fechaVencimiento } = req.body as {
       estado: string
-      archivoCompletado?: string
       notasObservaciones?: string
       fechaVencimiento?: string
     }
@@ -307,8 +431,6 @@ router.patch('/:id/fichas/:fichaId/status', validate(updateFichaStatusSchema), a
     if (!ficha) { res.status(404).json({ success: false, message: 'Ficha not found' }); return }
 
     // Validate transition. Per D3 — VENCIDO → COMPLETADO is allowed (admin override).
-    // VENCIDO is reached automatically by cron-style expiration, and the user
-    // can upload the late file and mark it complete.
     const validTransitions: Record<string, string[]> = {
       PENDIENTE: ['COMPLETADO', 'VENCIDO'],
       COMPLETADO: ['VENCIDO'],
@@ -320,16 +442,9 @@ router.patch('/:id/fichas/:fichaId/status', validate(updateFichaStatusSchema), a
       return
     }
 
-    // COMPLETADO requires archivoCompletado in the payload
-    if (estado === 'COMPLETADO' && !archivoCompletado) {
-      res.status(400).json({ success: false, message: 'archivoCompletado is required when transitioning to COMPLETADO' })
-      return
-    }
-
     const updateData: any = {
       estado,
       ...(estado === 'COMPLETADO' && { fechaCompletado: new Date() }),
-      ...(archivoCompletado && { archivoCompletado }),
       ...(notasObservaciones && { notasObservaciones }),
       ...(fechaVencimiento && { fechaVencimiento: new Date(fechaVencimiento) }),
     }

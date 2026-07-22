@@ -5,7 +5,31 @@ definePageMeta({
 })
 
 const authStore = useAuthStore()
+const { apiFetch } = useApi()
 const empresa = computed(() => authStore.empresa)
+
+// QA jul-11 I1: read-only cargos catalog on the detail view, so the list is
+// visible without entering edit mode (management stays on /empresa/editar).
+interface CargoEmpresa {
+  id: number
+  nombre: string
+  activo: boolean
+}
+const cargos = ref<CargoEmpresa[]>([])
+const cargosLoading = ref(false)
+const activeCargos = computed(() => cargos.value.filter((c) => c.activo !== false))
+
+async function fetchCargos() {
+  cargosLoading.value = true
+  try {
+    const res = await apiFetch<{ success: boolean; data: CargoEmpresa[] }>('/empresa/cargos')
+    cargos.value = (res.data ?? []).sort((a, b) => a.nombre.localeCompare(b.nombre))
+  } catch {
+    cargos.value = []
+  } finally {
+    cargosLoading.value = false
+  }
+}
 
 // W6: distinguish "still loading" from "loaded but empresa doesn't exist".
 // After the load completes and empresa is still null, we render the empty-state
@@ -22,6 +46,7 @@ onMounted(async () => {
     await authStore.fetchEmpresa()
   }
   loaded.value = true
+  if (empresa.value) await fetchCargos()
 })
 </script>
 
@@ -118,8 +143,41 @@ onMounted(async () => {
           </div>
         </template>
       </Card>
+
+      <!-- QA jul-11 I1: read-only cargos catalog (management lives in /empresa/editar) -->
+      <Card class="lg:col-span-2" data-testid="empresa-cargos-view">
+        <template #header>
+          <div class="px-6 pt-5 pb-0">
+            <h3 class="text-base font-semibold flex items-center gap-2 text-[var(--text-color)]">
+              <i class="pi pi-briefcase text-violet-500" /> Catálogo de Cargos
+              <span class="ml-2 text-xs font-normal text-[var(--text-color-secondary)]">
+                {{ activeCargos.length }} cargo(s) activo(s)
+              </span>
+            </h3>
+          </div>
+        </template>
+        <template #content>
+          <div v-if="cargosLoading" class="flex items-center justify-center py-4">
+            <i class="pi pi-spin pi-spinner text-2xl text-violet-500" />
+          </div>
+          <div
+            v-else-if="activeCargos.length === 0"
+            class="text-[var(--text-color-secondary)] text-sm py-2"
+          >
+            No hay cargos registrados. Puedes gestionarlos desde "Editar".
+          </div>
+          <div v-else class="flex flex-wrap gap-2">
+            <Tag
+              v-for="c in activeCargos"
+              :key="c.id"
+              :value="c.nombre"
+              severity="secondary"
+              data-testid="empresa-cargo-chip"
+            />
+          </div>
+        </template>
+      </Card>
     </div>
 
-    <Toast />
   </div>
 </template>

@@ -9,6 +9,7 @@ import { empresaRoutes } from './empresa.routes.js'
 import { uploadRoutes } from './uploads.routes.js'
 import { certificateRoutes } from './certificates.routes.js'
 import { userRoutes } from './users.routes.js'
+import { asistenciaRoutes } from './asistencia.routes.js'
 
 const router = Router()
 
@@ -16,6 +17,7 @@ router.use('/auth', authRoutes)
 router.use('/dashboard', dashboardRoutes)
 router.use('/employees', employeeRoutes)
 router.use('/nomina', nominaRoutes)
+router.use('/asistencia', asistenciaRoutes)
 router.use('/patients', patientRoutes)
 router.use('/instruments', instrumentRoutes)
 router.use('/empresa', empresaRoutes)

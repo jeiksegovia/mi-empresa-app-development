@@ -11,14 +11,21 @@ const emit = defineEmits<{
   close: []
 }>()
 
+const { can } = useDomainAccess()
+
 const sidebarWidth = computed(() => appConfig.sidebar.width)
 const menuItems = computed(() => appConfig.sidebar.items)
 
-// Filter menu items based on user role
+// Filter menu items based on role + RBAC domain matrix (§1.5).
 const filteredMenuItems = computed(() => {
   return menuItems.value.filter(item => {
-    // Hide "Empresa" menu item for non-admin users
+    // Hide "Empresa" menu item for non-admin users (pre-existing rule).
     if (item.to === '/empresa' && !authStore.isAdmin) {
+      return false
+    }
+    // Hide any section whose guarding domain is forbidden for this profile.
+    const domain = domainForPath(item.to)
+    if (domain && !can(domain)) {
       return false
     }
     return true

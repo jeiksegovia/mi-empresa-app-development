@@ -1,4 +1,10 @@
 import { getPrisma } from '../config/database.js'
+import {
+  validateAndScore,
+  type Respuestas,
+  type InstrumentDefinition,
+  InstrumentScoringError,
+} from './instrumentScoringService.js'
 
 /**
  * jul-10 C4 (decision D-C4): lazy PENDIENTE → VENCIDO flip.
@@ -256,6 +262,8 @@ export async function getPatient(id: number): Promise<PatientDetail | null> {
       estado: r.estado,
       fechaCompletado: r.fechaCompletado,
       fechaVencimiento: r.fechaVencimiento,
+      // W4: archivoCompletado REMOVED (file-flow gone). Historial surfaces the
+      // ficha in scoring-result view via GET /patients/:id/fichas/:fichaId instead.
       instrumento: {
         id: r.instrumento.id,
         nombreInstrumento: r.instrumento.nombreInstrumento,
@@ -326,6 +334,8 @@ export async function createPatient(input: CreatePatientInput): Promise<PatientD
       estado: r.estado,
       fechaCompletado: r.fechaCompletado,
       fechaVencimiento: r.fechaVencimiento,
+      // W4: archivoCompletado REMOVED (file-flow gone). Historial surfaces the
+      // ficha in scoring-result view via GET /patients/:id/fichas/:fichaId instead.
       instrumento: {
         id: r.instrumento.id,
         nombreInstrumento: r.instrumento.nombreInstrumento,
@@ -407,6 +417,8 @@ export async function updatePatient(id: number, input: UpdatePatientInput): Prom
       estado: r.estado,
       fechaCompletado: r.fechaCompletado,
       fechaVencimiento: r.fechaVencimiento,
+      // W4: archivoCompletado REMOVED (file-flow gone). Historial surfaces the
+      // ficha in scoring-result view via GET /patients/:id/fichas/:fichaId instead.
       instrumento: {
         id: r.instrumento.id,
         nombreInstrumento: r.instrumento.nombreInstrumento,
@@ -514,88 +526,345 @@ export async function listFichasVencimientos(days: number = 7): Promise<FichasVe
   }
 }
 
-// jul-10 C1: atomic single-step ficha create-or-complete
+// ---------------------------------------------------------------------------
+// W4 §4.3 / §4.3b / §4.4 — fichas with dynamic answers.
+//
+// Two write paths and one read path:
+//
+//   - createFichaAtomic: POST /patients/:id/fichas
+//       - respuestas absent → PENDIENTE (assign only, no scoring).
+//       - respuestas present → validate + score + persist as COMPLETADO.
+//
+//   - completeFichaAtomic: PATCH /patients/:id/fichas/:fichaId/completar
+//       - PENDIENTE or VENCIDO → COMPLETADO with validated/scored answers.
+//       - already COMPLETADO → throws InvalidStateError.
+//
+//   - getFicha: GET /patients/:id/fichas/:fichaId
+//       - response shape includes respuestas, subtotales, puntajeTotal,
+//         clasificacion, skippedSections, instrumentoVersion.
+//
+// All three return the same response shape (`FichaDetailResponse`) so W3's
+// renderer does not have to branch on the endpoint.
+// ---------------------------------------------------------------------------
+
 export interface CreateFichaInput {
   instrumentoId: number
-  versionRegistro: string
-  archivoCompletado?: string
+  /** Optional explicit version id; if omitted, the currently active version is used. */
+  instrumentoVersionId?: number
+  /**
+   * OPTIONAL (G2-12, 2026-07-17): clients SHOULD omit this. The service derives
+   * it server-side as `v{version}` (e.g., `"v1"`) from the resolved active
+   * version. If a client does send it, the value is honored (backward compat).
+   */
+  versionRegistro?: string
+  /** W4: respuestas is OPTIONAL — absent → PENDIENTE assign; present → COMPLETADO. */
+  respuestas?: Respuestas
   notasObservaciones?: string
   fechaVencimiento?: string
 }
 
-export interface FichaCreated {
+export interface CompleteFichaInput {
+  respuestas: Respuestas
+  notasObservaciones?: string
+}
+
+export interface FichaDetailResponse {
   id: number
   clienteId: number
   instrumentoId: number
-  estado: 'PENDIENTE' | 'COMPLETADO'
-  archivoCompletado: string | null
+  instrumentoVersionId: number | null
+  estado: 'PENDIENTE' | 'COMPLETADO' | 'VENCIDO'
   fechaCompletado: Date | null
   fechaVencimiento: Date | null
   versionRegistro: string
+  responsable: { id: number; nombre: string; apellido: string } | number
   notasObservaciones: string | null
-  singleStepCompleted: boolean
-  instrumento: { id: number; nombreInstrumento: string; tipo: string }
+  respuestas: Respuestas | null
+  subtotales: Record<string, number> | null
+  puntajeTotal: number | null
+  clasificacion: string | null
+  skippedSections: string[]
+}
+
+export class InvalidStateError extends Error {
+  readonly code: 'INVALID_STATE'
+  constructor(message: string) {
+    super(message)
+    this.name = 'InvalidStateError'
+    this.code = 'INVALID_STATE'
+  }
+}
+
+function calcularFechaVencimientoFromPeriodicidad(periodicidad: string, desde: Date): Date | null {
+  const d = new Date(desde)
+  switch (periodicidad) {
+    case 'MENSUAL':
+      d.setMonth(d.getMonth() + 1)
+      return d
+    case 'TRIMESTRAL':
+      d.setMonth(d.getMonth() + 3)
+      return d
+    case 'SEMESTRAL':
+      d.setMonth(d.getMonth() + 6)
+      return d
+    case 'ANUAL':
+      d.setFullYear(d.getFullYear() + 1)
+      return d
+    case 'UNICA':
+    default:
+      return null
+  }
+}
+
+async function loadActiveVersion(
+  prisma: ReturnType<typeof getPrisma>,
+  instrumentoId: number,
+): Promise<{ id: number; version: number; definition: InstrumentDefinition; periodicidad: string }> {
+  const inst = await prisma.instrumento.findUnique({
+    where: { id: instrumentoId },
+    select: { periodicidad: true },
+  })
+  if (!inst) {
+    throw new Error('Instrument not found')
+  }
+  const version = await prisma.instrumentoVersion.findFirst({
+    where: { instrumentoId, activo: true },
+  })
+  if (!version) {
+    throw new Error('NO_ACTIVE_VERSION')
+  }
+  return {
+    id: version.id,
+    version: version.version,
+    definition: version.definition as unknown as InstrumentDefinition,
+    periodicidad: inst.periodicidad,
+  }
+}
+
+async function buildFichaResponse(
+  prisma: ReturnType<typeof getPrisma>,
+  fichaRow: Awaited<ReturnType<typeof prisma.registroFichaCompletada.findUnique>>,
+): Promise<FichaDetailResponse | null> {
+  if (!fichaRow) return null
+  // Hydrate the responsible usuario's display name (the field is still an FK
+  // integer per the schema; the response surfaces a small summary for W3).
+  let responsableSummary: FichaDetailResponse['responsable'] = fichaRow.responsable
+  try {
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: fichaRow.responsable },
+      select: { id: true, nombre: true, apellido: true },
+    })
+    if (usuario) {
+      responsableSummary = { id: usuario.id, nombre: usuario.nombre, apellido: usuario.apellido }
+    }
+  } catch {
+    /* leave as the integer fallback */
+  }
+
+  return {
+    id: fichaRow.id,
+    clienteId: fichaRow.clienteId,
+    instrumentoId: fichaRow.instrumentoId,
+    instrumentoVersionId: fichaRow.instrumentoVersionId,
+    estado: fichaRow.estado as FichaDetailResponse['estado'],
+    fechaCompletado: fichaRow.fechaCompletado,
+    fechaVencimiento: fichaRow.fechaVencimiento,
+    versionRegistro: fichaRow.versionRegistro,
+    responsable: responsableSummary,
+    notasObservaciones: fichaRow.notasObservaciones,
+    respuestas: (fichaRow.respuestas as Respuestas | null) ?? null,
+    subtotales: (fichaRow.subtotales as Record<string, number> | null) ?? null,
+    puntajeTotal: fichaRow.puntajeTotal,
+    clasificacion: fichaRow.clasificacion,
+    skippedSections: [], // derivable on the fly by the engine; not persisted (contract §5.3 step 6)
+  }
 }
 
 /**
- * jul-10 C1: atomic assign + first update (single Prisma `$transaction`).
- * If `archivoCompletado` is provided, the ficha is created as COMPLETADO
- * with archivoCompletado + fechaCompletado set in one txn. Otherwise the
- * legacy flow runs (PENDIENTE, no fechaCompletado).
+ * W4 §4.3 — POST /patients/:id/fichas.
  *
- * The renewal flow (legacy PENDIENTE → PATCH → COMPLETADO) is preserved by
- * patients.routes.ts' PATCH /:id/fichas/:fichaId/status endpoint.
+ * - respuestas absent → PENDIENTE assign (legacy behavior preserved).
+ * - respuestas present → validate + score + persist as COMPLETADO.
+ *   - instrumentoVersionId is SERVER-RESOLVED (contract G2-11): any value the
+ *     client sends is ignored; we always use the currently active version.
+ *     The route still accepts the key in the Zod schema (it's optional) so
+ *     W3's payload doesn't trip validation, but the persisted row carries
+ *     the resolved id.
+ *   - fechaVencimiento is computed from instrumento.periodicidad (UNICA → null).
+ *   - skippedSections is computed at score time and is part of the response.
+ *
+ * Throws `InstrumentScoringError` on validation failure (route maps to 400).
  */
 export async function createFichaAtomic(
   patientId: number,
   responsableId: number,
-  input: CreateFichaInput
-): Promise<FichaCreated> {
+  input: CreateFichaInput,
+): Promise<FichaDetailResponse> {
   const prisma = getPrisma()
+  const patient = await prisma.cliente.findUnique({ where: { id: patientId } })
+  if (!patient) {
+    throw new Error('Patient not found')
+  }
 
-  const singleStep = Boolean(input.archivoCompletado && input.archivoCompletado.trim().length > 0)
+  // Resolve the InstrumentoVersion up-front so both branches (assign-only and
+  // assign+complete) record the same FK row. Per G2-11 the client-supplied
+  // version id (if any) is intentionally ignored — the active version wins.
+  const { id: resolvedVersionId, version: resolvedVersionNumber, definition, periodicidad } =
+    await loadActiveVersion(prisma, input.instrumentoId)
 
-  return await prisma.$transaction(async (tx) => {
-    const ficha = await tx.registroFichaCompletada.create({
+  // G2-12: server-default `versionRegistro` to `v{version}` when the caller omitted it.
+  const effectiveVersionRegistro = input.versionRegistro?.trim()
+    ? input.versionRegistro
+    : `v${resolvedVersionNumber}`
+
+  // Branch A — assign only (legacy PENDIENTE behavior).
+  if (!input.respuestas || Object.keys(input.respuestas).length === 0) {
+    const now = new Date()
+    const ficha = await prisma.registroFichaCompletada.create({
       data: {
         clienteId: patientId,
         instrumentoId: input.instrumentoId,
-        estado: singleStep ? 'COMPLETADO' : 'PENDIENTE',
-        versionRegistro: input.versionRegistro,
+        instrumentoVersionId: resolvedVersionId,
+        estado: 'PENDIENTE',
+        versionRegistro: effectiveVersionRegistro,
         responsable: responsableId,
-        ...(singleStep
-          ? {
-              archivoCompletado: input.archivoCompletado!,
-              fechaCompletado: new Date(),
-            }
-          : {}),
         ...(input.notasObservaciones ? { notasObservaciones: input.notasObservaciones } : {}),
-        ...(input.fechaVencimiento ? { fechaVencimiento: new Date(input.fechaVencimiento) } : {}),
-      },
-      include: {
-        instrumento: { select: { id: true, nombreInstrumento: true, tipo: true } },
+        ...(input.fechaVencimiento
+          ? { fechaVencimiento: new Date(input.fechaVencimiento) }
+          : { fechaVencimiento: calcularFechaVencimientoFromPeriodicidad(periodicidad, now) }),
       },
     })
-
-    return {
-      id: ficha.id,
-      clienteId: ficha.clienteId,
-      instrumentoId: ficha.instrumentoId,
-      estado: ficha.estado as 'PENDIENTE' | 'COMPLETADO',
-      archivoCompletado: ficha.archivoCompletado,
-      fechaCompletado: ficha.fechaCompletado,
-      fechaVencimiento: ficha.fechaVencimiento,
-      versionRegistro: ficha.versionRegistro,
-      notasObservaciones: ficha.notasObservaciones,
-      singleStepCompleted: singleStep,
-      instrumento: {
-        id: ficha.instrumento.id,
-        nombreInstrumento: ficha.instrumento.nombreInstrumento,
-        tipo: ficha.instrumento.tipo,
-      },
+    const response = await buildFichaResponse(prisma, ficha)
+    if (!response) {
+      throw new Error('Failed to load created ficha')
     }
+    return response
+  }
+
+  // Branch B — single-step assign + complete.
+  const scoreResult = validateAndScore(definition, input.respuestas)
+  const now = new Date()
+  const ficha = await prisma.registroFichaCompletada.create({
+    data: {
+      clienteId: patientId,
+      instrumentoId: input.instrumentoId,
+      instrumentoVersionId: resolvedVersionId,
+      estado: 'COMPLETADO',
+      versionRegistro: effectiveVersionRegistro,
+      responsable: responsableId,
+      fechaCompletado: now,
+      respuestas: input.respuestas as object,
+      puntajeTotal: scoreResult.puntajeTotal,
+      subtotales: scoreResult.subtotales as object,
+      clasificacion: scoreResult.clasificacion,
+      ...(input.notasObservaciones ? { notasObservaciones: input.notasObservaciones } : {}),
+      ...(input.fechaVencimiento
+        ? { fechaVencimiento: new Date(input.fechaVencimiento) }
+        : { fechaVencimiento: calcularFechaVencimientoFromPeriodicidad(periodicidad, now) }),
+    },
   })
+  const response = await buildFichaResponse(prisma, ficha)
+  if (!response) {
+    throw new Error('Failed to load created ficha')
+  }
+  response.skippedSections = scoreResult.skippedSections
+  return response
 }
+
+/**
+ * W4 §4.3b — PATCH /patients/:id/fichas/:fichaId/completar.
+ *
+ * Completes an existing PENDIENTE (or VENCIDO) ficha with answers.
+ * - already COMPLETADO → throws InvalidStateError.
+ * - validation/scoring happens identically to createFichaAtomic.
+ * - instrumentoVersionId is SERVER-RESOLVED (G2-11): the version recorded on
+ *   the row at completion time is ALWAYS the currently active version, even
+ *   if the row previously held a different value (e.g., a stale v1 → v2 bump).
+ *
+ * On success, the row is updated in place and the new full response is returned.
+ */
+export async function completeFichaAtomic(
+  patientId: number,
+  fichaId: number,
+  input: CompleteFichaInput,
+): Promise<FichaDetailResponse> {
+  const prisma = getPrisma()
+
+  const existing = await prisma.registroFichaCompletada.findFirst({
+    where: { id: fichaId, clienteId: patientId },
+  })
+  if (!existing) {
+    throw new Error('Ficha not found')
+  }
+  if (existing.estado === 'COMPLETADO') {
+    throw new InvalidStateError('La ficha ya está en estado COMPLETADO')
+  }
+
+  // G2-11: server-resolved active version. We do NOT honor the previously
+  // recorded version (it may be stale if the active version was bumped
+  // between assign and complete). The active version at completion time wins.
+  const { id: versionId, version: resolvedVersionNumber, definition } =
+    await loadActiveVersion(prisma, existing.instrumentoId)
+
+  // G2-12: ensure `versionRegistro` reflects the active version (legacy assign
+  // rows may predate G2-12; older runs set a hardcoded string. We re-derive
+  // from the active version when the row's value is missing/empty.)
+  const effectiveVersionRegistro =
+    existing.versionRegistro && existing.versionRegistro.trim().length > 0
+      ? existing.versionRegistro
+      : `v${resolvedVersionNumber}`
+
+  const scoreResult = validateAndScore(definition, input.respuestas)
+  const now = new Date()
+  const updated = await prisma.registroFichaCompletada.update({
+    where: { id: fichaId },
+    data: {
+      estado: 'COMPLETADO',
+      fechaCompletado: now,
+      instrumentoVersionId: versionId,
+      versionRegistro: effectiveVersionRegistro,
+      respuestas: input.respuestas as object,
+      puntajeTotal: scoreResult.puntajeTotal,
+      subtotales: scoreResult.subtotales as object,
+      clasificacion: scoreResult.clasificacion,
+      ...(input.notasObservaciones !== undefined
+        ? { notasObservaciones: input.notasObservaciones }
+        : {}),
+    },
+  })
+  const response = await buildFichaResponse(prisma, updated)
+  if (!response) {
+    throw new Error('Failed to load completed ficha')
+  }
+  response.skippedSections = scoreResult.skippedSections
+  return response
+}
+
+/**
+ * W4 §4.4 — GET /patients/:id/fichas/:fichaId (detail).
+ * Returns the new response shape including respuestas, scoring fields, and
+ * instrumentoVersion metadata.
+ */
+export async function getFicha(
+  patientId: number,
+  fichaId: number,
+): Promise<FichaDetailResponse | null> {
+  const prisma = getPrisma()
+
+  // jul-10 C4: lazy flip — same as getPatient. Keeps the detail response truthful.
+  await flipExpiredFichas(prisma, patientId)
+
+  const row = await prisma.registroFichaCompletada.findFirst({
+    where: { id: fichaId, clienteId: patientId },
+  })
+  if (!row) return null
+  return buildFichaResponse(prisma, row)
+}
+
+/**
+ * W4 helper — re-export the scoring error so callers don't need a separate import.
+ */
+export { InstrumentScoringError }
 
 export interface CreateNoteInput {
   tipo: 'POSITIVA' | 'NEGATIVA' | 'NEUTRAL' | 'ALERTA'

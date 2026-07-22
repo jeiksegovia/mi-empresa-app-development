@@ -1,5 +1,6 @@
 import { getPrisma } from '../config/database.js'
 import type { Prisma } from '../generated/prisma/index.js'
+import { sumMediasForEmpleadoPeriodo } from './asistenciaService.js'
 
 export interface ContratoInput {
   tipoContrato: 'OPS' | 'OBRA_O_LABOR' | 'TERMINO_FIJO' | 'TERMINO_INDEFINIDO'
@@ -12,6 +13,8 @@ export interface ContratoInput {
   // a Zod `.optional()` upstream has been removed in nomina.routes.ts.
   cargoId: number
   activo?: boolean
+  // nomina-asistencia-jul-18: required on CREATE at route layer
+  valorJornada?: number | null
 }
 
 export interface NominaPeriodoArchivoInput {
@@ -22,11 +25,19 @@ export interface NominaPeriodoArchivoInput {
 
 export interface NominaPeriodoInput {
   empleadoId: number
-  periodo: string  // YYYY-MM-01
+  periodo: string // YYYY-MM
   salario?: number
   notas?: string
   archivos?: NominaPeriodoArchivoInput[]
+  // nomina-asistencia-jul-18 calc fields
+  mediasJornadas?: number
+  valorJornada?: number
+  subtotalCalculado?: number
+  aportesSociales?: number
+  totalPagado?: number
 }
+
+const APORTES_ALLOWED: ReadonlySet<string> = new Set(['TERMINO_FIJO', 'TERMINO_INDEFINIDO'])
 
 export async function listContratos(empleadoId: number) {
   const prisma = getPrisma()
@@ -41,6 +52,7 @@ export async function listContratos(empleadoId: number) {
  * Create a new Contrato.
  * Rule 1: when activo=true (default), nullify any existing active contrato for the same empleado.
  * Rule 2: fechaFin required unless TERMINO_INDEFINIDO.
+ * Rule 3 (jul-18): valorJornada required on CREATE (enforced in route Zod + here as safety).
  */
 export async function createContrato(
   empleadoId: number,
@@ -50,8 +62,20 @@ export async function createContrato(
   if (input.tipoContrato !== 'TERMINO_INDEFINIDO' && !input.fechaFin) {
     throw Object.assign(new Error('fechaFin es requerido para este tipo de contrato'), { status: 400 })
   }
+  if (input.valorJornada === undefined || input.valorJornada === null) {
+    throw Object.assign(new Error('valorJornada es requerido'), {
+      status: 400,
+      field: 'valorJornada',
+    })
+  }
+  if (typeof input.valorJornada === 'number' && input.valorJornada < 0) {
+    throw Object.assign(new Error('valorJornada debe ser ≥ 0'), {
+      status: 400,
+      field: 'valorJornada',
+    })
+  }
 
-  const wantsActivo = input.activo !== false  // default true
+  const wantsActivo = input.activo !== false // default true
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     if (wantsActivo) {
       await tx.contrato.updateMany({
@@ -67,8 +91,8 @@ export async function createContrato(
         fechaFin: input.fechaFin ? new Date(input.fechaFin) : null,
         archivoUrl: input.archivoUrl ?? null,
         archivoFirmadoUrl: input.archivoFirmadoUrl ?? null,
-        // jul-10: cargoId is REQUIRED now (jul-10 migration tightened NOT NULL).
         cargoId: input.cargoId,
+        valorJornada: input.valorJornada,
         activo: wantsActivo,
       },
       include: { cargo: true },
@@ -97,18 +121,21 @@ export async function updateContrato(
         data: { activo: false },
       })
     }
+    const data: Record<string, unknown> = {
+      tipoContrato: input.tipoContrato,
+      fechaInicio: new Date(input.fechaInicio),
+      fechaFin: input.fechaFin ? new Date(input.fechaFin) : null,
+      archivoUrl: input.archivoUrl ?? null,
+      archivoFirmadoUrl: input.archivoFirmadoUrl ?? null,
+      cargoId: input.cargoId,
+      activo: wantsActivo,
+    }
+    if (input.valorJornada !== undefined) {
+      data.valorJornada = input.valorJornada
+    }
     return tx.contrato.update({
       where: { id: cid },
-      data: {
-        tipoContrato: input.tipoContrato,
-        fechaInicio: new Date(input.fechaInicio),
-        fechaFin: input.fechaFin ? new Date(input.fechaFin) : null,
-        archivoUrl: input.archivoUrl ?? null,
-        archivoFirmadoUrl: input.archivoFirmadoUrl ?? null,
-        // jul-10: cargoId required (not null)
-        cargoId: input.cargoId,
-        activo: wantsActivo,
-      },
+      data,
       include: { cargo: true },
     })
   })
@@ -123,15 +150,14 @@ export async function deleteContrato(empleadoId: number, cid: number) {
 
 /**
  * GET /nomina?periodo=YYYY-MM[&tipoContrato=OPS,OBRA_O_LABOR,TERMINO_FIJO,TERMINO_INDEFINIDO,NONE]
- *
- * - Default (no tipoContrato param): only empleados WITH an active contract.
- * - With `tipoContrato` param: filter includes any empleado whose active
- *   contrato.tipoContrato ∈ the list, OR (if "NONE" is in the list) empleados
- *   with NO active contrato.
- *
- * Returns each ACTIVO empleado with their contrato activo + period entry status.
  */
 const VALID_TIPOS_CONTRATO = ['OPS', 'OBRA_O_LABOR', 'TERMINO_FIJO', 'TERMINO_INDEFINIDO', 'NONE'] as const
+
+function toNum(v: unknown): number | null {
+  if (v === null || v === undefined) return null
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : null
+}
 
 export async function getNominaMonth(
   periodoYYYYMM: string,
@@ -161,15 +187,11 @@ export async function getNominaMonth(
     includeNoContract = valid.includes('NONE')
   }
 
-  // Filter empleados via contrato relation. When the user requested NONE, we
-  // union in empleados whose contrato count is 0 via `contratos: { none: ... }`.
-  // Prisma's `OR` between top-level and nested conditions works on findMany.
   const where: any = { estado: 'ACTIVO' }
   const orClauses: any[] = []
   if (tipoFilter && tipoFilter.length > 0) {
     orClauses.push({ contratos: { some: { activo: true, tipoContrato: { in: tipoFilter as any } } } })
   } else if (!tipoContratoParam) {
-    // No filter at all → default behaviour: only empleados WITH an active contract.
     orClauses.push({ contratos: { some: { activo: true } } })
   }
   if (includeNoContract) {
@@ -187,17 +209,60 @@ export async function getNominaMonth(
     },
   })
 
-  return empleados.map((e: any) => ({
-    empleado: {
-      id: e.id,
-      nombre: e.nombre,
-      apellido: e.apellido,
-      numeroDocumento: e.numeroDocumento,
-    },
-    contratoActivo: e.contratos[0] ?? null,
-    entrada: e.nominaPeriodos[0] ?? null,
-    cargoSalario: e.cargos[0]?.salario ?? null,
-  }))
+  // Batch-load asistencia medias for the month for all empleados in the result
+  const start = periodoDate
+  const end = new Date(Date.UTC(year, month, 1))
+  const empIds = empleados.map((e) => e.id)
+  const asistenciaRows =
+    empIds.length === 0
+      ? []
+      : await prisma.asistenciaEmpleado.findMany({
+          where: {
+            empleadoId: { in: empIds },
+            fecha: { gte: start, lt: end },
+          },
+          select: { empleadoId: true, jornadaAm: true, jornadaPm: true },
+        })
+  const mediasByEmp = new Map<number, number>()
+  for (const r of asistenciaRows) {
+    const prev = mediasByEmp.get(r.empleadoId) ?? 0
+    mediasByEmp.set(r.empleadoId, prev + (r.jornadaAm ? 1 : 0) + (r.jornadaPm ? 1 : 0))
+  }
+
+  return empleados.map((e: any) => {
+    const mediasJornadas = mediasByEmp.get(e.id) ?? 0
+    const contrato = e.contratos[0] ?? null
+    const valorJornada = contrato ? toNum(contrato.valorJornada) : null
+    const subtotal =
+      valorJornada !== null ? mediasJornadas * valorJornada : 0
+    return {
+      empleado: {
+        id: e.id,
+        nombre: e.nombre,
+        apellido: e.apellido,
+        numeroDocumento: e.numeroDocumento,
+        medioPagoTipo: e.medioPagoTipo ?? null,
+        medioPagoNequi: e.medioPagoNequi ?? null,
+        bancoNombre: e.bancoNombre ?? null,
+        bancoTipoCuenta: e.bancoTipoCuenta ?? null,
+        bancoNumeroCuenta: e.bancoNumeroCuenta ?? null,
+      },
+      contratoActivo: contrato,
+      entrada: e.nominaPeriodos[0] ?? null,
+      cargoSalario: e.cargos[0]?.salario ?? null,
+      asistenciaMes: {
+        mediasJornadas,
+        horas: mediasJornadas * 4,
+      },
+      sugerido: {
+        mediasJornadas,
+        valorJornada,
+        subtotalCalculado: subtotal,
+        aportesSociales: 0,
+        totalPagado: subtotal,
+      },
+    }
+  })
 }
 
 export async function getNominaPeriodo(id: number) {
@@ -209,10 +274,78 @@ export async function getNominaPeriodo(id: number) {
 }
 
 /**
- * Create a NominaPeriodo row.
- *  - Periodo = first day of the month from input.periodo (YYYY-MM-DD).
- *  - Resolves contrato activo on the empleado (or fetched explicitly).
- *  - UK(empleadoId, periodo) → P2002 → 409.
+ * Resolve calc fields for create/update.
+ */
+async function resolveCalcFields(
+  input: Partial<NominaPeriodoInput> & { empleadoId: number; periodo: string },
+  tipoContrato: string,
+  contratoValorJornada: unknown,
+): Promise<{
+  mediasJornadas: number | null
+  valorJornada: number | null
+  subtotalCalculado: number | null
+  aportesSociales: number
+  totalPagado: number | null
+  salario: number | null
+}> {
+  const aportes = input.aportesSociales ?? 0
+  if (aportes > 0 && !APORTES_ALLOWED.has(tipoContrato)) {
+    throw Object.assign(
+      new Error('Aportes sociales no aplican para este tipo de contrato'),
+      { status: 400, field: 'aportesSociales' },
+    )
+  }
+
+  let medias: number | null
+  if (input.mediasJornadas !== undefined && input.mediasJornadas !== null) {
+    medias = input.mediasJornadas
+  } else {
+    medias = await sumMediasForEmpleadoPeriodo(input.empleadoId, input.periodo)
+  }
+
+  let valor: number | null
+  if (input.valorJornada !== undefined && input.valorJornada !== null) {
+    valor = input.valorJornada
+  } else {
+    valor = toNum(contratoValorJornada)
+  }
+
+  let subtotal: number | null
+  if (input.subtotalCalculado !== undefined && input.subtotalCalculado !== null) {
+    subtotal = input.subtotalCalculado
+  } else if (medias !== null && valor !== null) {
+    subtotal = medias * valor
+  } else {
+    subtotal = 0
+  }
+
+  let total: number | null
+  if (input.totalPagado !== undefined && input.totalPagado !== null) {
+    total = input.totalPagado
+  } else {
+    total = (subtotal ?? 0) + aportes
+  }
+
+  // Dual-write: salario = totalPagado when total is set; else keep client salario if provided
+  const salario =
+    total !== null && total !== undefined
+      ? total
+      : input.salario !== undefined
+        ? input.salario
+        : null
+
+  return {
+    mediasJornadas: medias,
+    valorJornada: valor,
+    subtotalCalculado: subtotal,
+    aportesSociales: aportes,
+    totalPagado: total,
+    salario,
+  }
+}
+
+/**
+ * Create a NominaPeriodo row with attendance-based calc defaults.
  */
 export async function createNominaPeriodo(input: NominaPeriodoInput, userId: number): Promise<any> {
   const prisma = getPrisma()
@@ -221,7 +354,6 @@ export async function createNominaPeriodo(input: NominaPeriodoInput, userId: num
 
   try {
     return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Resolve contrato activo + snapshot tipo INSIDE the transaction to avoid TOCTOU races.
       const contrato = await tx.contrato.findFirst({
         where: { empleadoId: input.empleadoId, activo: true },
       })
@@ -229,7 +361,6 @@ export async function createNominaPeriodo(input: NominaPeriodoInput, userId: num
         throw Object.assign(new Error('El empleado no tiene contrato activo'), { status: 400 })
       }
 
-      // D4: cuenta-de-cobro is mandatory for OPS / OBRA_O_LABOR contratos.
       const requiresCuentaCobro = contrato.tipoContrato === 'OPS' || contrato.tipoContrato === 'OBRA_O_LABOR'
       if (requiresCuentaCobro) {
         const hasCuentaCobro = (input.archivos ?? []).some(
@@ -243,14 +374,21 @@ export async function createNominaPeriodo(input: NominaPeriodoInput, userId: num
         }
       }
 
+      const calc = await resolveCalcFields(input, contrato.tipoContrato, contrato.valorJornada)
+
       const row = await tx.nominaPeriodo.create({
         data: {
           empleadoId: input.empleadoId,
           contratoId: contrato.id,
           periodo,
           tipoContrato: contrato.tipoContrato,
-          salario: input.salario ?? null,
+          salario: calc.salario,
           notas: input.notas ?? null,
+          mediasJornadas: calc.mediasJornadas,
+          valorJornada: calc.valorJornada,
+          subtotalCalculado: calc.subtotalCalculado,
+          aportesSociales: calc.aportesSociales,
+          totalPagado: calc.totalPagado,
         },
       })
       if (input.archivos && input.archivos.length) {
@@ -278,11 +416,32 @@ export async function createNominaPeriodo(input: NominaPeriodoInput, userId: num
 
 export async function updateNominaPeriodo(id: number, input: Partial<NominaPeriodoInput>): Promise<any> {
   const prisma = getPrisma()
-  const existing = await prisma.nominaPeriodo.findUnique({ where: { id } })
+  const existing = await prisma.nominaPeriodo.findUnique({
+    where: { id },
+    include: { contrato: true },
+  })
   if (!existing) throw Object.assign(new Error('NominaPeriodo not found'), { status: 404 })
+
+  // periodo stored as Date — convert to YYYY-MM for asistencia sum
+  const d = existing.periodo
+  const periodoYYYYMM = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    // `archivos !== undefined` → replace-all (deleteMany + createMany, same conditional as FIX-1).
     if (input.archivos !== undefined) {
+      // D4: if replacing archivos on OPS/OBRA, still require cuenta cobro
+      const tipo = existing.tipoContrato
+      const requiresCuentaCobro = tipo === 'OPS' || tipo === 'OBRA_O_LABOR'
+      if (requiresCuentaCobro) {
+        const hasCuentaCobro = (input.archivos ?? []).some(
+          (a) => a.tipoArchivo === 'CUENTA_COBRO' && a.url && a.url.length > 0,
+        )
+        if (!hasCuentaCobro) {
+          throw Object.assign(
+            new Error('Cuenta de cobro requerida para contratos OPS/OBRA_O_LABOR'),
+            { status: 400, field: 'archivos.CUENTA_COBRO', code: 'CUENTA_COBRO_REQUIRED' },
+          )
+        }
+      }
       await tx.archivoNominaPeriodo.deleteMany({ where: { nominaPeriodoId: id } })
       if (input.archivos.length) {
         await tx.archivoNominaPeriodo.createMany({
@@ -295,10 +454,59 @@ export async function updateNominaPeriodo(id: number, input: Partial<NominaPerio
         })
       }
     }
-    // `null` → clear column; `undefined` → keep existing.
+
+    const calcTouched =
+      input.mediasJornadas !== undefined ||
+      input.valorJornada !== undefined ||
+      input.subtotalCalculado !== undefined ||
+      input.aportesSociales !== undefined ||
+      input.totalPagado !== undefined ||
+      input.salario !== undefined
+
     const data: Record<string, unknown> = {}
-    if (input.salario !== undefined) data.salario = input.salario
     if (input.notas !== undefined) data.notas = input.notas
+
+    if (calcTouched) {
+      const mergedInput: NominaPeriodoInput = {
+        empleadoId: existing.empleadoId,
+        periodo: periodoYYYYMM,
+        mediasJornadas:
+          input.mediasJornadas !== undefined
+            ? input.mediasJornadas
+            : toNum(existing.mediasJornadas) ?? undefined,
+        valorJornada:
+          input.valorJornada !== undefined
+            ? input.valorJornada
+            : toNum(existing.valorJornada) ?? undefined,
+        subtotalCalculado:
+          input.subtotalCalculado !== undefined
+            ? input.subtotalCalculado
+            : toNum(existing.subtotalCalculado) ?? undefined,
+        aportesSociales:
+          input.aportesSociales !== undefined
+            ? input.aportesSociales
+            : toNum(existing.aportesSociales) ?? 0,
+        totalPagado:
+          input.totalPagado !== undefined
+            ? input.totalPagado
+            : toNum(existing.totalPagado) ?? undefined,
+        salario: input.salario,
+      }
+      const calc = await resolveCalcFields(
+        mergedInput,
+        existing.tipoContrato,
+        existing.contrato?.valorJornada ?? existing.valorJornada,
+      )
+      data.mediasJornadas = calc.mediasJornadas
+      data.valorJornada = calc.valorJornada
+      data.subtotalCalculado = calc.subtotalCalculado
+      data.aportesSociales = calc.aportesSociales
+      data.totalPagado = calc.totalPagado
+      data.salario = calc.salario
+    } else if (input.salario !== undefined) {
+      data.salario = input.salario
+    }
+
     return tx.nominaPeriodo.update({
       where: { id },
       data,

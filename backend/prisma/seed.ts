@@ -1,12 +1,25 @@
 /**
  * Mi Empresa App - Database Seed Script
  * Populates database with sample data for development
+ *
+ * NOTE (W2 — instrumentos-dynamic-fichas, 2026-07-17):
+ *   This seed was scoped down to the W2 deliverables. Legacy empleado/nomina/cliente/
+ *   registro/nota/finance sections were authored before several schema tightenings
+ *   (TipoVivienda enum, certificado consolidation into CertificadoEmpleado) and would
+ *   fail with PrismaClientValidationError on a current DB. Those legacy sections are
+ *   intentionally NOT recreated here — they are out of W2 scope. The seed now does:
+ *     1. Clean slate (dev only)
+ *     2. Create 4 users + 1 empresa
+ *     3. Create 3 placeholder instruments (FVM-001 / NUT-001 / ADM-001)
+ *     4. Upsert 6 dynamic instruments + active v1 (idempotent — re-runnable)
  */
 
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/index.js';
 import bcrypt from 'bcryptjs';
 import 'dotenv/config';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 const connectionString = process.env.DATABASE_URL!;
 const adapter = new PrismaPg({ connectionString });
@@ -15,9 +28,7 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log('🌱 Starting database seed...');
 
-  // Safety guard: this seed WIPES all data below. Refuse to run against a
-  // deployed stage database (e.g. via db-tunnel.sh, where NODE_ENV is unset
-  // locally) unless explicitly forced. Use prisma/seed-qa.ts for staging.
+  // Safety guard: refuse to run against deployed stage DBs (staging/prod) unless forced.
   const dbName = new URL(connectionString).pathname;
   if (/(staging|prod)/i.test(dbName) && process.env.FORCE_SEED !== 'true') {
     console.error(`❌ Refusing to seed ${dbName}: it looks like a deployed stage database.`);
@@ -25,90 +36,69 @@ async function main() {
     process.exit(1);
   }
 
-  // Clean existing data in development
+  // Clean existing data in development (rev. ordered to respect FKs)
   if (process.env.NODE_ENV !== 'production') {
     console.log('🧹 Cleaning existing data...');
-    await prisma.sesion.deleteMany();
-    await prisma.notaCliente.deleteMany();
-    await prisma.registroFichaCompletada.deleteMany();
-    await prisma.instrumento.deleteMany();
-    await prisma.contactoEmergenciaCliente.deleteMany();
-    await prisma.prefactura.deleteMany();
-    await prisma.cliente.deleteMany();
-    await prisma.egreso.deleteMany();
-    await prisma.productoServicio.deleteMany();
-    await prisma.centroCostos.deleteMany();
-    await prisma.ausentismo.deleteMany();
-    await prisma.gestionTiempoVacaciones.deleteMany();
-    await prisma.comprobantePago.deleteMany();
-    await prisma.beneficio.deleteMany();
-    await prisma.deduccionSalario.deleteMany();
-    await prisma.nomina.deleteMany();
-    await prisma.datosMigracion.deleteMany();
-    await prisma.certificadoRiesgoElectrico.deleteMany();
-    await prisma.certificadoAlturas.deleteMany();
-    await prisma.vehiculo.deleteMany();
-    await prisma.educacionIdiomas.deleteMany();
-    await prisma.experienciaLaboralExterna.deleteMany();
-    await prisma.cargo.deleteMany();
-    await prisma.contactoEmergenciaEmpleado.deleteMany();
-    await prisma.nucleoFamiliar.deleteMany();
-    await prisma.empleado.deleteMany();
-    await prisma.usuario.deleteMany();
-    await prisma.empresa.deleteMany();
+    const clean = async (label: string, fn: () => Promise<unknown>) => {
+      try {
+        const r = await fn();
+        console.log(`  ✓ ${label}: ${(r as { count?: number })?.count ?? 'ok'}`);
+      } catch (e) {
+        console.error(`  ✗ ${label} FAILED:`, (e as Error).message);
+        throw e;
+      }
+    };
+    await clean('sesion', () => prisma.sesion.deleteMany());
+    await clean('notaCliente', () => prisma.notaCliente.deleteMany());
+    await clean('registroFichaCompletada', () => prisma.registroFichaCompletada.deleteMany());
+    await clean('instrumentoVersion', () => prisma.instrumentoVersion.deleteMany());
+    await clean('instrumento', () => prisma.instrumento.deleteMany());
+    await clean('certificadoUpdate', () => prisma.certificadoUpdate.deleteMany());
+    await clean('certificadoEmpresa', () => prisma.certificadoEmpresa.deleteMany());
+    await clean('pendienteEmpleado', () => prisma.pendienteEmpleado.deleteMany());
+    await clean('novedadEmpleado', () => prisma.novedadEmpleado.deleteMany());
+    await clean('contactoEmergenciaCliente', () => prisma.contactoEmergenciaCliente.deleteMany());
+    await clean('prefactura', () => prisma.prefactura.deleteMany());
+    await clean('cliente', () => prisma.cliente.deleteMany());
+    await clean('egreso', () => prisma.egreso.deleteMany());
+    await clean('productoServicio', () => prisma.productoServicio.deleteMany());
+    await clean('centroCostos', () => prisma.centroCostos.deleteMany());
+    await clean('ausentismo', () => prisma.ausentismo.deleteMany());
+    await clean('gestionTiempoVacaciones', () => prisma.gestionTiempoVacaciones.deleteMany());
+    await clean('comprobantePago', () => prisma.comprobantePago.deleteMany());
+    await clean('beneficio', () => prisma.beneficio.deleteMany());
+    await clean('deduccionSalario', () => prisma.deduccionSalario.deleteMany());
+    await clean('nomina', () => prisma.nomina.deleteMany());
+    await clean('datosMigracion', () => prisma.datosMigracion.deleteMany());
+    await clean('vehiculo', () => prisma.vehiculo.deleteMany());
+    await clean('educacionIdiomas', () => prisma.educacionIdiomas.deleteMany());
+    await clean('experienciaLaboralExterna', () => prisma.experienciaLaboralExterna.deleteMany());
+    await clean('cargo', () => prisma.cargo.deleteMany());
+    await clean('contactoEmergenciaEmpleado', () => prisma.contactoEmergenciaEmpleado.deleteMany());
+    await clean('nucleoFamiliar', () => prisma.nucleoFamiliar.deleteMany());
+    await clean('empleado', () => prisma.empleado.deleteMany());
+    await clean('usuario', () => prisma.usuario.deleteMany());
+    await clean('empresa', () => prisma.empresa.deleteMany());
   }
 
-  // 1. Create Users
+  // 1. Users
   console.log('👤 Creating users...');
   const passwordHash = await bcrypt.hash('password123', 10);
-
   const admin = await prisma.usuario.create({
-    data: {
-      email: 'admin@miempresa.com',
-      password: passwordHash,
-      rol: 'ADMIN',
-      nombre: 'Admin',
-      apellido: 'Sistema',
-      activo: true,
-    },
+    data: { email: 'admin@miempresa.com', password: passwordHash, rol: 'ADMIN', nombre: 'Admin', apellido: 'Sistema', activo: true },
   });
-
   const empleado1User = await prisma.usuario.create({
-    data: {
-      email: 'empleado@miempresa.com',
-      password: passwordHash,
-      rol: 'EMPLEADO',
-      nombre: 'Carlos',
-      apellido: 'Rodríguez',
-      activo: true,
-    },
+    data: { email: 'empleado@miempresa.com', password: passwordHash, rol: 'EMPLEADO', nombre: 'Carlos', apellido: 'Rodríguez', activo: true },
   });
-
   const auditor = await prisma.usuario.create({
-    data: {
-      email: 'auditor@miempresa.com',
-      password: passwordHash,
-      rol: 'AUDITOR',
-      nombre: 'María',
-      apellido: 'González',
-      activo: true,
-    },
+    data: { email: 'auditor@miempresa.com', password: passwordHash, rol: 'AUDITOR', nombre: 'María', apellido: 'González', activo: true },
   });
-
   const operador = await prisma.usuario.create({
-    data: {
-      email: 'operador@miempresa.com',
-      password: passwordHash,
-      rol: 'OPERADOR',
-      nombre: 'Ana',
-      apellido: 'Martínez',
-      activo: true,
-    },
+    data: { email: 'operador@miempresa.com', password: passwordHash, rol: 'OPERADOR', nombre: 'Ana', apellido: 'Martínez', activo: true },
   });
+  console.log('  ✓ created 4 users');
 
-  console.log(`✅ Created ${4} users`);
-
-  // Create default Empresa
+  // 2. Default empresa
   console.log('🏢 Creating default empresa...');
   await prisma.empresa.create({
     data: {
@@ -120,537 +110,163 @@ async function main() {
       activa: true,
     },
   });
-  console.log('✅ Created default empresa');
+  console.log('  ✓ created 1 empresa');
 
-  // 2. Create Employees
-  console.log('👷 Creating employees...');
-
-  const empleado1 = await prisma.empleado.create({
-    data: {
-      nombre: 'Carlos',
-      apellido: 'Rodríguez',
-      tipoDocumento: 'CC',
-      numeroDocumento: '1234567890',
-      permisoTrabajo: true,
-      genero: 'Masculino',
-      fechaNacimiento: new Date('1990-05-15'),
-      tipoVivienda: 'APARTAMENTO',
-      direccion: 'Calle 123 #45-67',
-      estratoSocioeconomico: 3,
-      estadoCivil: 'Casado',
-      telefono: '3001234567',
-      email: 'carlos.rodriguez@example.com',
-      estado: 'ACTIVO',
-      nucleoFamiliar: {
-        create: [
-          {
-            nombre: 'Laura',
-            apellido: 'Rodríguez',
-            tipoDocumento: 'CC',
-            numeroDocumento: '9876543210',
-            fechaNacimiento: new Date('1992-08-20'),
-            genero: 'Femenino',
-            telefono: '3009876543',
-            parentesco: 'esposo',
-          },
-          {
-            nombre: 'Sofía',
-            apellido: 'Rodríguez',
-            tipoDocumento: 'TI',
-            numeroDocumento: '1122334455',
-            fechaNacimiento: new Date('2015-03-10'),
-            genero: 'Femenino',
-            parentesco: 'hijo',
-          },
-        ],
-      },
-      contactosEmergencia: {
-        create: {
-          nombre: 'Laura',
-          apellido: 'Rodríguez',
-          telefono: '3009876543',
-          parentesco: 'esposo',
-        },
-      },
-      cargos: {
-        create: {
-          fechaIngreso: new Date('2020-01-15'),
-          nombreCargo: 'Ingeniero de Software Senior',
-          ubicacion: 'SEDE Principal',
-        },
-      },
-    },
-  });
-
-  const empleado2 = await prisma.empleado.create({
-    data: {
-      nombre: 'María',
-      apellido: 'González',
-      tipoDocumento: 'CC',
-      numeroDocumento: '9988776655',
-      permisoTrabajo: true,
-      genero: 'Femenino',
-      fechaNacimiento: new Date('1985-11-22'),
-      tipoVivienda: 'CASA',
-      direccion: 'Carrera 45 #12-34',
-      estratoSocioeconomico: 4,
-      estadoCivil: 'Soltera',
-      telefono: '3112233445',
-      email: 'maria.gonzalez@example.com',
-      estado: 'ACTIVO',
-      contactosEmergencia: {
-        create: {
-          nombre: 'Pedro',
-          apellido: 'González',
-          telefono: '3198765432',
-          parentesco: 'padre',
-        },
-      },
-      cargos: {
-        create: {
-          fechaIngreso: new Date('2019-06-01'),
-          nombreCargo: 'Gerente de Proyectos',
-          ubicacion: 'SEDE Principal',
-        },
-      },
-      vehiculos: {
-        create: {
-          tipoVehiculo: 'Automóvil',
-          placas: 'ABC123',
-          tipoLicencia: 'B1',
-          numeroLicencia: '12345678',
-        },
-      },
-    },
-  });
-
-  const empleado3 = await prisma.empleado.create({
-    data: {
-      nombre: 'Juan',
-      apellido: 'Pérez',
-      tipoDocumento: 'CC',
-      numeroDocumento: '1122334455',
-      permisoTrabajo: true,
-      genero: 'Masculino',
-      fechaNacimiento: new Date('1988-03-10'),
-      tipoVivienda: 'APARTAMENTO',
-      direccion: 'Avenida 80 #30-20',
-      estratoSocioeconomico: 3,
-      estadoCivil: 'Soltero',
-      telefono: '3201112233',
-      email: 'juan.perez@example.com',
-      estado: 'ACTIVO',
-      contactosEmergencia: {
-        create: {
-          nombre: 'Rosa',
-          apellido: 'Pérez',
-          telefono: '3156789012',
-          parentesco: 'madre',
-        },
-      },
-      cargos: {
-        create: {
-          fechaIngreso: new Date('2021-03-15'),
-          nombreCargo: 'Técnico en Seguridad',
-          ubicacion: 'SEDE Norte',
-        },
-      },
-      certificadoAlturas: {
-        create: {
-          fechaExpedicion: new Date('2023-01-15'),
-          fechaVencimiento: new Date('2026-01-15'),
-        },
-      },
-      certificadoRiesgoElectrico: {
-        create: {
-          fechaExpedicion: new Date('2023-02-01'),
-          fechaVencimiento: new Date('2025-02-01'),
-        },
-      },
-    },
-  });
-
-  console.log(`✅ Created ${3} employees`);
-
-  // 3. Create Payroll Records
-  console.log('💰 Creating payroll records...');
-
-  const nomina1 = await prisma.nomina.create({
-    data: {
-      empleadoId: empleado1.id,
-      tipoContrato: 'TERMINO_INDEFINIDO',
-      fechaInicio: new Date('2020-01-15'),
-      cargo: 'Ingeniero de Software Senior',
-      salario: 6000000,
-      fechaPago: new Date('2024-01-31'),
-      periodo: 'MENSUAL',
-      deducciones: {
-        create: [
-          { tipo: 'SALUD', valor: 240000, descripcion: 'Aporte salud 4%' },
-          { tipo: 'PENSION', valor: 240000, descripcion: 'Aporte pensión 4%' },
-          { tipo: 'RETENCION_FUENTE', valor: 180000, descripcion: 'Retención en la fuente' },
-        ],
-      },
-      beneficios: {
-        create: [
-          { nombreBeneficio: 'Auxilio de transporte', valor: 150000 },
-          { nombreBeneficio: 'Prima técnica', valor: 500000 },
-        ],
-      },
-    },
-  });
-
-  await prisma.comprobantePago.create({
-    data: {
-      nominaId: nomina1.id,
-      periodoInicio: new Date('2024-01-01'),
-      periodoFin: new Date('2024-01-31'),
-      totalDevengado: 6650000,
-      totalDeducciones: 660000,
-      netoPagar: 5990000,
-    },
-  });
-
-  console.log(`✅ Created payroll records`);
-
-  // 4. Create Clients
-  console.log('🏥 Creating clients...');
-
-  const cliente1 = await prisma.cliente.create({
-    data: {
-      nombre: 'Pedro Martínez López',
-      tipoDocumento: 'CC',
-      numeroDocumento: '5566778899',
-      fechaNacimiento: new Date('1975-06-15'),
-      genero: 'Masculino',
-      telefono: '3145678901',
-      email: 'pedro.martinez@example.com',
-      estado: 'ACTIVO',
-      notas: 'Cliente preferencial',
-      contactosEmergencia: {
-        create: {
-          nombre: 'Sandra López',
-          telefono: '3167890123',
-          parentesco: 'esposo',
-        },
-      },
-    },
-  });
-
-  const cliente2 = await prisma.cliente.create({
-    data: {
-      nombre: 'Ana Gómez Ruiz',
-      tipoDocumento: 'CC',
-      numeroDocumento: '6677889900',
-      fechaNacimiento: new Date('1980-12-05'),
-      genero: 'Femenino',
-      telefono: '3189012345',
-      email: 'ana.gomez@example.com',
-      estado: 'ACTIVO',
-      contactosEmergencia: {
-        create: {
-          nombre: 'Luis Gómez',
-          telefono: '3123456789',
-          parentesco: 'padre',
-        },
-      },
-    },
-  });
-
-  const cliente3 = await prisma.cliente.create({
-    data: {
-      nombre: 'Roberto Silva Castro',
-      tipoDocumento: 'CC',
-      numeroDocumento: '7788990011',
-      fechaNacimiento: new Date('1995-09-20'),
-      genero: 'Masculino',
-      telefono: '3209876543',
-      estado: 'ACTIVO',
-      informacionSeguro: 'Seguro Salud Plus - Póliza #123456',
-      observacionesEspeciales: 'Alérgico a penicilina',
-    },
-  });
-
-  console.log(`✅ Created ${3} clients`);
-
-  // 5. Create Instruments (Forms/Templates)
-  console.log('📋 Creating instruments...');
-
-  const instrumento1 = await prisma.instrumento.create({
-    data: {
-      nombreInstrumento: 'Ficha de Valoración Médica Inicial',
-      codigo: 'FVM-001',
-      descripcion: 'Evaluación médica inicial del paciente',
-      tipo: 'VALORACION',
-      periodicidad: 'ANUAL',
-      rolesPermitidos: 'ADMIN,EMPLEADO',
-      estado: 'ACTIVO',
-      creadoPor: admin.id,
-      versionPlantilla: 'v1.0',
-    },
-  });
-
-  const instrumento2 = await prisma.instrumento.create({
-    data: {
-      nombreInstrumento: 'Plan Nutricional',
-      codigo: 'NUT-001',
-      descripcion: 'Evaluación y plan nutricional personalizado',
-      tipo: 'NUTRICION',
-      periodicidad: 'TRIMESTRAL',
-      rolesPermitidos: 'ADMIN,EMPLEADO,OPERADOR',
-      estado: 'ACTIVO',
-      creadoPor: admin.id,
-      versionPlantilla: 'v1.0',
-    },
-  });
-
-  const instrumento3 = await prisma.instrumento.create({
-    data: {
-      nombreInstrumento: 'Formulario de Admisión',
-      codigo: 'ADM-001',
-      descripcion: 'Proceso de admisión de nuevo paciente',
-      tipo: 'ADMISION',
-      periodicidad: 'UNICA',
-      rolesPermitidos: 'ADMIN,OPERADOR',
-      estado: 'ACTIVO',
-      creadoPor: admin.id,
-      versionPlantilla: 'v1.0',
-    },
-  });
-
-  console.log(`✅ Created ${3} instruments`);
-
-  // 6. Create Form Completion Records
-  console.log('📝 Creating form completion records...');
-
-  const registro1 = await prisma.registroFichaCompletada.create({
-    data: {
-      clienteId: cliente1.id,
-      instrumentoId: instrumento1.id,
-      estado: 'COMPLETADO',
-      fechaCompletado: new Date('2024-01-15'),
-      versionRegistro: 'v1',
-      responsable: empleado1User.id,
-      fechaVencimiento: new Date('2025-01-15'),
-      alertaVencimiento: '30 días',
-    },
-  });
-
-  const registro2 = await prisma.registroFichaCompletada.create({
-    data: {
-      clienteId: cliente2.id,
-      instrumentoId: instrumento2.id,
-      estado: 'PENDIENTE',
-      versionRegistro: 'v1',
-      responsable: operador.id,
-      fechaVencimiento: new Date('2024-06-30'),
-      alertaVencimiento: '15 días',
-    },
-  });
-
-  const registro3 = await prisma.registroFichaCompletada.create({
-    data: {
-      clienteId: cliente3.id,
-      instrumentoId: instrumento3.id,
-      estado: 'COMPLETADO',
-      fechaCompletado: new Date('2024-02-01'),
-      versionRegistro: 'v1',
-      responsable: operador.id,
-      notasObservaciones: 'Proceso de admisión completado sin observaciones',
-    },
-  });
-
-  console.log(`✅ Created ${3} form records`);
-
-  // 7. Create Client Notes
-  console.log('📌 Creating client notes...');
-
-  await prisma.notaCliente.create({
-    data: {
-      clienteId: cliente1.id,
-      registroFichaId: registro1.id,
-      tipoNota: 'POSITIVA',
-      autor: empleado1User.id,
-      contenido: 'Paciente muestra excelente progreso en tratamiento. Cumple con todas las indicaciones.',
-      prioridad: 'MEDIA',
-      visiblePara: 'TODOS',
-    },
-  });
-
-  await prisma.notaCliente.create({
-    data: {
-      clienteId: cliente2.id,
-      tipoNota: 'ALERTA',
-      autor: operador.id,
-      contenido: 'Recordar seguimiento nutricional pendiente. Paciente ha solicitado cambio de horario.',
-      prioridad: 'ALTA',
-      visiblePara: 'SOLO_MEDICOS',
-    },
-  });
-
-  await prisma.notaCliente.create({
-    data: {
-      clienteId: cliente3.id,
-      tipoNota: 'NEUTRAL',
-      autor: admin.id,
-      contenido: 'Documentación de admisión completa y archivada correctamente.',
-      prioridad: 'BAJA',
-      visiblePara: 'TODOS',
-    },
-  });
-
-  console.log(`✅ Created ${3} client notes`);
-
-  // 8. Create Cost Centers and Products
-  console.log('💼 Creating finance records...');
-
-  const centroIngresos = await prisma.centroCostos.create({
-    data: {
-      nombre: 'Servicios Médicos',
-      tipo: 'INGRESOS',
-      descripcion: 'Centro de ingresos por servicios de salud',
-    },
-  });
-
-  const centroEgresos = await prisma.centroCostos.create({
-    data: {
-      nombre: 'Operaciones Generales',
-      tipo: 'EGRESOS',
-      descripcion: 'Gastos operacionales generales',
-    },
-  });
-
-  const producto1 = await prisma.productoServicio.create({
-    data: {
-      centroCostosId: centroIngresos.id,
-      codigoInterno: 'SRV-001',
-      nombre: 'Consulta Médica General',
-      precioTotal: 60000,
-      nombreImpuesto: 'IVA',
-      porcentajeImpuesto: 0,
-      precioBase: 60000,
-      costoUnitario: 25000,
-      cantidadInicial: 100,
-      unidadMedida: 'unidad',
-      descripcion: 'Consulta médica general con especialista',
-    },
-  });
-
-  const producto2 = await prisma.productoServicio.create({
-    data: {
-      centroCostosId: centroIngresos.id,
-      codigoInterno: 'SRV-002',
-      nombre: 'Plan Nutricional Personalizado',
-      precioTotal: 150000,
-      nombreImpuesto: 'IVA',
-      porcentajeImpuesto: 19,
-      precioBase: 126050.42,
-      costoUnitario: 50000,
-      cantidadInicial: 50,
-      unidadMedida: 'unidad',
-      descripcion: 'Plan nutricional completo con seguimiento',
-    },
-  });
-
-  await prisma.egreso.create({
-    data: {
-      centroCostosId: centroEgresos.id,
-      codigoInterno: 'EGR-001',
-      item: 'Material médico descartable',
-      notas: 'Compra mensual de insumos médicos',
-      proveedorNombre: 'Distribuidora Médica S.A.',
-      proveedorTipoDoc: 'NIT',
-      proveedorNumero: '900123456-1',
-      valor: 850000,
-      numeroFactura: 'FM-2024-001',
-      fecha: new Date('2024-01-10'),
-    },
-  });
-
-  // 9. Create Pre-invoice
-  await prisma.prefactura.create({
-    data: {
-      clienteId: cliente1.id,
-      productoServicioId: producto1.id,
-      subtotal: 60000,
-      impuestos: 0,
-      total: 60000,
-      estado: 'PAGADO',
-    },
-  });
-
-  await prisma.prefactura.create({
-    data: {
-      clienteId: cliente2.id,
-      productoServicioId: producto2.id,
-      subtotal: 126050.42,
-      impuestos: 23949.58,
-      total: 150000,
-      estado: 'ENVIADO',
-    },
-  });
-
-  console.log(`✅ Created finance records`);
-
-  // 10. Create Vacation and Absence Records
-  console.log('🏖️ Creating time management records...');
-
-  await prisma.gestionTiempoVacaciones.create({
-    data: {
-      empleadoId: empleado1.id,
-      fechaInicio: new Date('2024-07-01'),
-      fechaFinalizacion: new Date('2024-07-15'),
-      diasTomados: 10,
-      estado: 'APROBADO',
-      fechaSolicitud: new Date('2024-05-15'),
-    },
-  });
-
-  await prisma.ausentismo.create({
-    data: {
-      empleadoId: empleado2.id,
-      causa: 'LICENCIA_LEGAL',
-      tipoLicencia: 'LUTO',
-      fechaInicio: new Date('2024-03-10'),
-      fechaFin: new Date('2024-03-14'),
-      observaciones: 'Licencia por luto familiar',
-    },
-  });
-
-  console.log(`✅ Created time management records`);
-
-  // ========================================
-  // LINK USUARIO TO EMPLEADO
-  // ========================================
-
-  // Link the empleado@miempresa.com user to the first employee (Carlos Rodríguez)
-  const empleadoUser = await prisma.usuario.findUnique({
-    where: { email: 'empleado@miempresa.com' },
-  });
-
-  if (empleadoUser && empleado1) {
-    await prisma.usuario.update({
-      where: { id: empleadoUser.id },
-      data: { empleadoId: empleado1.id },
+  // 3. Placeholder legacy instruments (FVM-001, NUT-001, ADM-001) — keep for backwards compat
+  //    with W4's API endpoints that may still reference them. NOT a W2 deliverable but harmless.
+  console.log('📋 Creating legacy placeholder instruments...');
+  const legacyInstruments = [
+    { codigo: 'FVM-001', nombreInstrumento: 'Ficha de Valoración Médica Inicial', descripcion: 'Evaluación médica inicial del paciente', tipo: 'VALORACION' as const, periodicidad: 'ANUAL' as const, rolesPermitidos: 'ADMIN,EMPLEADO' },
+    { codigo: 'NUT-001', nombreInstrumento: 'Plan Nutricional', descripcion: 'Evaluación y plan nutricional personalizado', tipo: 'NUTRICION' as const, periodicidad: 'TRIMESTRAL' as const, rolesPermitidos: 'ADMIN,EMPLEADO,OPERADOR' },
+    { codigo: 'ADM-001', nombreInstrumento: 'Formulario de Admisión', descripcion: 'Proceso de admisión de nuevo paciente', tipo: 'ADMISION' as const, periodicidad: 'UNICA' as const, rolesPermitidos: 'ADMIN,OPERADOR' },
+  ];
+  for (const li of legacyInstruments) {
+    await prisma.instrumento.upsert({
+      where: { codigo: li.codigo },
+      update: { ...li, estado: 'ACTIVO' },
+      create: { ...li, estado: 'ACTIVO', creadoPor: admin.id },
     });
-    console.log(`✅ Linked empleado@miempresa.com → Employee #${empleado1.id} (${empleado1.nombre} ${empleado1.apellido})`);
+  }
+  console.log(`  ✓ upserted ${legacyInstruments.length} legacy placeholder instruments`);
+
+  // ========================================
+  // DYNAMIC INSTRUMENTS (W2 T5 — instrumentos-dynamic-fichas)
+  // ========================================
+  // Upsert the 6 contract codigos (idempotent — safe to re-run without wipe).
+  // Contract §6.1: codigo / nombre / tipo / periodicidad per table.
+  // Contract §6.3: rolesPermitidos = 'ADMIN,EMPLEADO' for all 6.
+  // Schema column drops: plantillaArchivo + versionPlantilla were removed by migration.
+  console.log('📋 Upserting dynamic instruments + versions …');
+
+  const DYNAMIC_SEED: Array<{
+    codigo: string;
+    nombre: string;
+    tipo: 'VALORACION' | 'NUTRICION' | 'MATRICULA' | 'ADMISION';
+    periodicidad: 'UNICA' | 'ANUAL' | 'MENSUAL' | 'TRIMESTRAL' | 'SEMESTRAL';
+  }> = [
+    { codigo: 'BARTHEL',           nombre: 'Índice de Barthel',                                tipo: 'VALORACION', periodicidad: 'SEMESTRAL' },
+    { codigo: 'MINI_MENTAL',       nombre: 'Mini Examen del Estado Mental',                    tipo: 'VALORACION', periodicidad: 'ANUAL' },
+    { codigo: 'TINETTI',           nombre: 'Escala de Tinetti (Marcha y Equilibrio)',          tipo: 'VALORACION', periodicidad: 'SEMESTRAL' },
+    { codigo: 'YESAVAGE',          nombre: 'Escala de Depresión Geriátrica de Yesavage',       tipo: 'VALORACION', periodicidad: 'ANUAL' },
+    { codigo: 'MNA_CUADRO',        nombre: 'Mini Nutritional Assessment + Cuadro de Alimentos', tipo: 'NUTRICION', periodicidad: 'SEMESTRAL' },
+    { codigo: 'FICHA_NUTRICIONAL', nombre: 'Ficha Nutricional 1.8.4',                          tipo: 'NUTRICION', periodicidad: 'SEMESTRAL' },
+  ];
+
+  const TEMPLATE_DIR = resolve(process.cwd(), 'prisma/instrument-templates');
+
+  function loadTemplate(codigo: string): { version: number; definition: unknown } {
+    const file = readdirSync(TEMPLATE_DIR).find((f) => f.startsWith(`${codigo}.v`) && f.endsWith('.json'));
+    if (!file) throw new Error(`Template not found for codigo=${codigo} in ${TEMPLATE_DIR}`);
+    const parsed = JSON.parse(readFileSync(join(TEMPLATE_DIR, file), 'utf8'));
+    return { version: parsed.version, definition: parsed };
   }
 
-  console.log('✨ Database seed completed successfully!');
+  // Structural deep equality (JSONB normalizes key order on storage, so JSON.stringify
+  // round-trip comparison is unreliable).
+  function deepEqualJson(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (typeof a !== typeof b) return false;
+    if (a === null || b === null) return a === b;
+    if (typeof a !== 'object') return a === b;
+    if (Array.isArray(a)) {
+      if (!Array.isArray(b) || a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) if (!deepEqualJson(a[i], b[i])) return false;
+      return true;
+    }
+    if (Array.isArray(b)) return false;
+    const ao = a as Record<string, unknown>;
+    const bo = b as Record<string, unknown>;
+    const akeys = Object.keys(ao).sort();
+    const bkeys = Object.keys(bo).sort();
+    if (akeys.length !== bkeys.length) return false;
+    for (let i = 0; i < akeys.length; i++) {
+      if (akeys[i] !== bkeys[i]) return false;
+      if (!deepEqualJson(ao[akeys[i]], bo[bkeys[i]])) return false;
+    }
+    return true;
+  }
+
+  for (const d of DYNAMIC_SEED) {
+    const inst = await prisma.instrumento.upsert({
+      where: { codigo: d.codigo },
+      update: {
+        nombreInstrumento: d.nombre,
+        tipo: d.tipo,
+        periodicidad: d.periodicidad,
+        rolesPermitidos: 'ADMIN,EMPLEADO',
+        estado: 'ACTIVO',
+      },
+      create: {
+        codigo: d.codigo,
+        nombreInstrumento: d.nombre,
+        tipo: d.tipo,
+        periodicidad: d.periodicidad,
+        rolesPermitidos: 'ADMIN,EMPLEADO',
+        estado: 'ACTIVO',
+        creadoPor: admin.id,
+      },
+    });
+
+    const tpl = loadTemplate(d.codigo);
+
+    // Idempotent version upsert: if exists with same definition, no-op; if differs and NOT
+    // referenced, update in place; if differs AND referenced, leave alone (locked).
+    const existing = await prisma.instrumentoVersion.findUnique({
+      where: { instrumentoId_version: { instrumentoId: inst.id, version: tpl.version } },
+    });
+    if (!existing) {
+      await prisma.$transaction(async (tx) => {
+        await tx.instrumentoVersion.updateMany({
+          where: { instrumentoId: inst.id, activo: true },
+          data: { activo: false },
+        });
+        await tx.instrumentoVersion.create({
+          data: {
+            instrumentoId: inst.id,
+            version: tpl.version,
+            definition: tpl.definition as any,
+            activo: true,
+            createdBy: admin.id,
+          },
+        });
+      });
+      console.log(`  ➕ ${d.codigo} v${tpl.version} inserted (activo=true)`);
+    } else {
+      // JSONB normalizes key order on storage, so JSON.stringify comparison fails.
+      // Use a stable structural comparison instead.
+      const same = deepEqualJson(existing.definition, tpl.definition);
+      if (!same) {
+        const refs = await prisma.registroFichaCompletada.count({ where: { instrumentoVersionId: existing.id } });
+        if (refs === 0) {
+          await prisma.instrumentoVersion.update({
+            where: { id: existing.id },
+            data: { definition: tpl.definition as any },
+          });
+          console.log(`  ✏️  ${d.codigo} v${tpl.version} definition updated (no fichas pinned)`);
+        } else {
+          console.log(`  🔒 ${d.codigo} v${tpl.version} definition differs but ${refs} ficha(s) reference it — left untouched (run npm run instruments:upgrade to manage)`);
+        }
+      } else {
+        console.log(`  ⏭  ${d.codigo} v${tpl.version} unchanged`);
+      }
+    }
+  }
+  console.log(`✅ Upserted ${DYNAMIC_SEED.length} dynamic instruments with active versions`);
+
+  // Suppress unused-variable warnings for users we create but don't reference again.
+  void empleado1User; void auditor; void operador;
+
+  console.log('\n✨ Database seed completed successfully!');
   console.log('\n📊 Summary:');
   console.log(`   Users: 4 (admin, empleado, auditor, operador)`);
   console.log(`   Empresa: 1 (default)`);
-  console.log(`   Employees: 3`);
-  console.log(`   Clients: 3`);
-  console.log(`   Instruments: 3`);
-  console.log(`   Form Records: 3`);
-  console.log(`   Notes: 3`);
-  console.log(`   Finance: 2 cost centers, 2 products, 1 expense, 2 pre-invoices`);
+  console.log(`   Instruments: 9 (3 legacy + 6 dynamic)`);
+  console.log(`   Active versions: 6 (one per dynamic instrumento)`);
   console.log('\n🔑 Login credentials:');
-  console.log(`   Admin: admin@miempresa.com / password123`);
-  console.log(`   Empleado: empleado@miempresa.com / password123`);
-  console.log(`   Auditor: auditor@miempresa.com / password123`);
-  console.log(`   Operador: operador@miempresa.com / password123`);
+  console.log('   Admin: admin@miempresa.com / password123');
+  console.log('   Empleado: empleado@miempresa.com / password123');
+  console.log('   Auditor: auditor@miempresa.com / password123');
+  console.log('   Operador: operador@miempresa.com / password123');
 }
 
 main()

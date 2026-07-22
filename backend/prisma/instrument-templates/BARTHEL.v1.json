@@ -1,0 +1,136 @@
+{
+  "codigo": "BARTHEL",
+  "nombre": "Índice de Barthel",
+  "version": 1,
+  "tipo": "VALORACION",
+  "descripcion": "Evalúa el nivel de independencia funcional en actividades básicas de la vida diaria (ABVD).",
+  "instructions": "Marque para cada actividad la opción que mejor describa el nivel de independencia del abuelo/a.",
+  "sections": [
+    {
+      "id": "abvd",
+      "titulo": "Actividades básicas de la vida diaria",
+      "subtotal": { "max": 100 },
+      "items": [
+        {
+          "id": "comida",
+          "label": "Comida",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            { "value": "independiente", "label": "Independiente. Capaz de comer por sí solo en un tiempo razonable. La comida puede ser cocinada y servida por otra persona", "score": 10 },
+            { "value": "ayuda",         "label": "Necesita ayuda para cortar la carne, extender la mantequilla, pero es capaz de comer sólo/a", "score": 5 },
+            { "value": "dependiente",   "label": "Dependiente. Necesita ser alimentado por otra persona", "score": 0 }
+          ]
+        },
+        {
+          "id": "lavado",
+          "label": "Lavado de manos",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            { "value": "independiente", "label": "Independiente. Capaz de lavarse, entrar y salir del baño con la ayuda mínima", "score": 5 },
+            { "value": "dependiente",   "label": "Dependiente. Necesita algún tipo de ayuda o supervisión", "score": 0 }
+          ]
+        },
+        {
+          "id": "vestido",
+          "label": "Vestido",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            { "value": "independiente", "label": "Independiente. Capaz de ponerse y quitarse la ropa sin ayuda", "score": 10 },
+            { "value": "ayuda",         "label": "Necesita ayuda. Realiza sin ayuda más de la mitad de estas tareas en un tiempo razonable", "score": 5 },
+            { "value": "dependiente",   "label": "Dependiente. Necesita ayuda para las mismas", "score": 0 }
+          ]
+        },
+        {
+          "id": "arreglo",
+          "label": "Arreglo personal (para salir)",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            { "value": "independiente", "label": "Independiente. Realiza todas las actividades personales sin ayuda alguna, los complementos necesarios pueden ser provistos por alguna persona", "score": 5 },
+            { "value": "dependiente",   "label": "Dependiente. Necesita alguna ayuda", "score": 0 }
+          ]
+        },
+        {
+          "id": "deposicion",
+          "label": "Deposición",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            { "value": "continente",      "label": "Continente. No presenta episodios de incontinencia", "score": 10 },
+            { "value": "accidente_ocasional", "label": "Accidente ocasional. Menos de una vez por semana o necesita ayuda para colocar enemas o supositorios", "score": 5 },
+            { "value": "incontinente",    "label": "Incontinente. Más de un episodio semanal", "score": 0 }
+          ]
+        },
+        {
+          "id": "miccion",
+          "label": "Micción",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            { "value": "continente",      "label": "Continente. No presenta episodios", "score": 10 },
+            { "value": "accidente_ocasional", "label": "Accidente ocasional. Presenta un máximo de un episodio en 24 horas o requiere ayuda para la manipulación de sondas o de otros dispositivos", "score": 5 },
+            { "value": "incontinente",    "label": "Incontinente. Más de un episodio en 24 horas", "score": 0 }
+          ]
+        },
+        {
+          "id": "retrete",
+          "label": "Ir al retrete",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            { "value": "independiente", "label": "Independiente. Entra y sale solo y no necesita ayuda alguna por parte de otra persona", "score": 10 },
+            { "value": "ayuda",         "label": "Necesita ayuda. Capaz de manejarse con una pequeña ayuda; es capaz de usar el cuarto de baño. Puede limpiarse solo/a", "score": 5 },
+            { "value": "dependiente",   "label": "Dependiente. Incapaz de acceder a él o de utilizarlo sin ayuda mayor", "score": 0 }
+          ]
+        },
+        {
+          "id": "transferencia",
+          "label": "Transferencia (traslado mesa/sillón)",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            { "value": "independiente",  "label": "Independiente. No requiere ayuda para sentarse o levantarse de una silla ni para entrar o salir de la mesa", "score": 15 },
+            { "value": "minima_ayuda",   "label": "Mínima ayuda. Incluye una supervisión o una pequeña ayuda física", "score": 10 },
+            { "value": "gran_ayuda",     "label": "Gran ayuda. Precisa ayuda de una persona fuerte o entrenada", "score": 5 },
+            { "value": "dependiente",    "label": "Dependiente. Necesita una grúa o el alzamiento por dos personas. Es incapaz de permanecer sentado", "score": 0 }
+          ]
+        },
+        {
+          "id": "deambulacion",
+          "label": "Deambulación",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            { "value": "independiente",     "label": "Independiente. Puede andar 50 metros o su equivalente en casa y jardín sin ayuda ni supervisión. Puede utilizar cualquier ayuda mecánica excepto un andador. Si puede utilizar la ayuda de un bastón", "score": 15 },
+            { "value": "necesita_ayuda",    "label": "Necesita ayuda. Necesita supervisión o una pequeña ayuda física por parte de otra persona o utiliza andador", "score": 10 },
+            { "value": "silla_ruedas",      "label": "Independiente en silla de ruedas. No requiere ayuda ni supervisión permanente y personalizada", "score": 5 },
+            { "value": "dependiente",       "label": "Dependiente", "score": 0 }
+          ]
+        },
+        {
+          "id": "desniveles",
+          "label": "Subir y bajar desniveles",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            { "value": "independiente", "label": "Independiente. Capaz de subir y bajar un desnivel sin ayuda ni supervisión de otra persona", "score": 10 },
+            { "value": "ayuda",         "label": "Necesita ayuda. Necesita ayuda o supervisión", "score": 5 },
+            { "value": "dependiente",   "label": "Dependiente. Es incapaz de salvar escalones o desniveles", "score": 0 }
+          ]
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "total": "sum",
+    "resultEvaluation": [
+      { "min": 0,  "max": 44,  "label": "Dependencia severa" },
+      { "min": 45, "max": 59,  "label": "Dependencia grave" },
+      { "min": 60, "max": 79,  "label": "Dependencia moderada" },
+      { "min": 80, "max": 100, "label": "Dependencia ligera" }
+    ]
+  }
+}

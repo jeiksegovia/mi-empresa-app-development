@@ -408,6 +408,14 @@ async function deleteNovedad(nid: number) {
     toast.add({ severity: 'error', summary: 'Error', detail: e?.data?.message || 'No se pudo eliminar' })
   }
 }
+
+// E: read-only detail dialog state for Novedades.
+const novedadDetail = ref<Novedad | null>(null)
+const novedadDetailOpen = ref(false)
+function openNovedadDetail(n: Novedad) {
+  novedadDetail.value = n
+  novedadDetailOpen.value = true
+}
 </script>
 
 <template>
@@ -479,12 +487,12 @@ async function deleteNovedad(nid: number) {
       </Card>
 
       <!-- Tabs -->
-      <div class="mb-4 flex gap-1 border-b border-[var(--surface-border)]">
+      <div class="mb-4 flex gap-1 border-b border-[var(--surface-border)] overflow-x-auto flex-nowrap">
         <button
           v-for="(tab, i) in tabs"
           :key="i"
           :class="[
-            'flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px',
+            'flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap flex-shrink-0',
             activeTab === i
               ? 'border-violet-500 text-violet-600 dark:text-violet-400'
               : 'border-transparent text-[var(--text-color-secondary)] hover:text-[var(--text-color)]'
@@ -1048,20 +1056,36 @@ async function deleteNovedad(nid: number) {
                     <Tag :value="novedadTipoLabels[n.tipo]" :severity="novedadTipoSeverity[n.tipo]" />
                     <span class="text-sm font-medium">{{ n.titulo }}</span>
                   </div>
-                  <Button
-                    v-if="authStore.isAdmin"
-                    icon="pi pi-trash"
-                    size="small"
-                    severity="danger"
-                    text
-                    rounded
-                    @click="deleteNovedad(n.id)"
-                  />
+                  <div class="flex items-center gap-1">
+                    <Button
+                      icon="pi pi-eye"
+                      size="small"
+                      severity="secondary"
+                      text
+                      rounded
+                      v-tooltip.top="'Ver detalles'"
+                      data-testid="novedad-view-btn"
+                      @click="openNovedadDetail(n)"
+                    />
+                    <Button
+                      v-if="authStore.isAdmin"
+                      icon="pi pi-trash"
+                      size="small"
+                      severity="danger"
+                      text
+                      rounded
+                      @click="deleteNovedad(n.id)"
+                    />
+                  </div>
                 </div>
                 <div class="text-xs text-[var(--text-color-secondary)]">
                   {{ formatDate(n.fechaInicio) }}<span v-if="n.fechaFin"> → {{ formatDate(n.fechaFin) }}</span>
                 </div>
-                <p v-if="n.descripcion" class="text-sm">{{ n.descripcion }}</p>
+                <p
+                  v-if="n.descripcion"
+                  class="text-sm line-clamp-2 cursor-pointer"
+                  @click="openNovedadDetail(n)"
+                >{{ n.descripcion }}</p>
                 <div v-if="n.archivos?.length" class="flex flex-wrap gap-2 pt-1">
                   <Button
                     v-for="(a, ai) in n.archivos"
@@ -1157,6 +1181,51 @@ async function deleteNovedad(nid: number) {
               :disabled="!novedadForm.titulo.trim()"
               data-testid="novedad-save"
               @click="saveNovedad"
+            />
+          </template>
+        </Dialog>
+
+        <!-- E: read-only detail dialog for a Novedad. -->
+        <Dialog
+          v-model:visible="novedadDetailOpen"
+          :header="novedadDetail?.titulo ?? ''"
+          :modal="true"
+          :style="{ width: '36rem' }"
+          data-testid="novedad-detail-dialog"
+        >
+          <div v-if="novedadDetail" class="space-y-3">
+            <div class="flex items-center gap-2">
+              <Tag
+                :value="novedadTipoLabels[novedadDetail.tipo]"
+                :severity="novedadTipoSeverity[novedadDetail.tipo]"
+              />
+            </div>
+            <div class="text-sm text-[var(--text-color-secondary)]">
+              {{ formatDate(novedadDetail.fechaInicio) }}<span v-if="novedadDetail.fechaFin"> → {{ formatDate(novedadDetail.fechaFin) }}</span>
+            </div>
+            <p
+              v-if="novedadDetail.descripcion"
+              class="text-sm whitespace-pre-wrap"
+            >{{ novedadDetail.descripcion }}</p>
+            <div v-if="novedadDetail.archivos?.length" class="space-y-2">
+              <Button
+                v-for="(a, ai) in novedadDetail.archivos"
+                :key="ai"
+                icon="pi pi-download"
+                :label="a.nombre"
+                size="small"
+                outlined
+                data-testid="novedad-detail-download"
+                @click="downloadFile(a.url)"
+              />
+            </div>
+          </div>
+          <template #footer>
+            <Button
+              label="Cerrar"
+              severity="secondary"
+              outlined
+              @click="novedadDetailOpen = false"
             />
           </template>
         </Dialog>

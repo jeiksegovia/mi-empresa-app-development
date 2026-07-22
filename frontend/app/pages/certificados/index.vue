@@ -258,7 +258,6 @@ onMounted(async () => {
       </template>
     </AppPageHeader>
 
-    <Toast />
 
     
     <div

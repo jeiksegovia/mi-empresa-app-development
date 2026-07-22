@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, requireRole } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
+import { requireDomain } from '../middleware/domainAccess.js'
 import { z } from 'zod'
 import * as certificateService from '../services/certificateService.js'
 import { logger } from '../config/logger.js'
@@ -8,6 +9,10 @@ import { logger } from '../config/logger.js'
 const router = Router()
 
 router.use(authMiddleware())
+
+// fixes-jul17-2 §1.2: certificados domain — CONTRATOS has full access;
+// GERONTOLOGA gets 403 (matrix false), null-EMPLEADO + ADMIN/AUDITOR/OPERADOR fall through.
+router.use(requireDomain('certificados'))
 
 const baseCertificateFields = {
   empresaId: z.number().int().positive().optional(),

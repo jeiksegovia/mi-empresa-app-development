@@ -314,6 +314,11 @@ export async function addCertificateUpdate(
 
     const parentPatch: Record<string, unknown> = {}
     if (input.archivoUrl !== undefined) parentPatch.archivoUrl = input.archivoUrl
+    // QA jul-11 B4b: the parent snapshot must also track the latest payment
+    // receipt — it was silently dropped, so the detail page never offered it.
+    if (input.comprobantePagoUrl !== undefined) {
+      parentPatch.comprobantePagoUrl = input.comprobantePagoUrl
+    }
     if (input.fechaEmision !== undefined) {
       parentPatch.fechaEmision = input.fechaEmision ? new Date(input.fechaEmision) : null
     }

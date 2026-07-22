@@ -244,6 +244,10 @@ test.describe('Instruments API', () => {
     });
 
     test('should create instrument with all optional fields', async ({ request }) => {
+      // W5 modernization: `plantillaArchivo` and `versionPlantilla` were
+      // REMOVED in W2/W4 (contract §3.2 — file-flow is gone, replaced by
+      // InstrumentoVersion.definition JSONB). The new optional surface is
+      // `descripcion`, `rolesPermitidos`, `estado`. We assert those instead.
       const response = await request.post(`${API_BASE}/api/v1/instruments`, {
         headers: { Cookie: sessionCookie },
         data: {
@@ -253,15 +257,17 @@ test.describe('Instruments API', () => {
           tipo: 'ADMISION',
           periodicidad: 'UNICA',
           rolesPermitidos: 'ADMIN',
-          plantillaArchivo: '/templates/test.pdf',
-          versionPlantilla: 'v2.0',
           estado: 'ACTIVO',
         },
       });
       expect(response.status()).toBe(201);
       const body = await response.json();
-      expect(body.data.plantillaArchivo).toBe('/templates/test.pdf');
-      expect(body.data.versionPlantilla).toBe('v2.0');
+      expect(body.data.descripcion).toBe('Con todos los campos');
+      expect(body.data.rolesPermitidos).toBe('ADMIN');
+      expect(body.data.estado).toBe('ACTIVO');
+      // Removed fields must NOT be on the response (no zombie values).
+      expect(body.data).not.toHaveProperty('plantillaArchivo');
+      expect(body.data).not.toHaveProperty('versionPlantilla');
       // cleanup
       if (body.data?.id) {
         await request.delete(`${API_BASE}/api/v1/instruments/${body.data.id}`, {
@@ -344,18 +350,24 @@ test.describe('Instruments API', () => {
 
     test('should update instrument fields successfully', async ({ request }) => {
       if (!createdInstrumentId) { test.skip(); return; }
+      // W5 modernization: `versionPlantilla` was REMOVED in W2/W4
+      // (contract §3.2). The new optional fields on update are
+      // `nombreInstrumento`, `descripcion`, `rolesPermitidos`.
       const response = await request.put(`${API_BASE}/api/v1/instruments/${createdInstrumentId}`, {
         headers: { Cookie: sessionCookie },
         data: {
           nombreInstrumento: 'Instrumento Actualizado',
           descripcion: 'Descripción actualizada en test',
-          versionPlantilla: 'v1.1',
+          rolesPermitidos: 'ADMIN,EMPLEADO',
         },
       });
       expect(response.status()).toBe(200);
       const body = await response.json();
       expect(body.data.nombreInstrumento).toBe('INSTRUMENTO ACTUALIZADO');
-      expect(body.data.versionPlantilla).toBe('v1.1');
+      expect(body.data.descripcion).toBe('Descripción actualizada en test');
+      expect(body.data.rolesPermitidos).toBe('ADMIN,EMPLEADO');
+      // Removed field must NOT be on the response.
+      expect(body.data).not.toHaveProperty('versionPlantilla');
     });
 
     test('should fail with invalid tipo on update', async ({ request }) => {

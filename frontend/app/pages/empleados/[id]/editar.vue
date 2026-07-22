@@ -41,8 +41,24 @@ const form = reactive({
   email: '',
   permisoTrabajo: false,
   estado: 'ACTIVO' as 'ACTIVO' | 'INACTIVO',
+  // nomina-asistencia-jul-18: medio de pago de nómina.
+  // '' = Sin definir (null on wire).
+  medioPagoTipo: '' as '' | 'NEQUI' | 'TRANSFERENCIA_BANCARIA',
+  medioPagoNequi: '',
+  bancoNombre: '',
+  bancoTipoCuenta: '' as '' | 'AHORRO' | 'CORRIENTE',
+  bancoNumeroCuenta: '',
 })
 const formErrors = reactive<Record<string, string>>({})
+const medioPagoTipoOptions = [
+  { label: 'Sin definir', value: '' },
+  { label: 'Nequi', value: 'NEQUI' },
+  { label: 'Transferencia bancaria', value: 'TRANSFERENCIA_BANCARIA' },
+]
+const bancoTipoCuentaOptions = [
+  { label: 'Ahorro', value: 'AHORRO' },
+  { label: 'Corriente', value: 'CORRIENTE' },
+]
 
 // D3: documentoIdentificacionUrl — nullable VARCHAR(500). Uploaded via
 // useFileUpload().uploadFile(file, 'empleado-documentos') and persisted
@@ -75,6 +91,16 @@ async function downloadDocumento() {
   await downloadFile(documentoIdentificacionUrl.value)
 }
 
+function validateForm() {
+  Object.keys(formErrors).forEach((k) => delete formErrors[k])
+  if (!form.nombre.trim()) formErrors.nombre = 'Requerido'
+  if (!form.apellido.trim()) formErrors.apellido = 'Requerido'
+  if (!form.numeroDocumento.trim()) formErrors.numeroDocumento = 'Requerido'
+  if (!form.genero) formErrors.genero = 'Requerido'
+  if (!form.fechaNacimiento) formErrors.fechaNacimiento = 'Requerido'
+  return Object.keys(formErrors).length === 0
+}
+
 async function savePersonal() {
   if (!validateForm()) return
   saving1.value = true
@@ -97,6 +123,27 @@ async function savePersonal() {
     if (form.email.trim()) payload.email = form.email.trim()
     // D3: include documentoIdentificacionUrl. Always send — null clears it.
     payload.documentoIdentificacionUrl = documentoIdentificacionUrl.value || null
+
+    // nomina-asistencia-jul-18: medio de pago (always send so clearing works).
+    if (form.medioPagoTipo === 'NEQUI') {
+      payload.medioPagoTipo = 'NEQUI'
+      payload.medioPagoNequi = form.medioPagoNequi.trim() || null
+      payload.bancoNombre = null
+      payload.bancoTipoCuenta = null
+      payload.bancoNumeroCuenta = null
+    } else if (form.medioPagoTipo === 'TRANSFERENCIA_BANCARIA') {
+      payload.medioPagoTipo = 'TRANSFERENCIA_BANCARIA'
+      payload.bancoNombre = form.bancoNombre.trim() || null
+      payload.bancoTipoCuenta = form.bancoTipoCuenta || null
+      payload.bancoNumeroCuenta = form.bancoNumeroCuenta.trim() || null
+      payload.medioPagoNequi = null
+    } else {
+      payload.medioPagoTipo = null
+      payload.medioPagoNequi = null
+      payload.bancoNombre = null
+      payload.bancoTipoCuenta = null
+      payload.bancoNumeroCuenta = null
+    }
 
     await apiFetch(`/employees/${route.params.id}`, { method: 'PUT', body: payload })
     toast.add({ severity: 'success', summary: 'Guardado', detail: 'Datos personales actualizados', life: 3000 })
@@ -233,6 +280,8 @@ const contratoForm = reactive({
   // D7: cargoId replaces the legacy cargo string. Number FK to
   // cargos_empresa; the API accepts only `cargoId` per contract §4.7.
   cargoId: null as number | null,
+  // nomina-asistencia-jul-18: valor media jornada (4h). Required on CREATE.
+  valorJornada: null as number | null,
   activo: true,
 })
 
@@ -340,6 +389,7 @@ function resetContratoForm() {
   contratoForm.archivoUrl = ''
   contratoForm.archivoFirmadoUrl = ''
   contratoForm.cargoId = null
+  contratoForm.valorJornada = null
   contratoForm.activo = true
   contratoEditingId.value = null
   // W9: clear the underlying HTML file input so picking a file for one
@@ -391,6 +441,8 @@ function openEditContrato(c: Contrato) {
   // when the contrato is loaded via the Prisma include.
   contratoForm.archivoFirmadoUrl = (c as any).archivoFirmadoUrl ?? ''
   contratoForm.cargoId = (c as any).cargoId ?? null
+  // nomina-asistencia-jul-18: hydrate valorJornada (Decimal may arrive as string).
+  contratoForm.valorJornada = (c as any).valorJornada != null ? Number((c as any).valorJornada) : null
   contratoForm.activo = c.activo
   // D7: ensure cargos catalog is loaded before showing the dialog so the
   // Select can display the cargo name even if it was archived since.
@@ -405,6 +457,16 @@ async function saveContrato() {
       severity: 'warn',
       summary: 'Fecha fin requerida',
       detail: 'Solo los contratos a término indefinido pueden omitir la fecha de fin.',
+      life: 4000,
+    })
+    return
+  }
+  // nomina-asistencia-jul-18: valorJornada required on CREATE.
+  if (!contratoEditingId.value && (contratoForm.valorJornada == null || Number.isNaN(Number(contratoForm.valorJornada)))) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Valor media jornada requerido',
+      detail: 'Ingresa el valor de media jornada (4h) para el nuevo contrato.',
       life: 4000,
     })
     return
@@ -424,6 +486,10 @@ async function saveContrato() {
     if (contratoForm.archivoFirmadoUrl) payload.archivoFirmadoUrl = contratoForm.archivoFirmadoUrl
     // D7: cargoId — number FK; legacy cargo string is rejected per contract §4.7.
     if (contratoForm.cargoId) payload.cargoId = contratoForm.cargoId
+    // nomina-asistencia-jul-18: valorJornada required on create; optional on update.
+    if (contratoForm.valorJornada != null && !Number.isNaN(Number(contratoForm.valorJornada))) {
+      payload.valorJornada = Number(contratoForm.valorJornada)
+    }
 
     if (contratoEditingId.value) {
       await apiFetch(`/nomina/employees/${route.params.id}/contratos/${contratoEditingId.value}`, {
@@ -495,6 +561,10 @@ async function saveContratoActivo(cid: number, activo: boolean) {
         // get cleared when only flipping the activo bit.
         archivoFirmadoUrl: (current as any)?.archivoFirmadoUrl ?? undefined,
         cargoId: (current as any)?.cargoId ?? undefined,
+        // nomina-asistencia-jul-18: preserve valorJornada on activo toggle.
+        valorJornada: (current as any)?.valorJornada != null
+          ? Number((current as any).valorJornada)
+          : undefined,
         activo,
       },
     })
@@ -823,6 +893,12 @@ async function fetchEmployee() {
     form.estado = emp.estado ?? 'ACTIVO'
     // D3: hydrate documentoIdentificacionUrl (nullable string).
     documentoIdentificacionUrl.value = emp.documentoIdentificacionUrl ?? ''
+    // nomina-asistencia-jul-18: hydrate medio de pago.
+    form.medioPagoTipo = emp.medioPagoTipo ?? ''
+    form.medioPagoNequi = emp.medioPagoNequi ?? ''
+    form.bancoNombre = emp.bancoNombre ?? ''
+    form.bancoTipoCuenta = emp.bancoTipoCuenta ?? ''
+    form.bancoNumeroCuenta = emp.bancoNumeroCuenta ?? ''
 
     // Tab 2
     familyMembers.value = (emp.nucleoFamiliar ?? []).map((nf: any) => ({
@@ -1058,6 +1134,74 @@ onMounted(fetchEmployee)
                   />
                 </label>
                 <i v-if="documentoUploading" class="pi pi-spin pi-spinner text-violet-500 ml-2" />
+              </div>
+
+              <!-- nomina-asistencia-jul-18: Medio de pago de nómina -->
+              <div
+                class="flex flex-col gap-3 sm:col-span-2 lg:col-span-3 border-t border-[var(--surface-border)] pt-4 mt-1"
+                data-testid="medio-pago-section"
+              >
+                <h4 class="text-sm font-semibold flex items-center gap-2 text-[var(--text-color)]">
+                  <i class="pi pi-wallet text-violet-500" /> Medio de pago de nómina
+                  <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
+                </h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div class="flex flex-col gap-1">
+                    <label class="text-sm font-medium" for="medio-pago-tipo">Tipo de medio</label>
+                    <Select
+                      id="medio-pago-tipo"
+                      v-model="form.medioPagoTipo"
+                      :options="medioPagoTipoOptions"
+                      option-label="label"
+                      option-value="value"
+                      placeholder="Sin definir"
+                      class="w-full"
+                      data-testid="medio-pago-tipo"
+                    />
+                  </div>
+                  <div v-if="form.medioPagoTipo === 'NEQUI'" class="flex flex-col gap-1">
+                    <label class="text-sm font-medium" for="medio-pago-nequi">Número Nequi</label>
+                    <InputText
+                      id="medio-pago-nequi"
+                      v-model="form.medioPagoNequi"
+                      placeholder="Número Nequi"
+                      data-testid="medio-pago-nequi"
+                    />
+                  </div>
+                  <template v-if="form.medioPagoTipo === 'TRANSFERENCIA_BANCARIA'">
+                    <div class="flex flex-col gap-1">
+                      <label class="text-sm font-medium" for="medio-pago-banco">Banco</label>
+                      <InputText
+                        id="medio-pago-banco"
+                        v-model="form.bancoNombre"
+                        placeholder="Nombre del banco"
+                        data-testid="medio-pago-banco"
+                      />
+                    </div>
+                    <div class="flex flex-col gap-1">
+                      <label class="text-sm font-medium" for="medio-pago-tipo-cuenta">Tipo de cuenta</label>
+                      <Select
+                        id="medio-pago-tipo-cuenta"
+                        v-model="form.bancoTipoCuenta"
+                        :options="bancoTipoCuentaOptions"
+                        option-label="label"
+                        option-value="value"
+                        placeholder="Seleccionar"
+                        class="w-full"
+                        data-testid="medio-pago-tipo-cuenta"
+                      />
+                    </div>
+                    <div class="flex flex-col gap-1">
+                      <label class="text-sm font-medium" for="medio-pago-numero-cuenta">Número de cuenta</label>
+                      <InputText
+                        id="medio-pago-numero-cuenta"
+                        v-model="form.bancoNumeroCuenta"
+                        placeholder="Número de cuenta"
+                        data-testid="medio-pago-numero-cuenta"
+                      />
+                    </div>
+                  </template>
+                </div>
               </div>
             </div>
             <div class="mt-4 flex justify-end">
@@ -1504,6 +1648,14 @@ onMounted(fetchEmployee)
                         class="ml-1"
                       />
                     </p>
+                    <p
+                      v-if="(c as any).valorJornada != null"
+                      class="text-xs text-[var(--text-color-secondary)]"
+                      data-testid="contrato-valor-jornada-display"
+                    >
+                      <i class="pi pi-money-bill mr-1" />
+                      Media jornada: {{ Number((c as any).valorJornada).toLocaleString('es-CO') }}
+                    </p>
                     <p v-if="c.archivoUrl" class="text-xs text-[var(--text-color-secondary)] truncate">
                       <i class="pi pi-paperclip" /> {{ filenameFromKey(c.archivoUrl) }}
                     </p>
@@ -1648,6 +1800,27 @@ onMounted(fetchEmployee)
                 ¿No ves el cargo? Usa «➕ Agregar otro cargo» para crearlo.
               </p>
             </div>
+            <!-- nomina-asistencia-jul-18: Valor media jornada (4h) — required on create -->
+            <div>
+              <label class="block text-sm font-medium mb-1">
+                Valor media jornada (4h)
+                <span v-if="!contratoEditingId" class="text-red-500">*</span>
+              </label>
+              <InputNumber
+                v-model="contratoForm.valorJornada"
+                mode="decimal"
+                :min="0"
+                :min-fraction-digits="0"
+                :max-fraction-digits="2"
+                input-class="w-full"
+                class="w-full"
+                placeholder="0"
+                data-testid="contrato-valor-jornada"
+              />
+              <p class="text-xs text-[var(--text-color-secondary)] mt-1">
+                Monto pagado por cada media jornada (AM o PM).
+              </p>
+            </div>
             <div>
               <label class="block text-sm font-medium mb-1">Archivo del contrato</label>
               <div v-if="contratoForm.archivoUrl" class="flex items-center gap-2 text-sm mb-2">
@@ -1769,6 +1942,5 @@ onMounted(fetchEmployee)
       </div>
     </template>
 
-    <Toast />
   </div>
 </template>

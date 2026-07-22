@@ -1,18 +1,23 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * LOCAL QA — Instrumentos rolesPermitidos refinement (D6).
+ * LOCAL QA — Instrumentos rolesPermitidos refinement.
  *
- * Verifies the W2 backend refinement of `rolesPermitidos` against the
- * RolUsuario enum. The MultiSelect on the frontend constrains user input,
- * but a malicious or scripted client could POST any string. The refine must
- * reject anything that is not in {ADMIN, EMPLEADO, AUDITOR, OPERADOR}.
+ * CONTRACT CHANGE (QA jul-11 I2): roles now mirror the per-empresa
+ * CargoEmpresa catalog (free-form names like "AUXILIAR DE ENFERMERÍA") plus
+ * ADMIN — they are NO LONGER restricted to the RolUsuario enum. The column
+ * is descriptive only (access gating never reads it), so the refine now
+ * validates SHAPE, not membership:
+ *   - non-empty comma-separated items
+ *   - each item ≤100 chars
+ *   - total ≤255 chars (DB VarChar(255))
  *
  * Coverage:
- *   - POST with single bogus role → 400 + `errors.rolesPermitidos`
- *   - POST with mix of valid + invalid → 400
- *   - POST with all 4 valid roles → 201
- *   - PUT also enforces refine
+ *   - POST with a cargo-style name → 201 (was 400 pre-jul-11)
+ *   - POST with legacy enum values → 201 (back-compat)
+ *   - POST with empty string / only commas → 400
+ *   - POST with an item >100 chars or total >255 → 400
+ *   - PUT enforces the same shape rules
  */
 
 const API_BASE = process.env.TEST_API_URL || 'http://localhost:3101';
@@ -42,7 +47,7 @@ function baseCreateBody(rolesPermitidos: string, uniq: string): Record<string, u
 
 test.describe.configure({ mode: 'serial' });
 
-test.describe('Instruments rolesPermitidos Zod refinement', () => {
+test.describe('Instruments rolesPermitidos Zod refinement (jul-11 cargo-name contract)', () => {
   test.beforeAll(async ({ request }) => {
     adminCookie = await loginAndGetCookie(request, ADMIN_EMAIL, ADMIN_PASSWORD);
   });
@@ -58,80 +63,87 @@ test.describe('Instruments rolesPermitidos Zod refinement', () => {
     }).catch(() => {});
   });
 
-  test('POST with single bogus role "SUPERHEROE" → 400 + errors.rolesPermitidos', async ({ request }) => {
+  test('POST with cargo-style names "ADMIN,AUXILIAR DE ENFERMERÍA,GERONTÓLOGA" → 201', async ({ request }) => {
+    const roles = 'ADMIN,AUXILIAR DE ENFERMERÍA,GERONTÓLOGA';
     const resp = await request.post(`${API_BASE}/api/v1/instruments`, {
       headers: { Cookie: adminCookie },
-      data: baseCreateBody('SUPERHEROE', `${Date.now()}-1`),
-    });
-    expect(resp.status()).toBe(400);
-    const body = await resp.json();
-    expect(body.success).toBe(false);
-    // The Zod refine error must surface with the field key
-    expect(body.errors).toBeTruthy();
-    expect(body.errors.rolesPermitidos || body.errors?.rolesPermitidos).toBeTruthy();
-    // The error message lists the allowed enum
-    const errStr = JSON.stringify(body.errors);
-    expect(errStr).toMatch(/ADMIN|EMPLEADO|AUDITOR|OPERADOR/);
-  });
-
-  test('POST with "ROLE_FOO,ADMIN" (one valid, one bogus) → 400', async ({ request }) => {
-    const resp = await request.post(`${API_BASE}/api/v1/instruments`, {
-      headers: { Cookie: adminCookie },
-      data: baseCreateBody('ROLE_FOO,ADMIN', `${Date.now()}-2`),
-    });
-    expect(resp.status()).toBe(400);
-    const body = await resp.json();
-    expect(body.success).toBe(false);
-    expect(JSON.stringify(body)).toMatch(/rolesPermitidos/);
-  });
-
-  test('POST with all 4 valid roles "ADMIN,EMPLEADO,AUDITOR,OPERADOR" → 201', async ({ request }) => {
-    const resp = await request.post(`${API_BASE}/api/v1/instruments`, {
-      headers: { Cookie: adminCookie },
-      data: baseCreateBody('ADMIN,EMPLEADO,AUDITOR,OPERADOR', `${Date.now()}-3`),
+      data: baseCreateBody(roles, `${Date.now()}-1`),
     });
     expect(resp.status()).toBe(201);
     const body = await resp.json();
     expect(body.success).toBe(true);
-    expect(body.data.rolesPermitidos).toBe('ADMIN,EMPLEADO,AUDITOR,OPERADOR');
+    expect(body.data.rolesPermitidos).toBe(roles);
     createdIds.push(body.data.id);
   });
 
-  test('POST with case-sensitive mismatch "admin" (lowercase) → 400', async ({ request }) => {
-    // The schema is case-sensitive per D6 — verify
+  test('POST with legacy enum values "ADMIN,EMPLEADO,AUDITOR,OPERADOR" still → 201 (back-compat)', async ({ request }) => {
     const resp = await request.post(`${API_BASE}/api/v1/instruments`, {
       headers: { Cookie: adminCookie },
-      data: baseCreateBody('admin', `${Date.now()}-4`),
+      data: baseCreateBody('ADMIN,EMPLEADO,AUDITOR,OPERADOR', `${Date.now()}-2`),
     });
-    expect(resp.status()).toBe(400);
+    expect(resp.status()).toBe(201);
+    const body = await resp.json();
+    expect(body.data.rolesPermitidos).toBe('ADMIN,EMPLEADO,AUDITOR,OPERADOR');
+    createdIds.push(body.data.id);
   });
 
   test('POST with empty string "" → 400 (.min(1) guard)', async ({ request }) => {
     const resp = await request.post(`${API_BASE}/api/v1/instruments`, {
       headers: { Cookie: adminCookie },
-      data: baseCreateBody('', `${Date.now()}-5`),
+      data: baseCreateBody('', `${Date.now()}-3`),
     });
     expect(resp.status()).toBe(400);
   });
 
-  test('PUT also enforces refine on update', async ({ request }) => {
-    // Create valid instrument first
+  test('POST with only commas ",,," → 400 (no valid items)', async ({ request }) => {
+    const resp = await request.post(`${API_BASE}/api/v1/instruments`, {
+      headers: { Cookie: adminCookie },
+      data: baseCreateBody(',,,', `${Date.now()}-4`),
+    });
+    expect(resp.status()).toBe(400);
+    expect(JSON.stringify(await resp.json())).toMatch(/rolesPermitidos/);
+  });
+
+  test('POST with a single item >100 chars → 400', async ({ request }) => {
+    const resp = await request.post(`${API_BASE}/api/v1/instruments`, {
+      headers: { Cookie: adminCookie },
+      data: baseCreateBody('X'.repeat(101), `${Date.now()}-5`),
+    });
+    expect(resp.status()).toBe(400);
+  });
+
+  test('POST with total >255 chars → 400 (DB VarChar(255) guard)', async ({ request }) => {
+    const roles = Array.from({ length: 6 }, (_, i) => `CARGO ${i} ${'Y'.repeat(45)}`).join(',');
+    expect(roles.length).toBeGreaterThan(255);
+    const resp = await request.post(`${API_BASE}/api/v1/instruments`, {
+      headers: { Cookie: adminCookie },
+      data: baseCreateBody(roles, `${Date.now()}-6`),
+    });
+    expect(resp.status()).toBe(400);
+  });
+
+  test('PUT enforces the same shape rules', async ({ request }) => {
     const createResp = await request.post(`${API_BASE}/api/v1/instruments`, {
       headers: { Cookie: adminCookie },
-      data: baseCreateBody('EMPLEADO', `${Date.now()}-6`),
+      data: baseCreateBody('ADMIN', `${Date.now()}-7`),
     });
     expect(createResp.status()).toBe(201);
-    const created = await createResp.json();
-    const id = created.data.id;
+    const id = (await createResp.json()).data.id;
     createdIds.push(id);
 
-    // Try PUT with bogus role
-    const putResp = await request.put(`${API_BASE}/api/v1/instruments/${id}`, {
+    // Cargo-style rename is accepted…
+    const okResp = await request.put(`${API_BASE}/api/v1/instruments/${id}`, {
       headers: { Cookie: adminCookie },
-      data: { rolesPermitidos: 'OVERLORD' },
+      data: { rolesPermitidos: 'ADMIN,GERONTÓLOGA' },
     });
-    expect(putResp.status()).toBe(400);
-    const body = await putResp.json();
-    expect(JSON.stringify(body)).toMatch(/rolesPermitidos/);
+    expect(okResp.status()).toBe(200);
+
+    // …but an over-long item is rejected.
+    const badResp = await request.put(`${API_BASE}/api/v1/instruments/${id}`, {
+      headers: { Cookie: adminCookie },
+      data: { rolesPermitidos: 'Z'.repeat(101) },
+    });
+    expect(badResp.status()).toBe(400);
+    expect(JSON.stringify(await badResp.json())).toMatch(/rolesPermitidos/);
   });
 });

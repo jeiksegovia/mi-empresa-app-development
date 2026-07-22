@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { useFileStash, useFileStashTitleGuard } from '~/composables/useFileStash'
+import DynamicInstrumentForm from '~/components/instrument/DynamicInstrumentForm.vue'
+import InstrumentResultView from '~/components/instrument/InstrumentResultView.vue'
+import type {
+  InstrumentDefinition,
+  Respuestas,
+} from '~/components/instrument/types'
+import type { Domain } from '~/composables/useDomainAccess'
 
 definePageMeta({
   middleware: 'auth',
@@ -22,9 +28,17 @@ interface RegistroFicha {
   instrumentoNombre?: string
   instrumentoTipo?: string
   instrumento?: { id: number; nombreInstrumento: string; tipo: string }
+  instrumentoCodigo?: string | null
   estado: 'PENDIENTE' | 'COMPLETADO' | 'VENCIDO'
   fechaCompletado: string | null
   fechaVencimiento: string | null
+  // Dynamic-instruments fields (W3 / W4 contract §4.4):
+  puntajeTotal?: number | null
+  clasificacion?: string | null
+  skippedSections?: string[]
+  subtotales?: Record<string, number | undefined>
+  respuestas?: Respuestas | null
+  instrumentoVersionId?: number | null
 }
 
 interface NotaCliente {
@@ -64,17 +78,26 @@ interface PatientDetail {
 interface Instrument {
   id: number
   nombreInstrumento: string
+  codigo?: string | null
   tipo: string
   estado: string
-  // C1/C2: needed by the single-step dialog. The list endpoint returns
-  // versionPlantilla; plantillaArchivo is fetched from GET /instruments/:id.
-  versionPlantilla?: string
-  plantillaArchivo?: string | null
+  // W3 fields (backed by InstrumentoVersion + activeVersion from §4.1).
+  activeVersion?: {
+    id: number
+    version: number
+    activo: boolean
+    createdAt: string
+  } | null
+  rolesPermitidos?: string
+  periodicidad?: string
 }
 
 const route = useRoute()
 const { apiFetch } = useApi()
 const toast = useToast()
+// NOTE (W3) — file-based upload removed from instrument/ficha flows per
+// contract §3.2/§3.3 (plantillaArchivo + archivoCompletado dropped from
+// Instrumento / RegistroFichaCompletada). Employee/cert uploads remain.
 
 const patient = ref<PatientDetail | null>(null)
 const loading = ref(true)
@@ -106,71 +129,70 @@ const deletingFichaId = ref<number | null>(null)
 // C3: sentinel option that routes to the create-instrument page.
 const CREATE_INSTRUMENT = '__create_instrument__'
 const instrumentSelectOptions = computed(() => [
-  ...instruments.value,
-  { id: CREATE_INSTRUMENT, nombreInstrumento: '➕ Crear instrumento nuevo', tipo: '', estado: '' },
+  // §3.2: sin-definición instruments (no activeVersion) are not fillable →
+  // disabled in the assign/llenar picker.
+  ...instruments.value.map((i) => ({ ...i, _disabled: !i.activeVersion })),
+  { id: CREATE_INSTRUMENT, nombreInstrumento: '➕ Crear instrumento nuevo', tipo: '', estado: '', _disabled: false },
 ])
 
-// ── C1/C2: single-step ficha dialog (assign + first update in one shot) ────────
-const { uploadFile } = useFileUpload()
-const showSingleStepDialog = ref(false)
-const loadingInstrumentDetail = ref(false)
-const submittingSingleStep = ref(false)
-const downloadingPlantilla = ref(false)
-const singleStepFile = ref<File | null>(null)
-const singleStepForm = reactive({
-  instrumentoId: 0,
-  instrumentoNombre: '',
-  versionRegistro: '',
-  plantillaArchivo: null as string | null,
-  notasObservaciones: '',
-  fechaVencimiento: '' as string,
-})
-// W7/W9 parity: IDB stash so the completed-evaluation file survives an
-// Android tab discard. Scoped by patient id + instrumento id.
-const singleStepFileGuard = useFileStashTitleGuard('Adjuntar evaluación completada')
-const singleStepStashKey = computed(
-  () => `ficha-single-step:${route.params.id}:${singleStepForm.instrumentoId || 'new'}:file`
-)
+// ── W3: Dynamic-instrument form dialogs ──────────────────────────────────────
+// Contract §4.3 — assign + complete with respuestas (POST with respuestas).
+const showFormDialog = ref(false)
+const formDialogMode = ref<'assign' | 'complete'>('assign')
+const formDialogTitle = ref('')
+const formDialogFichaId = ref<number | null>(null)
+const formDialogInstrument = ref<{
+  id: number
+  nombre: string
+  codigo: string | null
+} | null>(null)
+const formDefinition = ref<InstrumentDefinition | null>(null)
+const formRespuestas = ref<Respuestas>({})
+const formNotas = ref('')
+const formFechaVencimiento = ref('')
+const submittingForm = ref(false)
+const formDialogError = ref<string | null>(null)
+const loadingDefinition = ref(false)
 
-// ── B6: Ficha status dialog ───────────────────────────────────────────────────
+// View-result dialog (read-only InstrumentResultView over a completed ficha).
+// BUG-W5-02 (W6): result dialog must work without opening the assign dialog first,
+// so it loads its own definition into a dedicated ref instead of relying on
+// `formDefinition` (which is only populated by the assign/complete dialogs).
+const showResultDialog = ref(false)
+const resultDialogFicha = ref<RegistroFicha | null>(null)
+const resultDefinition = ref<InstrumentDefinition | null>(null)
+const loadingResult = ref(false)
+
+// ── B6: Ficha status dialog (kept for non-completado transitions e.g. → VENCIDO)
 const showFichaDialog = ref(false)
 const fichaForm = reactive({
   id: 0,
   currentEstado: 'PENDIENTE' as 'COMPLETADO' | 'PENDIENTE' | 'VENCIDO',
   newEstado: '' as 'COMPLETADO' | 'VENCIDO' | '',
   instrumentoNombre: '',
-  // D1 mitigation + Bug 2: free-form notes + optional next-due date.
+  // Free-form notes + optional next-due date.
   notasObservaciones: '',
   fechaVencimiento: '' as string,
 })
 const submittingFicha = ref(false)
 
-// File upload state for COMPLETADO transition
-const uploadedFile = ref<File | null>(null)
-const uploadingFile = ref(false)
-const uploadedFileKey = ref<string | null>(null)
-// Persisted display name of the last selected file (cannot persist the File itself).
-const uploadedFileName = ref<string | null>(null)
-
-// sessionStorage draft key, scoped per ficha id (line 87).
-const fichaDraftKey = computed(
-  () => `ficha-form-draft-${route.params.id}-${fichaForm.id || 'new'}`
-)
-
-// ── W7: IndexedDB file stash — survives full reload on Android ───────────────
-const { stash: stashFile, restore: restoreFile, clear: clearFile } = useFileStash()
-const fichaFileGuard = useFileStashTitleGuard('Adjuntar archivo de respaldo')
-// W9: stash key MUST include the ficha id so each ficha on the same
-// patient page gets its own slot. route.params.id is the patient id,
-// not the ficha id — without fichaForm.id, every ficha shares the
-// same stash and the second dialog opened shows the first dialog's file.
-const stashKey = computed(() => `ficha:${route.params.id}:${fichaForm.id || 'new'}:file`)
-
 const tabs = [
-  { label: 'Información Básica', icon: 'pi pi-user' },
-  { label: 'Fichas & Evaluaciones', icon: 'pi pi-file-check' },
-  { label: 'Notas', icon: 'pi pi-book' },
+  { index: 0, label: 'Información Básica', icon: 'pi pi-user', domain: null as Domain | null },
+  { index: 1, label: 'Fichas & Evaluaciones', icon: 'pi pi-file-check', domain: 'fichas' as Domain },
+  { index: 2, label: 'Notas', icon: 'pi pi-book', domain: 'notas' as Domain },
 ]
+
+// §1.5: hide the Fichas/Notas tabs when the profile lacks that domain.
+const { can, canCreateOnly } = useDomainAccess()
+const visibleTabs = computed(() => tabs.filter(t => !t.domain || can(t.domain)))
+
+// If the active tab becomes hidden (e.g. profile without fichas), fall back to
+// the first visible tab so the body is never blank.
+watchEffect(() => {
+  if (!visibleTabs.value.some(t => t.index === activeTab.value)) {
+    activeTab.value = visibleTabs.value[0]?.index ?? 0
+  }
+})
 
 // Valid status transitions (mirrors backend logic).
 // D3 (scope-decisions): VENCIDO → COMPLETADO is now allowed when an archive is supplied.
@@ -190,8 +212,6 @@ const transitionOptions = computed(() =>
     value: v,
   }))
 )
-
-const requiresFileUpload = computed(() => fichaForm.newEstado === 'COMPLETADO')
 
 async function fetchPatient() {
   loading.value = true
@@ -317,7 +337,9 @@ async function handleNoteSubmit() {
         tipo: noteForm.tipo,
         prioridad: noteForm.prioridad,
         contenido: noteForm.contenido.trim(),
-        fechaIncidente: noteForm.fechaIncidente,
+        // QA jul-11 B2: DatePicker yields a Date — normalize to YYYY-MM-DD
+        // or the backend schema rejects the ISO timestamp with a 400.
+        fechaIncidente: toYMD(noteForm.fechaIncidente),
       },
     })
 
@@ -366,175 +388,194 @@ function onInstrumentSelected() {
     navigateTo(`/instrumentos/crear?return=${encodeURIComponent(route.fullPath)}`)
     return
   }
-  openSingleStepDialog(Number(val))
+  const id = Number(val)
+  const fromList = instruments.value.find((i) => i.id === id)
+  openAsignarForm(id, fromList?.codigo ?? null)
 }
 
-async function openSingleStepDialog(instrumentoId: number) {
-  // Reset FIRST so a previously opened instrument never leaks its state.
-  singleStepFile.value = null
-  singleStepForm.instrumentoId = instrumentoId
+async function openAsignarForm(instrumentoId: number, codigo: string | null) {
+  formDialogMode.value = 'assign'
+  formDialogTitle.value = 'Asignar y completar evaluación'
+  formDialogFichaId.value = null
   const fromList = instruments.value.find((i) => i.id === instrumentoId)
-  singleStepForm.instrumentoNombre = fromList?.nombreInstrumento || 'Instrumento'
-  singleStepForm.versionRegistro = fromList?.versionPlantilla || ''
-  singleStepForm.plantillaArchivo = null
-  singleStepForm.notasObservaciones = ''
-  singleStepForm.fechaVencimiento = ''
-  singleStepFileGuard.disarm()
-  showSingleStepDialog.value = true
+  formDialogInstrument.value = {
+    id: instrumentoId,
+    nombre: fromList?.nombreInstrumento || 'Instrumento',
+    codigo: codigo ?? fromList?.codigo ?? null,
+  }
+  formRespuestas.value = {}
+  formNotas.value = ''
+  formFechaVencimiento.value = ''
+  formDialogError.value = null
+  showFormDialog.value = true
+  await loadInstrumentDefinition(codigo ?? fromList?.codigo ?? null)
+}
 
-  // Fetch detail for plantillaArchivo (not present in the list payload) and
-  // the authoritative versionPlantilla → versionRegistro.
-  loadingInstrumentDetail.value = true
+async function openCompleteForm(ficha: RegistroFicha) {
+  formDialogMode.value = 'complete'
+  formDialogTitle.value = `Completar: ${ficha.instrumento?.nombreInstrumento ?? ficha.instrumentoNombre ?? 'Ficha'}`
+  formDialogFichaId.value = ficha.id
+  formDialogInstrument.value = {
+    id: ficha.instrumentoId,
+    nombre: ficha.instrumento?.nombreInstrumento ?? ficha.instrumentoNombre ?? 'Instrumento',
+    codigo: ficha.instrumentoCodigo ?? null,
+  }
+  formRespuestas.value = {}
+  formNotas.value = ''
+  formFechaVencimiento.value = ''
+  formDialogError.value = null
+  showFormDialog.value = true
+  await loadInstrumentDefinition(ficha.instrumentoCodigo ?? null)
+}
+
+async function loadInstrumentDefinition(codigo: string | null) {
+  if (!codigo) {
+    formDefinition.value = null
+    formDialogError.value = 'No se pudo cargar la definición del instrumento (falta codigo).'
+    return
+  }
+  loadingDefinition.value = true
   try {
     const res = await apiFetch<{
       success: boolean
-      data: { nombreInstrumento: string; plantillaArchivo: string | null; versionPlantilla: string }
-    }>(`/instruments/${instrumentoId}`)
-    singleStepForm.instrumentoNombre = res.data.nombreInstrumento || singleStepForm.instrumentoNombre
-    singleStepForm.plantillaArchivo = res.data.plantillaArchivo ?? null
-    singleStepForm.versionRegistro = res.data.versionPlantilla || singleStepForm.versionRegistro || '1.0'
-  } catch (e) {
-    console.error('Error fetching instrument detail:', e)
-    if (!singleStepForm.versionRegistro) singleStepForm.versionRegistro = '1.0'
-  } finally {
-    loadingInstrumentDetail.value = false
-  }
-
-  // Re-hydrate the completed file from the IDB stash (Android tab-discard).
-  if (import.meta.client) {
-    restoreFile(singleStepStashKey.value).then((restored) => {
-      if (restored && !singleStepFile.value) {
-        singleStepFile.value = restored
-        toast.add({
-          severity: 'success',
-          summary: 'Archivo restaurado',
-          detail: `«${restored.name}» se restauró automáticamente.`,
-          life: 4000,
-        })
+      data: {
+        instrumento: { id: number; codigo: string; nombre: string; tipo: string }
+        version: { id: number; version: number; definition: InstrumentDefinition }
       }
-    }).catch(() => { /* IDB may be unavailable — silent */ })
-  }
-}
-
-async function onSingleStepFileSelected(event: Event) {
-  singleStepFileGuard.disarm()
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0] ?? null
-  singleStepFile.value = file
-  if (file) {
-    await stashFile(singleStepStashKey.value, file).catch(() => { /* IDB best-effort */ })
-  }
-}
-
-// C2: download the blank plantilla, renamed client-side to
-// {instrumentoNombre}_{pacienteNombre}.{ext}. If the blob fetch is blocked
-// (S3 CORS), fall back to opening the file + a toast with the rename hint.
-async function downloadPlantillaRenamed() {
-  const key = singleStepForm.plantillaArchivo
-  if (!key || !patient.value) return
-  downloadingPlantilla.value = true
-  const sanitize = (s: string) =>
-    (s || '').trim().replace(/[^\w\sÀ-ÿ.-]/g, '').replace(/\s+/g, '_') || 'archivo'
-  const ext = (filenameFromKey(key).split('.').pop() || 'pdf').toLowerCase()
-  const filename = `${sanitize(singleStepForm.instrumentoNombre)}_${sanitize(patient.value.nombre)}.${ext}`
-  try {
-    const res = await apiFetch<{ success: boolean; data: { downloadUrl: string } }>(
-      `/uploads/download-url?key=${encodeURIComponent(key)}`
-    )
-    const url = res.data.downloadUrl
-    try {
-      const blobRes = await fetch(url)
-      if (!blobRes.ok) throw new Error(`fetch ${blobRes.status}`)
-      const blob = await blobRes.blob()
-      const objectUrl = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = objectUrl
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(objectUrl)
-      toast.add({ severity: 'success', summary: 'Plantilla descargada', detail: filename, life: 3500 })
-    } catch {
-      // CORS / network blocked the client-side rename → open + rename hint.
-      window.open(url, '_blank')
-      toast.add({
-        severity: 'info',
-        summary: 'Plantilla abierta',
-        detail: `Guárdala con el nombre «${filename}».`,
-        life: 6000,
-      })
-    }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo descargar la plantilla.', life: 4000 })
+    }>(`/instruments/${codigo}/definition`)
+    formDefinition.value = res.data.version.definition
+  } catch (e: any) {
+    console.error('Error loading instrument definition:', e)
+    formDefinition.value = null
+    formDialogError.value =
+      e?.data?.message || e?.message || 'No se pudo cargar la definición.'
   } finally {
-    downloadingPlantilla.value = false
+    loadingDefinition.value = false
   }
 }
 
-async function handleSingleStepSubmit() {
-  if (!patient.value || !singleStepForm.instrumentoId) return
-  if (!singleStepFile.value) {
-    toast.add({
-      severity: 'warn',
-      summary: 'Debes adjuntar el archivo de la evaluación completada',
-      life: 4000,
-    })
-    return
-  }
-
-  submittingSingleStep.value = true
+async function openResultDialog(ficha: RegistroFicha) {
+  resultDialogFicha.value = ficha
+  resultDefinition.value = null
+  showResultDialog.value = true
+  loadingResult.value = true
   try {
-    // Upload the completed evaluation first → S3 key.
-    const key = await uploadFile(singleStepFile.value, 'fichas')
-    if (!key) {
-      submittingSingleStep.value = false
-      return
+    // Always re-fetch to ensure we have the latest respuestas/subtotales.
+    const res = await apiFetch<{
+      success: boolean
+      data: RegistroFicha & { instrumentoCodigo?: string }
+    }>(`/patients/${patient.value!.id}/fichas/${ficha.id}`)
+    if (res?.success) resultDialogFicha.value = res.data
+
+    // BUG-W5-02 (W6): the result dialog must render even when the user opens
+    // it directly via "Ver detalle" without first opening the assign dialog.
+    // We resolve the codigo from the loaded instruments list (which is in
+    // memory thanks to onMounted -> fetchInstruments) and pull the definition
+    // into the dedicated `resultDefinition` ref.
+    const codigo = await resolveInstrumentCodigo(resultDialogFicha.value)
+    if (codigo) {
+      await loadResultDefinition(codigo)
+    } else {
+      // No codigo means we cannot render the result breakdown — fall through
+      // with resultDefinition=null so the empty-state path renders.
+      console.warn('Result dialog: no codigo resolvable for instrumentoId', resultDialogFicha.value?.instrumentoId)
     }
+  } catch (e) {
+    // Fall back to the table row — at least we have something to render.
+    console.error('Error loading ficha detail:', e)
+  } finally {
+    loadingResult.value = false
+  }
+}
 
-    const notas = singleStepForm.notasObservaciones.trim()
-    const fechaVenc = singleStepForm.fechaVencimiento || ''
-    // C1 single-step: archivoCompletado present → backend creates COMPLETADO.
-    await apiFetch(`/patients/${patient.value.id}/fichas`, {
-      method: 'POST',
-      body: {
-        instrumentoId: singleStepForm.instrumentoId,
-        versionRegistro: singleStepForm.versionRegistro || '1.0',
-        archivoCompletado: key,
-        ...(notas ? { notasObservaciones: notas } : {}),
-        ...(fechaVenc ? { fechaVencimiento: fechaVenc } : {}),
-      },
-    })
+async function resolveInstrumentCodigo(ficha: RegistroFicha | null): Promise<string | null> {
+  if (!ficha) return null
+  // 1. Already on the ficha row (works when the GET /fichas/:id response
+  //    surfaces it; some endpoints may not).
+  if (ficha.instrumentoCodigo) return ficha.instrumentoCodigo
+  // 2. Look up in the in-memory instrument list (fetchInstruments in onMounted).
+  const fromList = instruments.value.find((i) => i.id === ficha.instrumentoId)
+  return fromList?.codigo ?? null
+}
 
+async function loadResultDefinition(codigo: string) {
+  try {
+    const res = await apiFetch<{
+      success: boolean
+      data: {
+        instrumento: { id: number; codigo: string; nombre: string; tipo: string }
+        version: { id: number; version: number; definition: InstrumentDefinition }
+      }
+    }>(`/instruments/${codigo}/definition`)
+    resultDefinition.value = res.data.version.definition
+  } catch (e: any) {
+    console.error('Error loading instrument definition (result dialog):', e)
+    resultDefinition.value = null
+  }
+}
+
+async function submitForm() {
+  if (!patient.value || !formDialogInstrument.value || !formDefinition.value) return
+  submittingForm.value = true
+  formDialogError.value = null
+  try {
+    const payload: Record<string, unknown> = {}
+    const notas = formNotas.value.trim()
+    if (notas) payload.notasObservaciones = notas
+    const fechaVenc = toYMD(formFechaVencimiento.value)
+    if (fechaVenc) payload.fechaVencimiento = fechaVenc
+
+    if (formDialogMode.value === 'assign') {
+      // Contract §4.3: POST with respuestas present → single-step assign+complete.
+      // G2-11: server resolves instrumentoVersionId from the active version
+      // (any client-supplied value is ignored). G2-12: server defaults
+      // versionRegistro to `v{version}` from the resolved version. We send
+      // just the keys the server needs.
+      payload.instrumentoId = formDialogInstrument.value.id
+      payload.respuestas = formRespuestas.value
+      await apiFetch(`/patients/${patient.value.id}/fichas`, {
+        method: 'POST',
+        body: payload,
+      })
+    } else {
+      // Contract §4.3b: PATCH completar a pending ficha.
+      payload.respuestas = formRespuestas.value
+      await apiFetch(
+        `/patients/${patient.value.id}/fichas/${formDialogFichaId.value}/completar`,
+        { method: 'PATCH', body: payload },
+      )
+    }
     await fetchPatient()
-    await clearFile(singleStepStashKey.value).catch(() => { /* noop */ })
-    singleStepFile.value = null
-    showSingleStepDialog.value = false
+    showFormDialog.value = false
     selectedInstrumentId.value = null
-    singleStepFileGuard.disarm()
     toast.add({
       severity: 'success',
-      summary: 'Ficha completada',
-      detail: 'La evaluación se registró como COMPLETADO.',
+      summary: 'Ficha guardada',
+      detail: formDialogMode.value === 'assign'
+        ? 'La evaluación se registró como COMPLETADO.'
+        : 'La evaluación pendiente se completó correctamente.',
       life: 3500,
     })
   } catch (e: any) {
-    console.error('Error creating single-step ficha:', e)
-    const msg = e?.data?.message || 'Error al registrar la ficha'
+    console.error('Error submitting form:', e)
+    const msg = e?.data?.message || e?.message || 'Error al guardar la evaluación'
+    formDialogError.value = msg
     toast.add({ severity: 'error', summary: msg, life: 4000 })
   } finally {
-    submittingSingleStep.value = false
+    submittingForm.value = false
   }
 }
 
-// Reset the select when the dialog closes so re-picking the SAME instrument
-// re-triggers @change (PrimeVue Select won't fire if the value is unchanged).
-watch(showSingleStepDialog, (open) => {
-  if (!open) {
-    selectedInstrumentId.value = null
-    singleStepFileGuard.disarm()
-  }
-})
+function closeFormDialog() {
+  showFormDialog.value = false
+  selectedInstrumentId.value = null
+}
+
+function closeResultDialog() {
+  showResultDialog.value = false
+  resultDialogFicha.value = null
+  resultDefinition.value = null
+}
 
 async function deleteFicha(fichaId: number) {
   if (!patient.value) return
@@ -558,13 +599,9 @@ async function deleteFicha(fichaId: number) {
 // ── B6 handlers ───────────────────────────────────────────────────────────────
 
 function openFichaDialog(ficha: RegistroFicha) {
-  // W9: explicit reset FIRST — before anything that might read or
-  // restore state — so closing & re-opening for a DIFFERENT ficha on
-  // the same page never shows the previous ficha's file/filename/key.
-  uploadedFile.value = null
-  uploadedFileName.value = null
-  uploadedFileKey.value = null
-
+  // W3: file-upload removed; this dialog now only handles → VENCIDO
+  // transitions (PENDIENTE/COMPLETADO → VENCIDO). Going to COMPLETADO is
+  // handled by openCompleteForm() via the dynamic form (PATCH /completar).
   fichaForm.id = ficha.id
   fichaForm.currentEstado = ficha.estado
   fichaForm.newEstado = ''
@@ -572,190 +609,32 @@ function openFichaDialog(ficha: RegistroFicha) {
     ficha.instrumento?.nombreInstrumento
     || ficha.instrumentoNombre
     || 'Ficha'
-
-  // D1 mitigation: restore any in-progress draft (Android tab-unload protection).
-  // readFichaDraft() internally validates parsed.id === fichaForm.id so
-  // drafts from another ficha are ignored here.
-  const draft = readFichaDraft()
-  if (draft) {
-    fichaForm.newEstado = (draft.newEstado as typeof fichaForm.newEstado) || ''
-    fichaForm.notasObservaciones = draft.notasObservaciones ?? ''
-    fichaForm.fechaVencimiento = draft.fechaVencimiento ?? ''
-    uploadedFileName.value = draft.uploadedFileName ?? null
-    if (draft.uploadedFileName) {
-      toast.add({
-        severity: 'info',
-        summary: 'Borrador restaurado',
-        detail: `Vuelve a seleccionar "${draft.uploadedFileName}" para continuar.`,
-        life: 5000,
-      })
-    }
-  } else {
-    fichaForm.notasObservaciones = ''
-    fichaForm.fechaVencimiento = ''
-    uploadedFileName.value = null
-  }
-
-  // W7 + W9: try to re-hydrate File from IndexedDB stash UNDER THE
-  // ficha-scoped key. If found, populate uploadedFile directly so the
-  // user sees the file is "still there" — no re-pick needed.
-  // Switching fichas: the new stashKey is ficha:<patientId>:<fichaId>:file,
-  // so the previous ficha's IDB entry is NOT picked up.
-  if (import.meta.client) {
-    restoreFile(stashKey.value).then((restoredFile) => {
-      if (restoredFile && !uploadedFile.value) {
-        uploadedFile.value = restoredFile
-        uploadedFileName.value = restoredFile.name
-        toast.add({
-          severity: 'success',
-          summary: 'Archivo restaurado',
-          detail: `«${restoredFile.name}» se restauró automáticamente.`,
-          life: 4000,
-        })
-      }
-    }).catch(() => { /* IDB may be unavailable — silent */ })
-  }
-
+  fichaForm.notasObservaciones = ''
+  fichaForm.fechaVencimiento = ''
   showFichaDialog.value = true
 }
-
-async function onFileSelected(event: Event) {
-  fichaFileGuard.disarm() // reset the title-guard prefix (Fix Option B)
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0] ?? null
-  uploadedFile.value = file
-  uploadedFileKey.value = null
-  if (file) {
-    uploadedFileName.value = file.name
-    // W7: persist the File to IndexedDB so Android Chrome can re-hydrate
-    // after a tab discard. sessionStorage can only hold the file NAME.
-    await stashFile(stashKey.value, file)
-    writeFichaDraft() // keep sessionStorage draft in sync (existing line)
-  }
-}
-
-// ── D1: form-state draft persistence (sessionStorage) ────────────────────────
-function readFichaDraft(): {
-  newEstado?: string
-  notasObservaciones?: string
-  fechaVencimiento?: string
-  uploadedFileName?: string
-} | null {
-  if (!import.meta.client) return null
-  try {
-    const raw = sessionStorage.getItem(fichaDraftKey.value)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    // Discard drafts from a different ficha id — fichaForm.id changed.
-    if (!parsed || parsed.id !== fichaForm.id) return null
-    const { newEstado, notasObservaciones, fechaVencimiento, uploadedFileName } = parsed
-    return { newEstado, notasObservaciones, fechaVencimiento, uploadedFileName }
-  } catch {
-    return null
-  }
-}
-
-function writeFichaDraft() {
-  if (!import.meta.client) return
-  try {
-    sessionStorage.setItem(
-      fichaDraftKey.value,
-      JSON.stringify({
-        id: fichaForm.id,
-        newEstado: fichaForm.newEstado,
-        notasObservaciones: fichaForm.notasObservaciones,
-        fechaVencimiento: fichaForm.fechaVencimiento,
-        uploadedFileName: uploadedFileName.value,
-      })
-    )
-  } catch {
-    // sessionStorage may be disabled — silently ignore.
-  }
-}
-
-function clearFichaDraft() {
-  if (!import.meta.client) return
-  try { sessionStorage.removeItem(fichaDraftKey.value) } catch { /* noop */ }
-}
-
-watch(
-  () => [fichaForm.newEstado, fichaForm.notasObservaciones, fichaForm.fechaVencimiento],
-  () => { if (showFichaDialog.value) writeFichaDraft() }
-)
-
-watch(uploadedFileName, () => { if (showFichaDialog.value) writeFichaDraft() })
 
 async function handleFichaSubmit() {
   if (!fichaForm.id || !fichaForm.newEstado || !patient.value) return
 
   submittingFicha.value = true
   try {
-    let archivoCompletado: string | undefined
-
-    // Upload file when transitioning to COMPLETADO
-    if (fichaForm.newEstado === 'COMPLETADO') {
-      if (!uploadedFile.value) {
-        toast.add({ severity: 'warn', summary: 'Debes adjuntar un archivo para marcar como completado', life: 4000 })
-        submittingFicha.value = false
-        return
-      }
-
-      uploadingFile.value = true
-      try {
-        // Step 1: Get presigned URL
-        const presignedRes = await apiFetch<{ success: boolean; data: { uploadUrl: string; key: string } }>(
-          '/uploads/presigned-url',
-          {
-            method: 'POST',
-            body: {
-              contentType: uploadedFile.value.type,
-              folder: 'fichas',
-            },
-          }
-        )
-
-        const { uploadUrl, key } = presignedRes.data
-
-        // Step 2: Upload directly to S3 using the presigned URL
-        const uploadResponse = await fetch(uploadUrl, {
-          method: 'PUT',
-          body: uploadedFile.value,
-          headers: { 'Content-Type': uploadedFile.value.type },
-        })
-
-        if (!uploadResponse.ok) {
-          throw new Error(`Upload failed: ${uploadResponse.status}`)
-        }
-
-        archivoCompletado = key
-      } finally {
-        uploadingFile.value = false
-      }
-    }
-
-    // Step 3: Update ficha status (Bug 2: include notasObservaciones + fechaVencimiento).
     const notas = fichaForm.notasObservaciones.trim()
-    const fechaVenc = fichaForm.fechaVencimiento || ''
+    // QA jul-11 B1 parity: normalize the DatePicker Date to YYYY-MM-DD.
+    const fechaVenc = toYMD(fichaForm.fechaVencimiento)
+    // Contract §4.6: → VENCIDO is still a status-only transition
+    // (no archivoCompletado; the contract dropped that field).
     await apiFetch(`/patients/${patient.value.id}/fichas/${fichaForm.id}/status`, {
       method: 'PATCH',
       body: {
         estado: fichaForm.newEstado,
-        ...(archivoCompletado ? { archivoCompletado } : {}),
         ...(notas ? { notasObservaciones: notas } : {}),
         ...(fechaVenc ? { fechaVencimiento: fechaVenc } : {}),
       },
     })
 
     await fetchPatient()
-    clearFichaDraft()
-    // W7: clear the IndexedDB file stash on successful submit so the
-    // next session starts clean. (Fix Option A — Diff 4)
-    await clearFile(stashKey.value)
-    uploadedFile.value = null
-    uploadedFileName.value = null
-    uploadedFileKey.value = null
     showFichaDialog.value = false
-    fichaFileGuard.disarm()
     toast.add({ severity: 'success', summary: 'Estado actualizado', life: 3000 })
   } catch (e: any) {
     console.error('Error updating ficha status:', e)
@@ -793,7 +672,7 @@ onMounted(async () => {
         <template #actions>
           <Button label="Volver" icon="pi pi-arrow-left" severity="secondary" outlined
             @click="navigateTo('/pacientes')" />
-          <Button label="Editar" icon="pi pi-pencil" severity="info" @click="navigateTo(`/pacientes/${patient.id}/editar`)" />
+          <Button v-if="!canCreateOnly('pacientes')" label="Editar" icon="pi pi-pencil" severity="info" @click="navigateTo(`/pacientes/${patient.id}/editar`)" />
         </template>
       </AppPageHeader>
 
@@ -827,15 +706,15 @@ onMounted(async () => {
       <!-- Tabs -->
       <div class="mb-4 flex gap-1 border-b border-[var(--surface-border)]">
         <button
-          v-for="(tab, i) in tabs"
-          :key="i"
+          v-for="tab in visibleTabs"
+          :key="tab.index"
           :class="[
             'flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px',
-            activeTab === i
+            activeTab === tab.index
               ? 'border-violet-500 text-violet-600 dark:text-violet-400'
               : 'border-transparent text-[var(--text-color-secondary)] hover:text-[var(--text-color)]'
           ]"
-          @click="activeTab = i"
+          @click="activeTab = tab.index"
         >
           <i :class="tab.icon" />
           {{ tab.label }}
@@ -939,7 +818,7 @@ onMounted(async () => {
       </div>
 
       <!-- TAB 1: Fichas & Evaluaciones -->
-      <div v-show="activeTab === 1" class="space-y-4">
+      <div v-if="can('fichas')" v-show="activeTab === 1" class="space-y-4">
 
         <!-- B5: Assign Instrument Card -->
         <Card>
@@ -958,6 +837,7 @@ onMounted(async () => {
                 :options="instrumentSelectOptions"
                 option-label="nombreInstrumento"
                 option-value="id"
+                option-disabled="_disabled"
                 placeholder="Seleccionar instrumento"
                 class="w-full"
                 filter
@@ -973,7 +853,15 @@ onMounted(async () => {
                   >
                     {{ option.nombreInstrumento }}
                   </span>
-                  <span v-else>{{ option.nombreInstrumento }}</span>
+                  <span v-else class="flex items-center gap-2">
+                    <span>{{ option.nombreInstrumento }}</span>
+                    <Tag
+                      v-if="option._disabled"
+                      value="Sin definición"
+                      severity="warn"
+                      data-testid="picker-sin-definicion"
+                    />
+                  </span>
                 </template>
               </Select>
               <p class="text-xs text-[var(--text-color-secondary)]">
@@ -1051,24 +939,33 @@ onMounted(async () => {
                 </template>
               </Column>
 
-              <Column header="Acciones" style="min-width: 120px">
+              <Column header="Acciones" style="min-width: 180px">
                 <template #body="{ data }">
                   <div class="flex items-center gap-1">
-                    <!-- View / update status button — Bug 3: drives disabled from the transitions map,
-                         so VENCIDO rows are editable once the backend allows VENCIDO → COMPLETADO. -->
+                    <!-- W3: View completed-detail result view (contract §4.4). -->
                     <Button
-                      icon="pi pi-pencil"
+                      v-if="data.estado === 'COMPLETADO'"
+                      icon="pi pi-eye"
                       size="small"
-                      severity="secondary"
+                      severity="info"
                       text
                       rounded
-                      v-tooltip.top="
-                        (validTransitions[data.estado]?.length ?? 0) > 0
-                          ? 'Cambiar estado'
-                          : 'Sin transiciones disponibles'
-                      "
-                      :disabled="!validTransitions[data.estado]?.length"
-                      @click="openFichaDialog(data)"
+                      v-tooltip.top="'Ver detalle'"
+                      data-testid="ficha-view-result"
+                      @click="openResultDialog(data)"
+                    />
+                    <!-- W3: Completar / Re-completar pending/vencida ficha
+                         (contract §4.3b PATCH .../completar). -->
+                    <Button
+                      v-if="data.estado !== 'COMPLETADO'"
+                      icon="pi pi-pencil"
+                      size="small"
+                      severity="success"
+                      text
+                      rounded
+                      v-tooltip.top="data.estado === 'PENDIENTE' ? 'Completar evaluación' : 'Re-completar evaluación'"
+                      data-testid="ficha-complete"
+                      @click="openCompleteForm(data)"
                     />
                     <!-- B5: Delete button — only for PENDIENTE fichas -->
                     <Button
@@ -1091,7 +988,7 @@ onMounted(async () => {
       </div>
 
       <!-- TAB 2: Notas -->
-      <div v-show="activeTab === 2" class="space-y-4">
+      <div v-if="can('notas')" v-show="activeTab === 2" class="space-y-4">
         <Card>
           <template #header>
             <div class="px-6 pt-5 pb-0 flex items-center justify-between">
@@ -1234,132 +1131,158 @@ onMounted(async () => {
         </form>
       </Dialog>
 
-      <!-- C1/C2: Single-step ficha dialog (assign + first update in one shot) -->
+      <!-- W3: Dynamic-instrument form dialog (assign + complete flows). -->
       <Dialog
-        v-model:visible="showSingleStepDialog"
+        v-model:visible="showFormDialog"
         modal
-        :header="`Asignar y completar: ${singleStepForm.instrumentoNombre}`"
-        :style="{ width: '34rem' }"
+        :header="formDialogTitle"
+        :style="{ width: 'min(64rem, 95vw)' }"
         :breakpoints="{ '640px': '95vw' }"
-        data-testid="ficha-single-step-dialog"
+        data-testid="ficha-form-dialog"
       >
-        <div class="space-y-5 pt-4">
-          <!-- C2: download blank plantilla (renamed client-side). -->
+        <div class="space-y-4 pt-4">
+          <!-- Loading / error states -->
           <div
-            v-if="singleStepForm.plantillaArchivo"
-            class="flex items-center justify-between gap-3 p-3 rounded-lg bg-[var(--surface-ground)]"
-          >
-            <div class="min-w-0">
-              <p class="text-sm font-medium text-[var(--text-color)]">Plantilla en blanco</p>
-              <p class="text-xs text-[var(--text-color-secondary)]">
-                Se descarga con el nombre del paciente para evitar confusiones.
-              </p>
-            </div>
-            <Button
-              label="Descargar plantilla"
-              icon="pi pi-download"
-              size="small"
-              severity="secondary"
-              outlined
-              :loading="downloadingPlantilla"
-              data-testid="ficha-descargar-plantilla"
-              @click="downloadPlantillaRenamed"
-            />
-          </div>
-          <div
-            v-else-if="loadingInstrumentDetail"
+            v-if="loadingDefinition"
             class="flex items-center gap-2 text-sm text-[var(--text-color-secondary)]"
           >
-            <i class="pi pi-spin pi-spinner" /> Cargando instrumento…
+            <i class="pi pi-spin pi-spinner" /> Cargando definición del instrumento…
           </div>
 
-          <!-- REQUIRED: completed evaluation file. -->
-          <div>
-            <label class="block text-sm font-medium mb-2">
-              Archivo de la evaluación <span class="text-red-500">*</span>
-              <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">
-                (evaluación diligenciada)
-              </span>
-            </label>
-            <div class="flex items-center gap-3">
-              <label
-                class="flex items-center gap-2 px-4 py-2 border border-[var(--surface-border)] rounded-md cursor-pointer hover:bg-[var(--surface-hover)] transition-colors text-sm"
-                @click="singleStepFileGuard.arm()"
-              >
-                <i class="pi pi-upload text-violet-500" />
-                {{ singleStepFile ? singleStepFile.name : 'Seleccionar archivo' }}
-                <input
-                  type="file"
-                  class="hidden"
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  data-testid="ficha-single-step-file-input"
-                  @change="onSingleStepFileSelected"
-                />
+          <Message
+            v-else-if="formDialogError"
+            severity="error"
+            :closable="false"
+            data-testid="form-dialog-error"
+          >
+            {{ formDialogError }}
+          </Message>
+
+          <!-- Read-only patient header band (contract §7). NEVER renders as form items. -->
+          <Card v-if="patient">
+            <template #content>
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div class="flex items-center gap-3">
+                  <Avatar
+                    :label="patient.nombre?.[0]?.toUpperCase() ?? '?'"
+                    shape="circle"
+                    class="bg-violet-500 text-white font-bold"
+                  />
+                  <div>
+                    <p class="font-semibold text-[var(--text-color)]">{{ patient.nombre }}</p>
+                    <p class="text-xs text-[var(--text-color-secondary)]">
+                      {{ patient.tipoDocumento }} {{ patient.numeroDocumento }}
+                      · {{ calculateAge(patient.fechaNacimiento) }} años · {{ patient.genero }}
+                    </p>
+                  </div>
+                </div>
+                <div class="text-xs text-[var(--text-color-secondary)] text-right">
+                  <p><strong>Instrumento:</strong> {{ formDialogInstrument?.nombre }}</p>
+                </div>
+              </div>
+            </template>
+          </Card>
+
+          <!-- THE dynamic form -->
+          <DynamicInstrumentForm
+            v-if="formDefinition"
+            :definition="formDefinition"
+            v-model="formRespuestas"
+          />
+
+          <!-- Optional metadata (notas + fechaVencimiento) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-[var(--surface-border)]">
+            <div>
+              <label for="formNotas" class="block text-sm font-medium mb-2">
+                Notas / Observaciones
+                <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
               </label>
-              <span v-if="singleStepFile" class="text-xs text-[var(--text-color-secondary)]">
-                {{ (singleStepFile.size / 1024).toFixed(1) }} KB
-              </span>
+              <Textarea
+                id="formNotas"
+                v-model="formNotas"
+                rows="3"
+                placeholder="Anota observaciones sobre la evaluación..."
+                class="w-full"
+                data-testid="form-notas"
+              />
             </div>
-            <p v-if="singleStepFile" class="mt-1.5 flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-              <i class="pi pi-check-circle" /> Archivo seleccionado
-            </p>
+            <div>
+              <label for="formFechaVencimiento" class="block text-sm font-medium mb-2">
+                Fecha de vencimiento
+                <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
+              </label>
+              <DatePicker
+                id="formFechaVencimiento"
+                v-model="formFechaVencimiento"
+                date-format="yy-mm-dd"
+                show-icon
+                class="w-full"
+                :show-button-bar="true"
+                data-testid="form-fecha-vencimiento"
+              />
+            </div>
           </div>
 
-          <!-- Optional notes. -->
-          <div>
-            <label for="singleStepNotas" class="block text-sm font-medium mb-2">
-              Notas / Observaciones
-              <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
-            </label>
-            <Textarea
-              id="singleStepNotas"
-              v-model="singleStepForm.notasObservaciones"
-              rows="3"
-              placeholder="Anota observaciones sobre la evaluación..."
-              class="w-full"
-              data-testid="ficha-single-step-notas"
-            />
-          </div>
-
-          <!-- Optional next due-date. -->
-          <div>
-            <label for="singleStepVencimiento" class="block text-sm font-medium mb-2">
-              Fecha de vencimiento
-              <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
-            </label>
-            <DatePicker
-              id="singleStepVencimiento"
-              v-model="singleStepForm.fechaVencimiento"
-              date-format="yy-mm-dd"
-              show-icon
-              class="w-full"
-              :show-button-bar="true"
-              data-testid="ficha-single-step-vencimiento"
-            />
-          </div>
-
-          <!-- Footer actions. -->
-          <div class="flex justify-end gap-2 pt-1">
+          <!-- Footer actions -->
+          <div class="flex justify-end gap-2 pt-2">
             <Button
               label="Cancelar"
               severity="secondary"
               outlined
-              :disabled="submittingSingleStep"
-              @click="showSingleStepDialog = false"
+              :disabled="submittingForm"
+              @click="closeFormDialog"
             />
             <Button
-              label="Asignar y completar"
+              :label="formDialogMode === 'assign' ? 'Asignar y completar' : 'Guardar evaluación'"
               icon="pi pi-check"
-              :loading="submittingSingleStep"
-              :disabled="!singleStepFile || submittingSingleStep"
-              data-testid="ficha-single-step-submit"
-              @click="handleSingleStepSubmit"
+              :loading="submittingForm"
+              :disabled="!formDefinition || submittingForm"
+              data-testid="form-submit"
+              @click="submitForm"
             />
           </div>
         </div>
       </Dialog>
 
-      <!-- B6: Ficha Status Dialog -->
+      <!-- W3: Result view dialog (read-only). -->
+      <Dialog
+        v-model:visible="showResultDialog"
+        modal
+        :header="`Detalle: ${resultDialogFicha?.instrumento?.nombreInstrumento ?? resultDialogFicha?.instrumentoNombre ?? 'Ficha'}`"
+        :style="{ width: 'min(56rem, 95vw)' }"
+        :breakpoints="{ '640px': '95vw' }"
+        data-testid="ficha-result-dialog"
+      >
+        <div class="pt-4">
+          <div v-if="loadingResult" class="flex items-center gap-2 text-sm text-[var(--text-color-secondary)] py-6">
+            <i class="pi pi-spin pi-spinner" /> Cargando detalle…
+          </div>
+          <InstrumentResultView
+            v-else-if="resultDialogFicha?.respuestas && resultDefinition"
+            :definition="resultDefinition"
+            :respuestas="resultDialogFicha.respuestas ?? null"
+            :subtotales="resultDialogFicha.subtotales ?? null"
+            :puntaje-total="resultDialogFicha.puntajeTotal ?? null"
+            :clasificacion="resultDialogFicha.clasificacion ?? null"
+            :skipped-sections="resultDialogFicha.skippedSections ?? []"
+          />
+          <div v-else class="text-center py-8 text-[var(--text-color-secondary)] text-sm">
+            <i class="pi pi-info-circle text-3xl block mb-2" />
+            Esta ficha no tiene respuestas registradas (estado
+            {{ resultDialogFicha?.estado ?? '—' }}).
+          </div>
+        </div>
+        <template #footer>
+          <Button
+            label="Cerrar"
+            severity="secondary"
+            outlined
+            @click="closeResultDialog"
+          />
+        </template>
+      </Dialog>
+
+      <!-- B6: Ficha Status Dialog (kept for → VENCIDO transitions; no file UI). -->
       <Dialog
         v-model:visible="showFichaDialog"
         modal
@@ -1396,7 +1319,7 @@ onMounted(async () => {
             />
           </div>
 
-          <!-- Bug 2: free-form notes (always available, sent with the PATCH when set). -->
+          <!-- Free-form notes + optional next due-date (no file UI per W3). -->
           <div>
             <label for="notasObservaciones" class="block text-sm font-medium mb-2">
               Notas / Observaciones
@@ -1410,7 +1333,6 @@ onMounted(async () => {
             />
           </div>
 
-          <!-- Bug 2: optional next due-date (e.g. to flag the next periodicidad). -->
           <div>
             <label for="fechaVencimiento" class="block text-sm font-medium mb-2">
               Próximo vencimiento
@@ -1427,48 +1349,6 @@ onMounted(async () => {
             />
           </div>
 
-          <!-- File upload — required when transitioning to COMPLETADO.
-               If we restored `uploadedFileName` from sessionStorage but not the File,
-               we show that name + a hint so the user knows to re-select. -->
-          <div v-if="requiresFileUpload">
-            <label class="block text-sm font-medium mb-2">
-              Archivo de respaldo *
-              <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">
-                (requerido para marcar como completado)
-              </span>
-            </label>
-            <div class="flex items-center gap-3">
-              <label
-                class="flex items-center gap-2 px-4 py-2 border border-[var(--surface-border)] rounded-md cursor-pointer hover:bg-[var(--surface-hover)] transition-colors text-sm"
-                @click="fichaFileGuard.arm()"
-              >
-                <i class="pi pi-upload text-violet-500" />
-                {{
-                  uploadedFile
-                    ? uploadedFile.name
-                    : (uploadedFileName || 'Seleccionar archivo')
-                }}
-                <input
-                  type="file"
-                  class="hidden"
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  data-testid="ficha-file-input"
-                  @change="onFileSelected"
-                />
-              </label>
-              <span v-if="uploadedFile" class="text-xs text-[var(--text-color-secondary)]">
-                {{ (uploadedFile.size / 1024).toFixed(1) }} KB
-              </span>
-            </div>
-            <p v-if="uploadedFile" class="mt-1.5 flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-              <i class="pi pi-check-circle" /> Archivo seleccionado
-            </p>
-            <p v-else-if="uploadedFileName" class="mt-1.5 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-              <i class="pi pi-info-circle" /> Vuelve a seleccionar
-              &laquo;{{ uploadedFileName }}&raquo; para continuar.
-            </p>
-          </div>
-
           <!-- Footer actions -->
           <div class="flex justify-end gap-2 pt-1">
             <Button
@@ -1481,12 +1361,8 @@ onMounted(async () => {
             <Button
               label="Guardar Cambios"
               icon="pi pi-save"
-              :loading="submittingFicha || uploadingFile"
-              :disabled="
-                availableTransitions.length === 0
-                  || !fichaForm.newEstado
-                  || (requiresFileUpload && !uploadedFile)
-              "
+              :loading="submittingFicha"
+              :disabled="availableTransitions.length === 0 || !fichaForm.newEstado"
               @click="handleFichaSubmit"
             />
           </div>

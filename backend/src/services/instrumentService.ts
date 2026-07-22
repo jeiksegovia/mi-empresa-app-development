@@ -1,4 +1,5 @@
 import { getPrisma } from '../config/database.js'
+import type { InstrumentDefinition } from './instrumentScoringService.js'
 
 export interface InstrumentListParams {
   page?: number
@@ -6,6 +7,13 @@ export interface InstrumentListParams {
   search?: string
   tipo?: string
   estado?: 'ACTIVO' | 'INACTIVO'
+}
+
+export interface ActiveVersionSummary {
+  id: number
+  version: number
+  activo: boolean
+  createdAt: Date
 }
 
 export interface InstrumentSummary {
@@ -17,9 +25,11 @@ export interface InstrumentSummary {
   periodicidad: string
   rolesPermitidos: string
   estado: string
-  versionPlantilla: string
+  /** W4: versionPlantilla REMOVED (file-flow gone, replaced by activeVersion). */
   fechaCreacion: Date
   totalRegistros: number
+  /** W4 (§4.1): active version metadata — null if no activo=true version exists. */
+  activeVersion: ActiveVersionSummary | null
 }
 
 export interface InstrumentListResult {
@@ -39,8 +49,7 @@ export interface InstrumentDetail {
   periodicidad: string
   rolesPermitidos: string
   estado: string
-  plantillaArchivo: string | null
-  versionPlantilla: string
+  /** W4: plantillaArchivo REMOVED. */
   fechaCreacion: Date
   creadoPor: number
   registros: Array<{
@@ -57,6 +66,8 @@ export interface InstrumentDetail {
       numeroDocumento: string
     }
   }>
+  /** fixes-jul17-2 §3.1: present when createInstrument used templateCodigo. */
+  activeVersion?: ActiveVersionSummary | null
 }
 
 export interface CreateInstrumentInput {
@@ -66,12 +77,28 @@ export interface CreateInstrumentInput {
   tipo: 'VALORACION' | 'NUTRICION' | 'MATRICULA' | 'ADMISION'
   periodicidad: 'UNICA' | 'ANUAL' | 'MENSUAL' | 'TRIMESTRAL' | 'SEMESTRAL'
   rolesPermitidos: string
-  plantillaArchivo?: string
-  versionPlantilla: string
   estado?: 'ACTIVO' | 'INACTIVO'
+  // fixes-jul17-2 §3.1: optional template deep-copy.
+  templateCodigo?: 'BARTHEL' | 'MINI_MENTAL' | 'TINETTI' | 'YESAVAGE' | 'MNA_CUADRO' | 'FICHA_NUTRICIONAL'
 }
 
-export type UpdateInstrumentInput = Partial<CreateInstrumentInput>
+export type UpdateInstrumentInput = Partial<Omit<CreateInstrumentInput, 'templateCodigo'>>
+
+/**
+ * fixes-jul17-2 §3.1: structured error codes the route layer maps to HTTP.
+ */
+export type CreateFromTemplateError =
+  | 'TEMPLATE_NOT_FOUND'
+  | 'NO_ACTIVE_VERSION'
+
+export class CreateInstrumentError extends Error {
+  readonly code: CreateFromTemplateError
+  constructor(code: CreateFromTemplateError, message: string) {
+    super(message)
+    this.name = 'CreateInstrumentError'
+    this.code = code
+  }
+}
 
 export interface RecordDetail {
   id: number
@@ -82,7 +109,7 @@ export interface RecordDetail {
   fechaVencimiento: Date | null
   versionRegistro: string
   responsable: number
-  archivoCompletado: string | null
+  /** W4: archivoCompletado REMOVED. */
   notasObservaciones: string | null
   fechaCreacionRegistro: Date
   cliente: {
@@ -106,7 +133,6 @@ export interface CreateRecordInput {
   fechaVencimiento?: string | Date
   versionRegistro: string
   responsable: number
-  archivoCompletado?: string
   notasObservaciones?: string
 }
 
@@ -186,24 +212,44 @@ export async function listInstruments(params: InstrumentListParams): Promise<Ins
         _count: {
           select: { registros: true },
         },
+        versiones: {
+          where: { activo: true },
+          select: {
+            id: true,
+            version: true,
+            activo: true,
+            createdAt: true,
+          },
+          take: 1,
+        },
       },
     }),
     prisma.instrumento.count({ where }),
   ])
 
-  const data: InstrumentSummary[] = instruments.map((inst) => ({
-    id: inst.id,
-    nombreInstrumento: inst.nombreInstrumento,
-    codigo: inst.codigo,
-    descripcion: inst.descripcion,
-    tipo: inst.tipo,
-    periodicidad: inst.periodicidad,
-    rolesPermitidos: inst.rolesPermitidos,
-    estado: inst.estado,
-    versionPlantilla: inst.versionPlantilla,
-    fechaCreacion: inst.fechaCreacion,
-    totalRegistros: inst._count.registros,
-  }))
+  const data: InstrumentSummary[] = instruments.map((inst) => {
+    const activeVersion = inst.versiones[0] ?? null
+    return {
+      id: inst.id,
+      nombreInstrumento: inst.nombreInstrumento,
+      codigo: inst.codigo,
+      descripcion: inst.descripcion,
+      tipo: inst.tipo,
+      periodicidad: inst.periodicidad,
+      rolesPermitidos: inst.rolesPermitidos,
+      estado: inst.estado,
+      fechaCreacion: inst.fechaCreacion,
+      totalRegistros: inst._count.registros,
+      activeVersion: activeVersion
+        ? {
+            id: activeVersion.id,
+            version: activeVersion.version,
+            activo: activeVersion.activo,
+            createdAt: activeVersion.createdAt,
+          }
+        : null,
+    }
+  })
 
   return { data, total, page, limit, totalPages: Math.ceil(total / limit) }
 }
@@ -235,8 +281,6 @@ export async function getInstrument(id: number): Promise<InstrumentDetail | null
     periodicidad: inst.periodicidad,
     rolesPermitidos: inst.rolesPermitidos,
     estado: inst.estado,
-    plantillaArchivo: inst.plantillaArchivo,
-    versionPlantilla: inst.versionPlantilla,
     fechaCreacion: inst.fechaCreacion,
     creadoPor: inst.creadoPor,
     registros: inst.registros.map((r) => ({
@@ -256,9 +300,99 @@ export async function getInstrument(id: number): Promise<InstrumentDetail | null
   }
 }
 
+/**
+ * Deep-clone via JSON round-trip. Definition JSON contains only JSON-safe values
+ * (strings, numbers, booleans, arrays, plain objects) — safe to clone this way.
+ */
+function deepCloneDefinition<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
 export async function createInstrument(input: CreateInstrumentInput, userId: number): Promise<InstrumentDetail> {
   const prisma = getPrisma()
 
+  // fixes-jul17-2 §3.1: when templateCodigo is present, resolve template + active
+  // version + deep-copy the definition in a single transaction. The source template
+  // rows are NEVER mutated (VERSION_LOCKED semantics).
+  if (input.templateCodigo) {
+    return await prisma.$transaction(async (tx) => {
+      const template = await tx.instrumento.findUnique({
+        where: { codigo: input.templateCodigo! },
+        include: {
+          versiones: {
+            where: { activo: true },
+            take: 1,
+            orderBy: { version: 'desc' },
+          },
+        },
+      })
+      if (!template) {
+        throw new CreateInstrumentError(
+          'TEMPLATE_NOT_FOUND',
+          `No existe un instrumento-plantilla con código ${input.templateCodigo}`,
+        )
+      }
+      const sourceVersion = template.versiones[0]
+      if (!sourceVersion) {
+        throw new CreateInstrumentError(
+          'NO_ACTIVE_VERSION',
+          `El instrumento-plantilla ${input.templateCodigo} no tiene una versión activa`,
+        )
+      }
+
+      // Deep-copy + rewrite codigo/nombre/version per §3.1 step 2.
+      const newDefinition = deepCloneDefinition(sourceVersion.definition as any) as Record<string, any>
+      newDefinition.codigo = input.codigo ?? null
+      newDefinition.nombre = input.nombreInstrumento
+      newDefinition.version = 1
+
+      const inst = await tx.instrumento.create({
+        data: {
+          nombreInstrumento: input.nombreInstrumento,
+          codigo: input.codigo,
+          descripcion: input.descripcion,
+          tipo: input.tipo as any,
+          periodicidad: input.periodicidad as any,
+          rolesPermitidos: input.rolesPermitidos,
+          estado: (input.estado ?? 'ACTIVO') as any,
+          creadoPor: userId,
+        },
+      })
+
+      const newVersion = await tx.instrumentoVersion.create({
+        data: {
+          instrumentoId: inst.id,
+          version: 1,
+          definition: newDefinition as any,
+          activo: true,
+          createdBy: userId,
+        },
+      })
+
+      return {
+        id: inst.id,
+        nombreInstrumento: inst.nombreInstrumento,
+        codigo: inst.codigo,
+        descripcion: inst.descripcion,
+        tipo: inst.tipo,
+        periodicidad: inst.periodicidad,
+        rolesPermitidos: inst.rolesPermitidos,
+        estado: inst.estado,
+        fechaCreacion: inst.fechaCreacion,
+        creadoPor: inst.creadoPor,
+        registros: [],
+        activeVersion: {
+          id: newVersion.id,
+          version: newVersion.version,
+          activo: newVersion.activo,
+          createdAt: newVersion.createdAt,
+        },
+      }
+    })
+  }
+
+  // Legacy metadata-only creation (instrument is "sin definición" until a
+  // definition is uploaded through the editor flow).
   const inst = await prisma.instrumento.create({
     data: {
       nombreInstrumento: input.nombreInstrumento,
@@ -267,8 +401,6 @@ export async function createInstrument(input: CreateInstrumentInput, userId: num
       tipo: input.tipo as any,
       periodicidad: input.periodicidad as any,
       rolesPermitidos: input.rolesPermitidos,
-      plantillaArchivo: input.plantillaArchivo,
-      versionPlantilla: input.versionPlantilla,
       estado: (input.estado ?? 'ACTIVO') as any,
       creadoPor: userId,
     },
@@ -292,8 +424,6 @@ export async function createInstrument(input: CreateInstrumentInput, userId: num
     periodicidad: inst.periodicidad,
     rolesPermitidos: inst.rolesPermitidos,
     estado: inst.estado,
-    plantillaArchivo: inst.plantillaArchivo,
-    versionPlantilla: inst.versionPlantilla,
     fechaCreacion: inst.fechaCreacion,
     creadoPor: inst.creadoPor,
     registros: [],
@@ -341,8 +471,6 @@ export async function updateInstrument(id: number, input: UpdateInstrumentInput,
     periodicidad: inst.periodicidad,
     rolesPermitidos: inst.rolesPermitidos,
     estado: inst.estado,
-    plantillaArchivo: inst.plantillaArchivo,
-    versionPlantilla: inst.versionPlantilla,
     fechaCreacion: inst.fechaCreacion,
     creadoPor: inst.creadoPor,
     registros: inst.registros.map((r) => ({
@@ -377,6 +505,100 @@ export async function deleteInstrument(id: number): Promise<void> {
 }
 
 // ---- Records ----
+
+// ---------------------------------------------------------------------------
+// W4 §4.2: GET /instruments/:codigo/definition
+// Returns the active version metadata + full definition. Throws structured
+// error codes that the route layer maps to HTTP 404/403.
+// ---------------------------------------------------------------------------
+
+export type GetInstrumentDefinitionError =
+  | 'INSTRUMENT_NOT_FOUND'
+  | 'NO_ACTIVE_VERSION'
+  | 'ROLE_NOT_ALLOWED'
+
+export class InstrumentDefinitionError extends Error {
+  readonly code: GetInstrumentDefinitionError
+  constructor(code: GetInstrumentDefinitionError, message: string) {
+    super(message)
+    this.name = 'InstrumentDefinitionError'
+    this.code = code
+  }
+}
+
+export interface InstrumentDefinitionResult {
+  instrumento: {
+    id: number
+    codigo: string
+    nombre: string
+    tipo: string
+  }
+  version: {
+    id: number
+    version: number
+    definition: InstrumentDefinition
+  }
+}
+
+export async function getInstrumentDefinition(
+  codigo: string,
+  callerRolesCsv: string | null,
+): Promise<InstrumentDefinitionResult> {
+  const prisma = getPrisma()
+  const inst = await prisma.instrumento.findUnique({ where: { codigo } })
+  if (!inst) {
+    throw new InstrumentDefinitionError(
+      'INSTRUMENT_NOT_FOUND',
+      `No existe un instrumento con código ${codigo}`,
+    )
+  }
+
+  // §4.2: 403 ROLE_NOT_ALLOWED via rolesPermitidos CSV check.
+  // Caller's role must appear in the CSV (case-insensitive trimmed match).
+  // ADMIN bypass is implicit because ADMIN is typically in rolesPermitidos;
+  // callers can pre-add ADMIN to the list if needed.
+  if (callerRolesCsv !== null && inst.rolesPermitidos) {
+    const allowed = inst.rolesPermitidos
+      .split(',')
+      .map((r) => r.trim().toUpperCase())
+      .filter(Boolean)
+    const callerRoles = callerRolesCsv
+      .split(',')
+      .map((r) => r.trim().toUpperCase())
+      .filter(Boolean)
+    const intersect = callerRoles.some((r) => allowed.includes(r))
+    if (!intersect) {
+      throw new InstrumentDefinitionError(
+        'ROLE_NOT_ALLOWED',
+        `Su rol no tiene acceso al instrumento ${codigo}`,
+      )
+    }
+  }
+
+  const version = await prisma.instrumentoVersion.findFirst({
+    where: { instrumentoId: inst.id, activo: true },
+  })
+  if (!version) {
+    throw new InstrumentDefinitionError(
+      'NO_ACTIVE_VERSION',
+      `El instrumento ${codigo} no tiene una versión activa`,
+    )
+  }
+
+  return {
+    instrumento: {
+      id: inst.id,
+      codigo: inst.codigo ?? codigo,
+      nombre: inst.nombreInstrumento,
+      tipo: inst.tipo,
+    },
+    version: {
+      id: version.id,
+      version: version.version,
+      definition: version.definition as unknown as InstrumentDefinition,
+    },
+  }
+}
 
 export async function listRecordsByInstrument(instrumentId: number): Promise<RecordDetail[]> {
   const prisma = getPrisma()
@@ -421,7 +643,6 @@ export async function createRecord(input: CreateRecordInput): Promise<RecordDeta
       fechaVencimiento: vencimiento,
       versionRegistro: input.versionRegistro,
       responsable: input.responsable,
-      archivoCompletado: input.archivoCompletado,
       notasObservaciones: input.notasObservaciones,
     },
     include: RECORD_INCLUDE,
@@ -451,14 +672,6 @@ export async function updateRecord(id: number, input: UpdateRecordInput): Promis
     // COMPLETADO cannot go back to PENDIENTE
     if (currentState === 'COMPLETADO' && nextState === 'PENDIENTE') {
       throw new Error('Invalid state transition: cannot transition from COMPLETADO to PENDIENTE')
-    }
-
-    // Transitioning to COMPLETADO requires archivoCompletado
-    if (nextState === 'COMPLETADO') {
-      const hasArchivo = input.archivoCompletado || existing.archivoCompletado
-      if (!hasArchivo) {
-        throw new Error('archivoCompletado is required to transition to COMPLETADO')
-      }
     }
   }
 
@@ -495,7 +708,6 @@ function mapRecord(r: any): RecordDetail {
     fechaVencimiento: r.fechaVencimiento,
     versionRegistro: r.versionRegistro,
     responsable: r.responsable,
-    archivoCompletado: r.archivoCompletado,
     notasObservaciones: r.notasObservaciones,
     fechaCreacionRegistro: r.fechaCreacionRegistro,
     cliente: {

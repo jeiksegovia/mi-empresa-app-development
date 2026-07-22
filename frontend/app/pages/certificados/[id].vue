@@ -300,9 +300,10 @@ async function submitAddUpdate() {
 
     // Update local state from response — parent snapshot was mutated server-side.
     certificate.value = res.data.certificate
+    // W7 + QA jul-11 B4a: full reset (IDB stash + draft + model) BEFORE
+    // closing — the form unmounts with the dialog, so the ref dies after.
+    addUpdateFormRef.value?.reset()
     showAddUpdateDialog.value = false
-    // W7: clear sessionStorage draft through the form
-    addUpdateFormRef.value?.clearDraft()
     await fetchUpdates()
 
     toast.add({
@@ -324,6 +325,15 @@ async function downloadComprobanteUpdate(update: CertificateUpdateRecord) {
   await downloadFile(update.comprobantePagoUrl)
 }
 
+// QA jul-11 B4a: dismissing the dialog (Cancelar / X / esc) must wipe the
+// stashed files + draft too, or they re-hydrate on the next open. The 'pre'
+// flush runs before the Dialog unmounts its content, so the ref is alive.
+watch(showAddUpdateDialog, (open) => {
+  if (!open && !savingUpdate.value) {
+    addUpdateFormRef.value?.reset()
+  }
+})
+
 onMounted(async () => {
   await fetchCertificate()
   if (certificate.value) await fetchUpdates()
@@ -332,7 +342,6 @@ onMounted(async () => {
 
 <template>
   <div>
-    <Toast />
 
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-16">
@@ -744,11 +753,15 @@ onMounted(async () => {
           Esta entrada quedará registrada en el historial y actualizará la versión actual del certificado.
         </p>
 
+        <!-- QA jul-11 B4a ROOT CAUSE: `v-model` on a `const reactive` binding
+             silently no-ops on reassignment — the emitted file URLs never
+             reached this parent. Bind explicitly and merge instead. -->
         <CertificateUpdateForm
           ref="addUpdateFormRef"
-          v-model="addUpdateForm"
+          :model-value="addUpdateForm"
           :stash-key-prefix="updateStashPrefix"
           test-id-prefix="cert-update"
+          @update:model-value="(v) => Object.assign(addUpdateForm, v)"
         />
 
         <Message

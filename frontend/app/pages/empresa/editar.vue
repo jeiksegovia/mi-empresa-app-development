@@ -404,6 +404,5 @@ async function submit() {
       </template>
     </Card>
 
-    <Toast />
   </div>
 </template>

@@ -36,14 +36,17 @@ model Usuario {
   sesiones                  Sesion[]
   instrumentosCreados       Instrumento[]  @relation("InstrumentoCreador")
   instrumentosModificados   Instrumento[]  @relation("InstrumentoModificador")
+  instrumentosVersionesCreadas InstrumentoVersion[] @relation("InstrumentoVersionCreador")
   registrosResponsables     RegistroFichaCompletada[] @relation("RegistroResponsable")
   notasCliente              NotaCliente[]
   certificadosEmpresaCreados CertificadoEmpresa[] @relation("CertificadoEmpresaCreador")
   certificadosEmpresaUpdates CertificadoUpdate[] @relation("CertificadoUpdateCreador")
   
   pendientesCreados         PendienteEmpleado[]    @relation("PendienteCreador")
-  
+
   novedadesCreadas          NovedadEmpleado[]      @relation("NovedadCreador")
+  // nomina-asistencia-jul-18
+  asistenciasRegistradas    AsistenciaEmpleado[]   @relation("AsistenciaRegistrador")
 
   @@map("usuarios")
 }
@@ -92,6 +95,13 @@ model Empleado {
   // jul-9 D3: identity-document file URL
   documentoIdentificacionUrl String? @map("documento_identificacion_url") @db.VarChar(500)
 
+  // nomina-asistencia-jul-18: medio de pago de nómina (optional)
+  medioPagoTipo       MedioPagoNomina? @map("medio_pago_tipo")
+  medioPagoNequi      String?          @map("medio_pago_nequi") @db.VarChar(50)
+  bancoNombre         String?          @map("banco_nombre") @db.VarChar(100)
+  bancoTipoCuenta     TipoCuentaBanco? @map("banco_tipo_cuenta")
+  bancoNumeroCuenta   String?          @map("banco_numero_cuenta") @db.VarChar(50)
+
   // Relations
   usuarios                     Usuario[]
   nucleoFamiliar               NucleoFamiliar[]
@@ -112,6 +122,8 @@ model Empleado {
   nominaPeriodos               NominaPeriodo[]
   // jul-9 D2: repeatable education entries
   educacionEmpleado            EducacionEmpleado[]
+  // nomina-asistencia-jul-18
+  asistencias                  AsistenciaEmpleado[]
 
   @@index([numeroDocumento])
   @@index([estado])
@@ -359,6 +371,8 @@ model Contrato {
   // jul-9 D7 (nullable in jul-9; jul-10 tighten: SET NOT NULL after backfill to "Otro")
   cargoId       Int        @map("cargo_id")
   cargo         CargoEmpresa @relation(fields: [cargoId], references: [id], onDelete: Restrict)
+  // nomina-asistencia-jul-18: rate per media jornada (4h); required on CREATE at API layer
+  valorJornada  Decimal?   @map("valor_jornada") @db.Decimal(12, 2)
   activo       Boolean      @default(true)
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
@@ -396,6 +410,12 @@ model NominaPeriodo {
   tipoContrato TipoContrato @map("tipo_contrato")
   salario      Decimal?     @db.Decimal(12, 2)
   notas        String?      @db.Text
+  // nomina-asistencia-jul-18: liquidación calc snapshot
+  mediasJornadas    Decimal? @map("medias_jornadas") @db.Decimal(8, 2)
+  valorJornada      Decimal? @map("valor_jornada") @db.Decimal(12, 2)
+  subtotalCalculado Decimal? @map("subtotal_calculado") @db.Decimal(12, 2)
+  aportesSociales   Decimal? @map("aportes_sociales") @db.Decimal(12, 2)
+  totalPagado       Decimal? @map("total_pagado") @db.Decimal(12, 2)
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
 
@@ -406,6 +426,27 @@ model NominaPeriodo {
   @@unique([empleadoId, periodo])
   @@index([periodo])
   @@map("nomina_periodos")
+}
+
+// nomina-asistencia-jul-18: daily AM/PM attendance (no rate fields)
+model AsistenciaEmpleado {
+  id            Int      @id @default(autoincrement()) @map("asistencia_id")
+  empleadoId    Int      @map("empleado_id")
+  fecha         DateTime @db.Date
+  jornadaAm     Boolean  @default(false) @map("jornada_am")
+  jornadaPm     Boolean  @default(false) @map("jornada_pm")
+  notas         String?  @db.VarChar(500)
+  registradoPor Int      @map("registrado_por")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  empleado    Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  registrador Usuario  @relation("AsistenciaRegistrador", fields: [registradoPor], references: [id])
+
+  @@unique([empleadoId, fecha])
+  @@index([fecha])
+  @@index([empleadoId])
+  @@map("asistencia_empleados")
 }
 
 model ArchivoNominaPeriodo {
@@ -560,38 +601,60 @@ model ContactoEmergenciaCliente {
 model Instrumento {
   id                  Int                   @id @default(autoincrement()) @map("instrumento_id")
   nombreInstrumento   String                @map("nombre_instrumento") @db.VarChar(200)
-  codigo              String?               @db.VarChar(50)
+  codigo              String?               @unique @db.VarChar(50)
   descripcion         String?               @db.Text
   tipo                TipoInstrumento
   periodicidad        PeriodicidadInstrumento
   rolesPermitidos     String                @map("roles_permitidos") @db.VarChar(255)
   estado              EstadoInstrumento     @default(ACTIVO)
-  plantillaArchivo    String?               @map("plantilla_archivo") @db.VarChar(500)
   fechaCreacion       DateTime              @default(now()) @map("fecha_creacion")
   creadoPor           Int                   @map("creado_por")
   fechaModificacion   DateTime?             @updatedAt @map("fecha_modificacion")
   modificadoPor       Int?                  @map("modificado_por")
-  versionPlantilla    String                @map("version_plantilla") @db.VarChar(20)
 
   // Relations
   creador             Usuario               @relation("InstrumentoCreador", fields: [creadoPor], references: [id])
   modificador         Usuario?              @relation("InstrumentoModificador", fields: [modificadoPor], references: [id])
   registros           RegistroFichaCompletada[]
+  versiones           InstrumentoVersion[]
 
   @@index([estado])
   @@index([tipo])
   @@map("instrumentos")
 }
 
+model InstrumentoVersion {
+  id            Int       @id @default(autoincrement()) @map("instrumento_version_id")
+  instrumentoId Int       @map("instrumento_id")
+  version       Int       @map("version_numero")
+  definition    Json      @map("definicion_jsonb")
+  activo        Boolean   @default(false) @map("activo")
+  createdAt     DateTime  @default(now()) @map("fecha_creacion")
+  createdBy     Int       @map("creado_por")
+
+  instrumento   Instrumento @relation(fields: [instrumentoId], references: [id], onDelete: Cascade)
+  creador       Usuario     @relation("InstrumentoVersionCreador", fields: [createdBy], references: [id])
+  fichas        RegistroFichaCompletada[]
+
+  @@unique([instrumentoId, version])
+  @@index([activo])
+  @@index([instrumentoId])
+  @@map("instrumentos_versiones")
+}
+
 model RegistroFichaCompletada {
   id                      Int                      @id @default(autoincrement()) @map("registro_id")
   clienteId               Int                      @map("cliente_id")
   instrumentoId           Int                      @map("instrumento_id")
+  instrumentoVersionId    Int?                     @map("instrumento_version_id")
   estado                  EstadoRegistroFicha      @default(PENDIENTE)
   fechaCompletado         DateTime?                @map("fecha_completado")
   versionRegistro         String                   @map("version_registro") @db.VarChar(20)
   responsable             Int
-  archivoCompletado       String?                  @map("archivo_completado") @db.VarChar(500)
+  respuestas              Json?                    @map("respuestas_jsonb")
+  puntajeTotal            Float?                   @map("puntaje_total")
+  subtotales              Json?                    @map("subtotales_jsonb")
+  clasificacion           String?                  @map("clasificacion") @db.VarChar(100)
   notasObservaciones      String?                  @map("notas_observaciones") @db.Text
   fechaVencimiento        DateTime?                @map("fecha_vencimiento") @db.Date
   alertaVencimiento       String?                  @map("alerta_vencimiento") @db.VarChar(50)
@@ -600,6 +663,7 @@ model RegistroFichaCompletada {
   // Relations
   cliente                 Cliente                  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   instrumento             Instrumento              @relation(fields: [instrumentoId], references: [id], onDelete: Restrict)
+  instrumentoVersion      InstrumentoVersion?      @relation(fields: [instrumentoVersionId], references: [id], onDelete: Restrict)
   usuarioResponsable      Usuario                  @relation("RegistroResponsable", fields: [responsable], references: [id])
   notas                   NotaCliente[]
 
@@ -607,6 +671,7 @@ model RegistroFichaCompletada {
   @@index([instrumentoId])
   @@index([estado])
   @@index([fechaVencimiento])
+  @@index([instrumentoVersionId])
   @@map("registros_fichas_completadas")
 }
 
@@ -810,10 +875,11 @@ enum RolUsuario {
 }
 
 // jul-10 C6/L2: sub-role specialization for EMPLEADO accounts.
-// Single value now (GERONTOLOGA) — enum rather than free-text so future
-// specializations (auxiliar, terapista, etc.) scale without a migration.
+// jul-17 (fixes-jul17-2 §1.1): added CONTRATOS — additive migration, no row
+// rewrites (new enum value appended). Existing EMPLEADO users remain null.
 enum TipoEmpleado {
   GERONTOLOGA
+  CONTRATOS
 }
 
 enum TipoDocumentoEmpleado {
@@ -1006,4 +1072,15 @@ enum TipoArchivoNomina {
   COMPROBANTE_APORTES
   DESPRENDIBLE
   OTRO
+}
+
+// nomina-asistencia-jul-18
+enum MedioPagoNomina {
+  NEQUI
+  TRANSFERENCIA_BANCARIA
+}
+
+enum TipoCuentaBanco {
+  AHORRO
+  CORRIENTE
 }

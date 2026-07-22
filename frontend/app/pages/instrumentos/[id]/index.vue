@@ -31,8 +31,6 @@ interface InstrumentDetail {
   periodicidad: string // UNICA | ANUAL | MENSUAL | TRIMESTRAL | SEMESTRAL
   rolesPermitidos: string
   estado: string // ACTIVO | INACTIVO
-  plantillaArchivo: string | null
-  versionPlantilla: string
   fechaCreacion: string
   creadoPor: number
   registros: Registro[]
@@ -42,14 +40,30 @@ interface InstrumentDetail {
 const route = useRoute()
 const { apiFetch } = useApi()
 const authStore = useAuthStore()
-const { downloadFile } = useFileUpload()
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const instrument = ref<InstrumentDetail | null>(null)
 const loading = ref(true)
 const error = ref('')
 const activeTab = ref(0)
-const downloadingPlantilla = ref(false)
+
+// §3.2/§4: active definition (from GET /instruments/:codigo/definition).
+// null after load ⇒ "sin definición — no llenable"; also feeds the audit view
+// + dry-run (#36).
+import type { InstrumentDefinition, Respuestas } from '~/components/instrument/types'
+import DynamicInstrumentForm from '~/components/instrument/DynamicInstrumentForm.vue'
+import InstrumentAuditView from '~/components/instrument/InstrumentAuditView.vue'
+const definition = ref<InstrumentDefinition | null>(null)
+const definitionLoading = ref(true)
+const hasDefinition = computed(() => !!definition.value)
+
+// §4 dry-run ("Probar sin guardar"): local-only form state, ZERO network writes.
+const showDryRun = ref(false)
+const dryRunAnswers = ref<Respuestas>({})
+function openDryRun() {
+  dryRunAnswers.value = {}
+  showDryRun.value = true
+}
 
 const tabs = [
   { label: 'Información', icon: 'pi pi-info-circle' },
@@ -105,6 +119,28 @@ async function fetchInstrument() {
   }
 }
 
+// §4.2: fetch the ACTIVE definition. 404 ⇒ no active version ⇒ sin definición.
+async function loadDefinition() {
+  definitionLoading.value = true
+  definition.value = null
+  const codigo = instrument.value?.codigo
+  if (!codigo) {
+    definitionLoading.value = false
+    return
+  }
+  try {
+    const res = await apiFetch<{
+      success: boolean
+      data: { version: { definition: InstrumentDefinition } }
+    }>(`/instruments/${codigo}/definition`)
+    definition.value = res?.data?.version?.definition ?? null
+  } catch {
+    definition.value = null // 404 / 403 ⇒ treat as sin definición for this view
+  } finally {
+    definitionLoading.value = false
+  }
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function formatDate(dateStr: string | null | undefined) {
   if (!dateStr) return '—'
@@ -124,18 +160,10 @@ function formatShortDate(dateStr: string | null | undefined) {
   })
 }
 
-// ─── W7 GAP-2: plantilla download ──────────────────────────────────────────────
-async function handlePlantillaDownload() {
-  if (!instrument.value?.plantillaArchivo) return
-  downloadingPlantilla.value = true
-  try {
-    await downloadFile(instrument.value.plantillaArchivo)
-  } finally {
-    downloadingPlantilla.value = false
-  }
-}
-
-onMounted(fetchInstrument)
+onMounted(async () => {
+  await fetchInstrument()
+  if (instrument.value) await loadDefinition()
+})
 </script>
 
 <template>
@@ -173,6 +201,15 @@ onMounted(fetchInstrument)
             @click="navigateTo('/instrumentos')"
           />
           <Button
+            v-if="hasDefinition"
+            label="Probar sin guardar"
+            icon="pi pi-play"
+            severity="help"
+            outlined
+            data-testid="dry-run-button"
+            @click="openDryRun"
+          />
+          <Button
             v-if="authStore.isAdmin"
             label="Editar"
             icon="pi pi-pencil"
@@ -200,6 +237,12 @@ onMounted(fetchInstrument)
                   :severity="tipoSeverityMap[instrument.tipo] || 'info'"
                 />
                 <AppStatusBadge :status="instrument.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'" />
+                <Tag
+                  v-if="!definitionLoading && !hasDefinition"
+                  value="Sin definición — no llenable"
+                  severity="warn"
+                  data-testid="sin-definicion-badge"
+                />
               </div>
               <div class="flex flex-wrap gap-4 text-sm text-[var(--text-color-secondary)]">
                 <span v-if="instrument.codigo">
@@ -209,10 +252,6 @@ onMounted(fetchInstrument)
                 <span>
                   <i class="pi pi-refresh mr-1" />
                   {{ periodicidadLabels[instrument.periodicidad] || instrument.periodicidad }}
-                </span>
-                <span>
-                  <i class="pi pi-tag mr-1" />
-                  {{ instrument.versionPlantilla }}
                 </span>
                 <span>
                   <i class="pi pi-list mr-1" />
@@ -281,26 +320,6 @@ onMounted(fetchInstrument)
               </div>
 
               <div>
-                <p class="text-xs text-[var(--text-color-secondary)] mb-1">Versión Plantilla</p>
-                <p class="font-medium font-mono">{{ instrument.versionPlantilla }}</p>
-              </div>
-
-              <!-- W7 GAP-2: Descargar plantilla (only when plantillaArchivo is set) -->
-              <div v-if="instrument.plantillaArchivo">
-                <p class="text-xs text-[var(--text-color-secondary)] mb-1">Plantilla</p>
-                <Button
-                  label="Descargar plantilla"
-                  icon="pi pi-download"
-                  size="small"
-                  severity="info"
-                  outlined
-                  :loading="downloadingPlantilla"
-                  data-testid="instrument-download-plantilla"
-                  @click="handlePlantillaDownload"
-                />
-              </div>
-
-              <div>
                 <p class="text-xs text-[var(--text-color-secondary)] mb-1">Fecha Creación</p>
                 <p class="font-medium">{{ formatDate(instrument.fechaCreacion) }}</p>
               </div>
@@ -324,6 +343,20 @@ onMounted(fetchInstrument)
               </div>
 
             </div>
+          </template>
+        </Card>
+
+        <!-- §4: Revisión de puntajes y lógica (audit view) — hidden for sin definición -->
+        <Card v-if="hasDefinition && definition">
+          <template #content>
+            <details data-testid="audit-expand">
+              <summary class="cursor-pointer select-none font-semibold text-[var(--text-color)] flex items-center gap-2">
+                <i class="pi pi-search text-violet-500" /> Revisión de puntajes y lógica
+              </summary>
+              <div class="mt-4">
+                <InstrumentAuditView :definition="definition" />
+              </div>
+            </details>
           </template>
         </Card>
       </div>
@@ -401,6 +434,29 @@ onMounted(fetchInstrument)
           </template>
         </Card>
       </div>
+
+      <!-- §4 dry-run dialog: DynamicInstrumentForm + live client scoring.
+           ZERO network writes — pure local state + scoring.ts. -->
+      <Dialog
+        v-model:visible="showDryRun"
+        modal
+        header="Probar sin guardar"
+        :style="{ width: '48rem', maxWidth: '95vw' }"
+        data-testid="dry-run-dialog"
+      >
+        <Message severity="info" :closable="false" data-testid="dry-run-banner" class="mb-4">
+          Vista de prueba — resultado no oficial, no se guarda.
+        </Message>
+        <DynamicInstrumentForm
+          v-if="definition"
+          :definition="definition"
+          :model-value="dryRunAnswers"
+          @update:model-value="(v) => (dryRunAnswers = v)"
+        />
+        <template #footer>
+          <Button label="Cerrar" icon="pi pi-times" severity="secondary" outlined @click="showDryRun = false" />
+        </template>
+      </Dialog>
     </template>
   </div>
 </template>

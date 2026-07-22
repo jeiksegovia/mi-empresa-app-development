@@ -10,6 +10,9 @@ export interface LoginResult {
     id: number
     email: string
     rol: string
+    // fixes-jul17-2 §1.4: additive — included so the frontend (W10) can gate
+    // navigation/route middleware without a second round-trip. Nullable.
+    tipoEmpleado: string | null
     nombre: string
     apellido: string
     empleadoId?: number
@@ -21,6 +24,8 @@ export interface CurrentUserResult {
   id: number
   email: string
   rol: string
+  // fixes-jul17-2 §1.4: additive. See LoginResult.user.tipoEmpleado.
+  tipoEmpleado: string | null
   nombre: string
   apellido: string
   activo: boolean
@@ -102,6 +107,7 @@ export async function loginUser(
       id: usuario.id,
       email: usuario.email,
       rol: usuario.rol,
+      tipoEmpleado: usuario.tipoEmpleado ?? null,
       nombre: usuario.nombre,
       apellido: usuario.apellido,
       empleadoId: usuario.empleadoId || undefined,
@@ -139,6 +145,8 @@ export async function getCurrentUser(userId: number): Promise<CurrentUserResult>
       id: true,
       email: true,
       rol: true,
+      // fixes-jul17-2 §1.4: additive — exposed to frontend.
+      tipoEmpleado: true,
       nombre: true,
       apellido: true,
       activo: true,
@@ -152,6 +160,7 @@ export async function getCurrentUser(userId: number): Promise<CurrentUserResult>
 
   return {
     ...usuario,
+    tipoEmpleado: usuario.tipoEmpleado ?? null,
     empleadoId: usuario.empleadoId || undefined,
   }
 }

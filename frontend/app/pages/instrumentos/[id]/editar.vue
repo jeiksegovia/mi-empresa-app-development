@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { useFileStash, useFileStashTitleGuard } from '~/composables/useFileStash'
+/**
+ * W3 NOTE: plantilla file upload and versionPlantilla text input REMOVED
+ * per contract §3.2 — `plantillaArchivo` + `versionPlantilla` columns were
+ * dropped from `Instrumento` when the dynamic-version model was introduced.
+ */
 
 definePageMeta({
   middleware: 'auth',
@@ -9,12 +13,7 @@ definePageMeta({
 const route = useRoute()
 const { apiFetch } = useApi()
 const toast = useToast()
-const { uploadFile, downloadFile } = useFileUpload()
-const { stash: stashFile, restore: restoreFile, clear: clearFile } = useFileStash()
 
-// W7: stash key + title guard for the plantilla (scoped by instrumento id).
-const plantillaStashKey = computed(() => `instrumento-editar:${route.params.id}:plantilla`)
-const plantillaGuard = useFileStashTitleGuard('Reemplazar plantilla del instrumento')
 const instEditarDraftKey = computed(() => `instrumento-editar-draft:${route.params.id}`)
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -27,13 +26,13 @@ interface InstrumentEdit {
   periodicidad: string
   rolesPermitidos: string
   estado: string
-  plantillaArchivo: string | null
-  versionPlantilla: string
 }
 
 // ─── Roles (MultiSelect) ──────────────────────────────────────────────────────
-const ROLES_OPTIONS = ['ADMIN', 'EMPLEADO', 'AUDITOR', 'OPERADOR']
+// QA jul-11 I2: options come from the CargoEmpresa catalog (+ ADMIN); values
+// already stored on the instrument are merged in so legacy roles keep working.
 const rolesArray = ref<string[]>([])
+const { fetchCargoRoles, roleOptions } = useCargoRoles(rolesArray)
 
 // ─── Form state ──────────────────────────────────────────────────────────────
 const form = reactive({
@@ -42,22 +41,13 @@ const form = reactive({
   descripcion: '',
   tipo: '',
   periodicidad: '',
-  versionPlantilla: '',
   estado: 'ACTIVO' as 'ACTIVO' | 'INACTIVO',
-  plantillaArchivo: '' as string,
 })
 
 const errors = reactive<Record<string, string>>({})
 const saving = ref(false)
 const loading = ref(true)
 const error = ref('')
-const originalPlantilla = ref<string | null>(null)
-
-// ─── Plantilla upload state ──────────────────────────────────────────────────
-const selectedPlantilla = ref<File | null>(null)
-const plantillaInputRef = ref<HTMLInputElement | null>(null)
-const uploadingPlantilla = ref(false)
-const plantillaProgress = ref<'idle' | 'uploading' | 'done' | 'error'>('idle')
 
 // ─── Options ─────────────────────────────────────────────────────────────────
 const tipoOptions = [
@@ -94,10 +84,7 @@ async function fetchInstrument() {
     form.descripcion = inst.descripcion || ''
     form.tipo = inst.tipo
     form.periodicidad = inst.periodicidad
-    form.versionPlantilla = inst.versionPlantilla
     form.estado = (inst.estado as 'ACTIVO' | 'INACTIDO') || 'ACTIVO'
-    form.plantillaArchivo = inst.plantillaArchivo || ''
-    originalPlantilla.value = inst.plantillaArchivo
 
     rolesArray.value = inst.rolesPermitidos
       ? inst.rolesPermitidos.split(',').map((s) => s.trim()).filter(Boolean)
@@ -113,57 +100,6 @@ async function fetchInstrument() {
   }
 }
 
-// ─── Plantilla handlers ──────────────────────────────────────────────────────
-async function onPlantillaChange(event: Event) {
-  plantillaGuard.disarm()
-  const input = event.target as HTMLInputElement
-  if (input.files && input.files[0]) {
-    selectedPlantilla.value = input.files[0]
-    plantillaProgress.value = 'idle'
-    await stashFile(plantillaStashKey.value, input.files[0])
-    writeInstEditarDraft()
-  }
-}
-
-function clearSelectedPlantilla() {
-  selectedPlantilla.value = null
-  plantillaProgress.value = 'idle'
-  if (plantillaInputRef.value) plantillaInputRef.value.value = ''
-  clearFile(plantillaStashKey.value).catch(() => { /* noop */ })
-}
-
-function removeExistingPlantilla() {
-  originalPlantilla.value = null
-  form.plantillaArchivo = ''
-}
-
-async function uploadSelectedPlantilla(): Promise<string | null> {
-  if (!selectedPlantilla.value) return null
-  plantillaProgress.value = 'uploading'
-  uploadingPlantilla.value = true
-  try {
-    const key = await uploadFile(selectedPlantilla.value, 'instrumentos')
-    if (!key) {
-      plantillaProgress.value = 'error'
-      return null
-    }
-    form.plantillaArchivo = key
-    plantillaProgress.value = 'done'
-    return key
-  } catch {
-    plantillaProgress.value = 'error'
-    return null
-  } finally {
-    uploadingPlantilla.value = false
-  }
-}
-
-async function downloadPlantilla() {
-  const key = originalPlantilla.value || form.plantillaArchivo
-  if (!key) return
-  await downloadFile(key)
-}
-
 // ─── Validation ───────────────────────────────────────────────────────────────
 function validate(): boolean {
   Object.keys(errors).forEach((k) => delete errors[k])
@@ -176,8 +112,6 @@ function validate(): boolean {
     errors.periodicidad = 'La periodicidad es requerida'
   if (rolesArray.value.length === 0)
     errors.rolesPermitidos = 'Selecciona al menos un rol permitido'
-  if (!form.versionPlantilla.trim())
-    errors.versionPlantilla = 'La versión de la plantilla es requerida'
 
   return Object.keys(errors).length === 0
 }
@@ -188,26 +122,15 @@ async function onSubmit() {
 
   saving.value = true
   try {
-    // Upload new plantilla if one was selected
-    if (selectedPlantilla.value && !form.plantillaArchivo) {
-      const key = await uploadSelectedPlantilla()
-      if (plantillaProgress.value === 'error' || !key) {
-        saving.value = false
-        return
-      }
-    }
-
     const payload: Record<string, unknown> = {
       nombreInstrumento: form.nombreInstrumento.trim(),
       tipo: form.tipo,
       periodicidad: form.periodicidad,
       rolesPermitidos: rolesArray.value.join(','),
-      versionPlantilla: form.versionPlantilla.trim(),
       estado: form.estado,
     }
     if (form.codigo.trim()) payload.codigo = form.codigo.trim()
     if (form.descripcion.trim()) payload.descripcion = form.descripcion.trim()
-    payload.plantillaArchivo = form.plantillaArchivo || null
 
     await apiFetch(`/instruments/${route.params.id}`, {
       method: 'PUT',
@@ -221,9 +144,7 @@ async function onSubmit() {
       life: 3000,
     })
 
-    // W7: clear draft + IDB stash on successful submit
     clearInstEditarDraft()
-    await clearFile(plantillaStashKey.value)
 
     await navigateTo(`/instrumentos/${route.params.id}`)
   } catch (e: any) {
@@ -247,10 +168,8 @@ function readInstEditarDraft(): {
   descripcion?: string
   tipo?: string
   periodicidad?: string
-  versionPlantilla?: string
   estado?: 'ACTIVO' | 'INACTIVO'
   roles?: string[]
-  plantillaRemoved?: boolean
   ts?: number
 } | null {
   if (!import.meta.client) return null
@@ -274,10 +193,8 @@ function writeInstEditarDraft() {
         descripcion: form.descripcion,
         tipo: form.tipo,
         periodicidad: form.periodicidad,
-        versionPlantilla: form.versionPlantilla,
         estado: form.estado,
         roles: rolesArray.value,
-        plantillaRemoved: originalPlantilla.value === null && !selectedPlantilla.value,
         ts: Date.now(),
       })
     )
@@ -293,22 +210,15 @@ async function restoreInstEditarDraft() {
   if (!import.meta.client) return
   const draft = readInstEditarDraft()
   if (!draft) return
-  // Only restore draft fields if they are still empty/default to avoid
-  // clobbering what fetchInstrument already populated.
   if (draft.nombreInstrumento) form.nombreInstrumento = draft.nombreInstrumento
   if (draft.codigo) form.codigo = draft.codigo
   if (draft.descripcion) form.descripcion = draft.descripcion
   if (draft.tipo) form.tipo = draft.tipo
   if (draft.periodicidad) form.periodicidad = draft.periodicidad
-  if (draft.versionPlantilla) form.versionPlantilla = draft.versionPlantilla
   if (draft.estado) form.estado = draft.estado
   if (Array.isArray(draft.roles) && draft.roles.length) rolesArray.value = draft.roles
-  if (draft.plantillaRemoved) originalPlantilla.value = null
 
-  const restoredPlantilla = await restoreFile(plantillaStashKey.value)
-  if (restoredPlantilla) selectedPlantilla.value = restoredPlantilla
-
-  if (restoredPlantilla || draft.plantillaRemoved) {
+  if (draft.nombreInstrumento) {
     toast.add({
       severity: 'info',
       summary: 'Borrador restaurado',
@@ -319,7 +229,7 @@ async function restoreInstEditarDraft() {
 }
 
 watch(
-  () => [form.nombreInstrumento, form.codigo, form.descripcion, form.tipo, form.periodicidad, form.versionPlantilla, form.estado, rolesArray.value, originalPlantilla.value, selectedPlantilla.value],
+  () => [form.nombreInstrumento, form.codigo, form.descripcion, form.tipo, form.periodicidad, form.estado, rolesArray.value],
   () => writeInstEditarDraft(),
   { deep: true }
 )
@@ -327,6 +237,7 @@ watch(
 onMounted(async () => {
   await fetchInstrument()
   await restoreInstEditarDraft()
+  await fetchCargoRoles()
 })
 </script>
 
@@ -344,7 +255,6 @@ onMounted(async () => {
       </template>
     </AppPageHeader>
 
-    <Toast />
 
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-16">
@@ -465,7 +375,7 @@ onMounted(async () => {
               </label>
               <MultiSelect
                 v-model="rolesArray"
-                :options="ROLES_OPTIONS"
+                :options="roleOptions"
                 placeholder="Selecciona roles"
                 class="w-full"
                 display="chip"
@@ -477,21 +387,8 @@ onMounted(async () => {
               </p>
             </div>
 
-            <!-- Versión Plantilla -->
-            <div>
-              <label class="block text-sm font-medium text-[var(--text-color)] mb-1">
-                Versión Plantilla <span class="text-red-500">*</span>
-              </label>
-              <InputText
-                v-model="form.versionPlantilla"
-                placeholder="Ej: v1.0"
-                class="w-full font-mono"
-                :invalid="!!errors.versionPlantilla"
-              />
-              <p v-if="errors.versionPlantilla" class="mt-1 text-xs text-red-500">
-                {{ errors.versionPlantilla }}
-              </p>
-            </div>
+            <!-- W3: Versión Plantilla + plantilla upload REMOVED per contract §3.2.
+                 Dynamic template content is supplied via InstrumentoVersion.definition. -->
 
             <!-- Descripción -->
             <div>
@@ -506,111 +403,7 @@ onMounted(async () => {
               />
             </div>
 
-            <!-- Plantilla archivo upload -->
-            <div>
-              <label class="block text-sm font-medium text-[var(--text-color)] mb-1">
-                Plantilla (archivo) <span class="text-xs text-[var(--text-color-secondary)]">(opcional)</span>
-              </label>
-
-              <!-- Existing plantilla (no new file selected) -->
-              <div
-                v-if="!selectedPlantilla && originalPlantilla"
-                class="flex items-center gap-3 px-4 py-3 border border-[var(--surface-border)] rounded-lg bg-[var(--surface-ground)]"
-                data-testid="instrument-plantilla-existing"
-              >
-                <i class="pi pi-file text-violet-500 text-xl flex-shrink-0" />
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-[var(--text-color)] truncate">
-                    {{ filenameFromKey(originalPlantilla) }}
-                  </p>
-                </div>
-                <Button
-                  icon="pi pi-download"
-                  size="small"
-                  severity="info"
-                  outlined
-                  label="Descargar"
-                  @click="downloadPlantilla"
-                />
-                <Button
-                  icon="pi pi-refresh"
-                  size="small"
-                  severity="secondary"
-                  outlined
-                  label="Reemplazar"
-                  data-testid="instrument-plantilla-replace"
-                  @click="() => { plantillaGuard.arm(); plantillaInputRef?.click() }"
-                />
-                <Button
-                  icon="pi pi-trash"
-                  size="small"
-                  severity="danger"
-                  text
-                  rounded
-                  v-tooltip.top="'Quitar plantilla'"
-                  @click="removeExistingPlantilla"
-                />
-              </div>
-
-              <!-- Newly selected plantilla -->
-              <div
-                v-else-if="selectedPlantilla"
-                class="flex items-center gap-3 px-4 py-3 border border-[var(--surface-border)] rounded-lg bg-[var(--surface-ground)]"
-              >
-                <i class="pi pi-file text-violet-500 text-xl flex-shrink-0" />
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-[var(--text-color)] truncate">
-                    {{ selectedPlantilla.name }}
-                  </p>
-                  <p class="text-xs text-[var(--text-color-secondary)]">
-                    {{ (selectedPlantilla.size / 1024).toFixed(1) }} KB
-                  </p>
-                </div>
-                <div v-if="plantillaProgress === 'uploading'" class="flex-shrink-0">
-                  <i class="pi pi-spin pi-spinner text-violet-500" />
-                </div>
-                <div v-else-if="plantillaProgress === 'done'" class="flex-shrink-0">
-                  <i class="pi pi-check-circle text-green-500" />
-                </div>
-                <div v-else-if="plantillaProgress === 'error'" class="flex-shrink-0">
-                  <i class="pi pi-times-circle text-red-500" />
-                </div>
-                <Button
-                  v-if="plantillaProgress !== 'uploading'"
-                  icon="pi pi-times"
-                  size="small"
-                  severity="secondary"
-                  text
-                  rounded
-                  v-tooltip.top="'Cancelar'"
-                  @click="clearSelectedPlantilla"
-                />
-              </div>
-
-              <!-- Empty dropzone -->
-              <div
-                v-else
-                class="border-2 border-dashed border-[var(--surface-border)] rounded-lg p-6 text-center cursor-pointer hover:border-violet-400 transition-colors"
-                @click="() => { plantillaGuard.arm(); plantillaInputRef?.click() }"
-                data-testid="instrument-plantilla-dropzone"
-              >
-                <i class="pi pi-file-pdf text-3xl text-[var(--text-color-secondary)] mb-2 block" />
-                <p class="text-sm text-[var(--text-color-secondary)]">
-                  Haz clic para seleccionar una plantilla
-                </p>
-                <p class="text-xs text-[var(--text-color-secondary)] mt-1">
-                  PDF, DOCX u otro documento de referencia
-                </p>
-              </div>
-
-              <input
-                ref="plantillaInputRef"
-                type="file"
-                class="hidden"
-                accept="*/*"
-                @change="onPlantillaChange"
-              />
-            </div>
+            <!-- W3: plantilla file upload removed. -->
 
             <Divider />
 
@@ -629,7 +422,7 @@ onMounted(async () => {
                 type="submit"
                 label="Guardar Cambios"
                 icon="pi pi-check"
-                :loading="saving || uploadingPlantilla"
+                :loading="saving"
                 data-testid="instrument-save"
               />
             </div>

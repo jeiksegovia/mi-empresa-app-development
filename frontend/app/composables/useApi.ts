@@ -21,8 +21,21 @@ export const useApi = () => {
     baseURL,
     credentials: 'include',
     onResponseError({ response }) {
-      if (response.status !== 401) return
       if (!import.meta.client) return
+
+      // §1.5 (fixes-jul17-2): 403 DOMAIN_FORBIDDEN → surface the shared
+      // "Acceso no permitido" toast so a denied API call is never a silent
+      // failure. Handled here so every page gets it uniformly.
+      if (response.status === 403 && (response._data as any)?.code === 'DOMAIN_FORBIDDEN') {
+        try {
+          document.dispatchEvent(new CustomEvent('app:access-denied', {
+            detail: { message: (response._data as any)?.message || 'Acceso no permitido para su perfil.' },
+          }))
+        } catch { /* noop */ }
+        return
+      }
+
+      if (response.status !== 401) return
       if ((window as any)[FIRED_FLAG]) return
       ;(window as any)[FIRED_FLAG] = true
       setTimeout(() => { (window as any)[FIRED_FLAG] = false }, 1000)

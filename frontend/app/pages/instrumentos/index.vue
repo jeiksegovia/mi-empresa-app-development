@@ -16,6 +16,9 @@ interface InstrumentSummary {
   versionPlantilla: string
   fechaCreacion: string
   totalRegistros: number
+  // §4.1 / §3.2: null or absent ⇒ instrument has no active definition version
+  // ("sin definición — no llenable").
+  activeVersion?: { id: number; version: number; activo: boolean; createdAt?: string } | null
 }
 
 interface InstrumentListResponse {
@@ -226,6 +229,13 @@ onMounted(async () => {
               <div>
                 <p class="font-medium text-[var(--text-color)]">{{ data.nombreInstrumento }}</p>
                 <p v-if="data.codigo" class="text-xs text-[var(--text-color-secondary)] font-mono">{{ data.codigo }}</p>
+                <Tag
+                  v-if="!data.activeVersion"
+                  value="Sin definición — no llenable"
+                  severity="warn"
+                  class="mt-1"
+                  data-testid="sin-definicion-badge"
+                />
               </div>
             </template>
           </Column>

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, requireRole } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
+import { requireDomain } from '../middleware/domainAccess.js'
 import { z } from 'zod'
 import * as employeeService from '../services/employeeService.js'
 import * as educacionService from '../services/educacionEmpleadoService.js'
@@ -12,8 +13,13 @@ const router = Router()
 // Apply auth to all routes
 router.use(authMiddleware())
 
+// fixes-jul17-2 §1.2: empleados domain — CONTRATOS has full access;
+// GERONTOLOGA / null-EMPLEADO / AUDITOR / OPERADOR / ADMIN all fall through.
+router.use(requireDomain('empleados'))
+
 // Zod schemas for validation
-const createEmployeeSchema = z.object({
+// Base object (no superRefine) so .partial() works for update schema.
+const employeeBaseSchema = z.object({
   // jul-10 E1: normalize to upper-case + trim on entity nombre/apellido
   nombre: z.string().min(1).max(100).transform((v) => v.trim().toUpperCase()),
   apellido: z.string().min(1).max(100).transform((v) => v.trim().toUpperCase()),
@@ -108,11 +114,61 @@ const createEmployeeSchema = z.object({
     visaExpedicion: z.string().optional(),
     visaVencimiento: z.string().optional(),
   }).optional(),
+  // nomina-asistencia-jul-18: medio de pago (optional; conditional fields below)
+  medioPagoTipo: z.enum(['NEQUI', 'TRANSFERENCIA_BANCARIA']).nullable().optional(),
+  medioPagoNequi: z.string().max(50).nullable().optional(),
+  bancoNombre: z.string().max(100).nullable().optional(),
+  bancoTipoCuenta: z.enum(['AHORRO', 'CORRIENTE']).nullable().optional(),
+  bancoNumeroCuenta: z.string().max(50).nullable().optional(),
 })
 
-const updateEmployeeSchema = createEmployeeSchema
+function refineMedioPago(data: {
+  medioPagoTipo?: string | null
+  medioPagoNequi?: string | null
+  bancoNombre?: string | null
+  bancoTipoCuenta?: string | null
+  bancoNumeroCuenta?: string | null
+}, ctx: z.RefinementCtx) {
+  if (data.medioPagoTipo === 'NEQUI') {
+    if (!data.medioPagoNequi || !String(data.medioPagoNequi).trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Número Nequi es requerido',
+        path: ['medioPagoNequi'],
+      })
+    }
+  }
+  if (data.medioPagoTipo === 'TRANSFERENCIA_BANCARIA') {
+    if (!data.bancoNombre || !String(data.bancoNombre).trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Nombre del banco es requerido',
+        path: ['bancoNombre'],
+      })
+    }
+    if (!data.bancoTipoCuenta) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Tipo de cuenta es requerido',
+        path: ['bancoTipoCuenta'],
+      })
+    }
+    if (!data.bancoNumeroCuenta || !String(data.bancoNumeroCuenta).trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Número de cuenta es requerido',
+        path: ['bancoNumeroCuenta'],
+      })
+    }
+  }
+}
+
+const createEmployeeSchema = employeeBaseSchema.superRefine(refineMedioPago)
+
+const updateEmployeeSchema = employeeBaseSchema
   .partial()
   .omit({ cargos: true, contactosEmergencia: true, nucleoFamiliar: true, experienciasLaborales: true, educacionIdiomas: true, vehiculos: true, certificados: true, datosMigracion: true })
+  .superRefine(refineMedioPago)
 
 // GET /employees - list with pagination/search/filter
 router.get('/', async (req: Request, res: Response): Promise<void> => {
@@ -153,7 +209,8 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
 // POST /employees
 router.post('/', validate(createEmployeeSchema), async (req: Request, res: Response): Promise<void> => {
   try {
-    const employee = await employeeService.createEmployee(req.body)
+    const userId = req.user!.id
+    const employee = await employeeService.createEmployee(req.body, userId)
     res.status(201).json({ success: true, data: employee })
   } catch (error: any) {
     logger.error('Create employee error:', error)
@@ -177,7 +234,8 @@ router.put('/:id', validate(updateEmployeeSchema), async (req: Request, res: Res
       res.status(400).json({ success: false, message: 'Invalid employee ID' })
       return
     }
-    const employee = await employeeService.updateEmployee(id, req.body)
+    const userId = req.user!.id
+    const employee = await employeeService.updateEmployee(id, req.body, userId)
     res.json({ success: true, data: employee })
   } catch (error: any) {
     logger.error('Update employee error:', error)

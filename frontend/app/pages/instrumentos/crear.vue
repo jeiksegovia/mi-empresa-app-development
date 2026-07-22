@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { useFileStash, useFileStashTitleGuard } from '~/composables/useFileStash'
+/**
+ * W3 NOTE: plantilla file upload and versionPlantilla text input REMOVED
+ * per contract §3.2 — `plantillaArchivo` + `versionPlantilla` columns were
+ * dropped from `Instrumento` when the dynamic-version model was introduced.
+ *
+ * The dynamic-template content for an instrument now flows through
+ * `InstrumentoVersion.definition` (JSONB) — managed separately (admin
+ * UI / seed / upgrade script). For this MVP we keep just the metadata
+ * fields here.
+ */
 
 definePageMeta({
   middleware: 'auth',
@@ -9,18 +18,84 @@ definePageMeta({
 const { apiFetch } = useApi()
 const toast = useToast()
 const route = useRoute()
-const { uploadFile } = useFileUpload()
-const { stash: stashFile, restore: restoreFile, clear: clearFile } = useFileStash()
 
-// W7: stash key + title guard for the plantilla
-const plantillaGuard = useFileStashTitleGuard('Adjuntar plantilla del instrumento')
 const INST_CREAR_DRAFT_KEY = 'instrumento-crear:draft'
 
+// ─── §3.2: Template (plantilla) selector ──────────────────────────────────────
+// The 6 seeded templates (§3.1). Selecting one sends `templateCodigo` in POST
+// so the backend deep-copies its active definition into v1 of the new
+// instrument. "Sin plantilla" → legacy metadata-only creation (sin definición).
+import type { InstrumentDefinition } from '~/components/instrument/types'
+
+const TEMPLATE_CODIGOS = [
+  'BARTHEL',
+  'MINI_MENTAL',
+  'TINETTI',
+  'YESAVAGE',
+  'MNA_CUADRO',
+  'FICHA_NUTRICIONAL',
+] as const
+
+const NO_TEMPLATE = '__none__'
+const selectedTemplate = ref<string>(NO_TEMPLATE)
+
+interface TemplateOption {
+  value: string
+  codigo: string | null
+  label: string
+  summary: string
+}
+
+const templateSummaries = ref<Record<string, string>>({})
+
+/** Human summary for a template definition: "N ítems · máx M" or "N ítems · informativo". */
+function summarizeDefinition(def: InstrumentDefinition): string {
+  const nItems = def.sections.reduce((n, s) => n + s.items.length, 0)
+  if (def.scoring?.total === 'none') return `${nItems} ítems · informativo`
+  let max = 0
+  for (const s of def.sections) {
+    for (const it of s.items) {
+      if (it.type === 'single-select-scored') {
+        const scores = it.options.map((o) => (typeof o.score === 'number' ? o.score : 0))
+        if (scores.length) max += Math.max(...scores)
+      }
+    }
+  }
+  return `${nItems} ítems · máx ${max}`
+}
+
+const templateOptions = computed<TemplateOption[]>(() => [
+  { value: NO_TEMPLATE, codigo: null, label: 'Sin plantilla (solo metadatos)', summary: 'Instrumento sin definición — no llenable' },
+  ...TEMPLATE_CODIGOS.map((codigo) => ({
+    value: codigo,
+    codigo,
+    label: codigo,
+    summary: templateSummaries.value[codigo] ?? 'Resumen no disponible',
+  })),
+])
+
+async function loadTemplateSummaries() {
+  // Fetch each template's active definition to compute its summary. Backend may
+  // 404 briefly (W9 build in parallel) — degrade gracefully per option.
+  await Promise.all(
+    TEMPLATE_CODIGOS.map(async (codigo) => {
+      try {
+        const res = await apiFetch<{
+          success: boolean
+          data: { version: { definition: InstrumentDefinition } }
+        }>(`/instruments/${codigo}/definition`)
+        const def = res?.data?.version?.definition
+        if (def) templateSummaries.value[codigo] = summarizeDefinition(def)
+      } catch {
+        // leave default "Resumen no disponible"
+      }
+    }),
+  )
+}
+
 // ─── Roles (MultiSelect) ──────────────────────────────────────────────────────
-// Backend still accepts/returns comma-separated string per D6; the MultiSelect
-// value array is joined to a string on submit.
-const ROLES_OPTIONS = ['ADMIN', 'EMPLEADO', 'AUDITOR', 'OPERADOR']
 const rolesArray = ref<string[]>([])
+const { fetchCargoRoles, roleOptions } = useCargoRoles(rolesArray)
 
 // ─── Form state ──────────────────────────────────────────────────────────────
 const form = reactive({
@@ -29,58 +104,10 @@ const form = reactive({
   descripcion: '',
   tipo: '',
   periodicidad: '',
-  versionPlantilla: '',
-  plantillaArchivo: '' as string,
 })
 
 const errors = reactive<Record<string, string>>({})
 const saving = ref(false)
-
-// ─── Plantilla upload state ──────────────────────────────────────────────────
-const selectedPlantilla = ref<File | null>(null)
-const plantillaInputRef = ref<HTMLInputElement | null>(null)
-const uploadingPlantilla = ref(false)
-const plantillaProgress = ref<'idle' | 'uploading' | 'done' | 'error'>('idle')
-
-async function onPlantillaChange(event: Event) {
-  plantillaGuard.disarm()
-  const input = event.target as HTMLInputElement
-  if (input.files && input.files[0]) {
-    selectedPlantilla.value = input.files[0]
-    form.plantillaArchivo = ''
-    plantillaProgress.value = 'idle'
-    await stashFile('instrumento-crear:plantilla', input.files[0])
-  }
-}
-
-function clearPlantilla() {
-  selectedPlantilla.value = null
-  form.plantillaArchivo = ''
-  plantillaProgress.value = 'idle'
-  if (plantillaInputRef.value) plantillaInputRef.value.value = ''
-  clearFile('instrumento-crear:plantilla').catch(() => { /* noop */ })
-}
-
-async function uploadSelectedPlantilla(): Promise<string | null> {
-  if (!selectedPlantilla.value) return null
-  plantillaProgress.value = 'uploading'
-  uploadingPlantilla.value = true
-  try {
-    const key = await uploadFile(selectedPlantilla.value, 'instrumentos')
-    if (!key) {
-      plantillaProgress.value = 'error'
-      return null
-    }
-    form.plantillaArchivo = key
-    plantillaProgress.value = 'done'
-    return key
-  } catch {
-    plantillaProgress.value = 'error'
-    return null
-  } finally {
-    uploadingPlantilla.value = false
-  }
-}
 
 // ─── Select options ───────────────────────────────────────────────────────────
 const tipoOptions = [
@@ -98,7 +125,6 @@ const periodicidadOptions = [
   { label: 'Semestral', value: 'SEMESTRAL' },
 ]
 
-// ─── Validation ───────────────────────────────────────────────────────────────
 function validate(): boolean {
   Object.keys(errors).forEach((k) => delete errors[k])
 
@@ -110,37 +136,28 @@ function validate(): boolean {
     errors.periodicidad = 'La periodicidad es requerida'
   if (rolesArray.value.length === 0)
     errors.rolesPermitidos = 'Selecciona al menos un rol permitido'
-  if (!form.versionPlantilla.trim())
-    errors.versionPlantilla = 'La versión de la plantilla es requerida'
 
   return Object.keys(errors).length === 0
 }
 
-// ─── Submit ───────────────────────────────────────────────────────────────────
 async function onSubmit() {
   if (!validate()) return
 
   saving.value = true
   try {
-    // Upload plantilla first if one was selected but not yet uploaded
-    if (selectedPlantilla.value && !form.plantillaArchivo) {
-      const key = await uploadSelectedPlantilla()
-      if (plantillaProgress.value === 'error' || !key) {
-        saving.value = false
-        return
-      }
-    }
-
     const payload: Record<string, unknown> = {
       nombreInstrumento: form.nombreInstrumento.trim(),
       tipo: form.tipo,
       periodicidad: form.periodicidad,
       rolesPermitidos: rolesArray.value.join(','),
-      versionPlantilla: form.versionPlantilla.trim(),
     }
     if (form.codigo.trim()) payload.codigo = form.codigo.trim()
     if (form.descripcion.trim()) payload.descripcion = form.descripcion.trim()
-    if (form.plantillaArchivo) payload.plantillaArchivo = form.plantillaArchivo
+    // §3.1: when a template is chosen, the backend deep-copies its active
+    // definition into v1 of the new instrument.
+    if (selectedTemplate.value && selectedTemplate.value !== NO_TEMPLATE) {
+      payload.templateCodigo = selectedTemplate.value
+    }
 
     const res = await apiFetch<{ success: boolean; data: { id: number } }>('/instruments', {
       method: 'POST',
@@ -154,12 +171,8 @@ async function onSubmit() {
       life: 3500,
     })
 
-    // W7: clear draft + IDB stash on successful submit
     clearInstCrearDraft()
-    await clearFile('instrumento-crear:plantilla')
 
-    // C3: if we arrived here via the "crear instrumento nuevo" shortcut,
-    // return to the originating page (e.g. the patient's fichas tab).
     const returnTo = route.query.return
     if (typeof returnTo === 'string' && returnTo.startsWith('/')) {
       await navigateTo(returnTo)
@@ -180,14 +193,13 @@ async function onSubmit() {
   }
 }
 
-// ─── W7: sessionStorage metadata draft persistence ───────────────────────────
+// ─── sessionStorage metadata draft persistence ───────────────────────────────
 function readInstCrearDraft(): {
   nombreInstrumento?: string
   codigo?: string
   descripcion?: string
   tipo?: string
   periodicidad?: string
-  versionPlantilla?: string
   roles?: string[]
   ts?: number
 } | null {
@@ -212,7 +224,6 @@ function writeInstCrearDraft() {
         descripcion: form.descripcion,
         tipo: form.tipo,
         periodicidad: form.periodicidad,
-        versionPlantilla: form.versionPlantilla,
         roles: rolesArray.value,
         ts: Date.now(),
       })
@@ -234,30 +245,28 @@ async function restoreInstCrearDraft() {
   form.descripcion = draft.descripcion ?? ''
   form.tipo = draft.tipo ?? ''
   form.periodicidad = draft.periodicidad ?? ''
-  form.versionPlantilla = draft.versionPlantilla ?? ''
   rolesArray.value = Array.isArray(draft.roles) ? draft.roles : []
 
-  const restoredPlantilla = await restoreFile('instrumento-crear:plantilla')
-  if (restoredPlantilla) selectedPlantilla.value = restoredPlantilla
-
-  if (restoredPlantilla || draft.nombreInstrumento) {
+  if (draft.nombreInstrumento) {
     toast.add({
       severity: 'info',
       summary: 'Borrador restaurado',
-      detail: 'Se recuperaron los datos y archivos de tu sesión anterior.',
+      detail: 'Se recuperaron los datos de tu sesión anterior.',
       life: 4000,
     })
   }
 }
 
 watch(
-  () => [form.nombreInstrumento, form.codigo, form.descripcion, form.tipo, form.periodicidad, form.versionPlantilla, rolesArray.value],
+  () => [form.nombreInstrumento, form.codigo, form.descripcion, form.tipo, form.periodicidad, rolesArray.value],
   () => writeInstCrearDraft(),
   { deep: true }
 )
 
 onMounted(async () => {
   await restoreInstCrearDraft()
+  await Promise.all([fetchCargoRoles(), loadTemplateSummaries()])
+  if (rolesArray.value.length === 0) rolesArray.value = ['ADMIN']
 })
 </script>
 
@@ -275,7 +284,6 @@ onMounted(async () => {
       </template>
     </AppPageHeader>
 
-    <Toast />
 
     <div class="max-w-2xl">
       <Card>
@@ -288,6 +296,33 @@ onMounted(async () => {
         </template>
         <template #content>
           <form class="space-y-5" @submit.prevent="onSubmit">
+
+            <!-- §3.2: Tipo de instrumento (plantilla) -->
+            <div>
+              <label class="block text-sm font-medium text-[var(--text-color)] mb-1">
+                Tipo de instrumento (plantilla)
+              </label>
+              <Select
+                v-model="selectedTemplate"
+                :options="templateOptions"
+                option-label="label"
+                option-value="value"
+                class="w-full"
+                data-testid="template-selector"
+              >
+                <template #option="{ option }">
+                  <div class="flex flex-col py-0.5" :data-template-option="option.value">
+                    <span class="font-medium">{{ option.label }}</span>
+                    <span class="text-xs text-[var(--text-color-secondary)]">{{ option.summary }}</span>
+                  </div>
+                </template>
+              </Select>
+              <p class="mt-1 text-xs text-[var(--text-color-secondary)]">
+                Al elegir una plantilla se copia su definición activa como versión 1
+                (el instrumento queda llenable). "Sin plantilla" crea solo los
+                metadatos — quedará <em>sin definición</em> y no será llenable.
+              </p>
+            </div>
 
             <!-- Nombre del Instrumento -->
             <div>
@@ -364,7 +399,7 @@ onMounted(async () => {
               </label>
               <MultiSelect
                 v-model="rolesArray"
-                :options="ROLES_OPTIONS"
+                :options="roleOptions"
                 placeholder="Selecciona roles"
                 class="w-full"
                 display="chip"
@@ -379,21 +414,9 @@ onMounted(async () => {
               </p>
             </div>
 
-            <!-- Versión Plantilla -->
-            <div>
-              <label class="block text-sm font-medium text-[var(--text-color)] mb-1">
-                Versión Plantilla <span class="text-red-500">*</span>
-              </label>
-              <InputText
-                v-model="form.versionPlantilla"
-                placeholder="Ej: v1.0"
-                class="w-full font-mono"
-                :invalid="!!errors.versionPlantilla"
-              />
-              <p v-if="errors.versionPlantilla" class="mt-1 text-xs text-red-500">
-                {{ errors.versionPlantilla }}
-              </p>
-            </div>
+            <!-- W3: Versión Plantilla + plantilla upload REMOVED per contract §3.2.
+                 The dynamic template content is supplied via
+                 `InstrumentoVersion.definition` (admin-managed separately). -->
 
             <!-- Descripción -->
             <div>
@@ -405,70 +428,6 @@ onMounted(async () => {
                 rows="3"
                 placeholder="Descripción general del instrumento..."
                 class="w-full rounded-md border border-[var(--surface-border)] bg-[var(--surface-ground)] text-[var(--text-color)] px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent placeholder:text-[var(--text-color-secondary)]"
-              />
-            </div>
-
-            <!-- Plantilla archivo upload -->
-            <div>
-              <label class="block text-sm font-medium text-[var(--text-color)] mb-1">
-                Plantilla (archivo) <span class="text-xs text-[var(--text-color-secondary)]">(opcional)</span>
-              </label>
-
-              <div
-                v-if="!selectedPlantilla && !form.plantillaArchivo"
-                class="border-2 border-dashed border-[var(--surface-border)] rounded-lg p-6 text-center cursor-pointer hover:border-violet-400 transition-colors"
-                @click="() => { plantillaGuard.arm(); plantillaInputRef?.click() }"
-                data-testid="instrument-plantilla-dropzone"
-              >
-                <i class="pi pi-file-pdf text-3xl text-[var(--text-color-secondary)] mb-2 block" />
-                <p class="text-sm text-[var(--text-color-secondary)]">
-                  Haz clic para seleccionar una plantilla
-                </p>
-                <p class="text-xs text-[var(--text-color-secondary)] mt-1">
-                  PDF, DOCX u otro documento de referencia
-                </p>
-              </div>
-
-              <div
-                v-else
-                class="flex items-center gap-3 px-4 py-3 border border-[var(--surface-border)] rounded-lg bg-[var(--surface-ground)]"
-              >
-                <i class="pi pi-file text-violet-500 text-xl flex-shrink-0" />
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-[var(--text-color)] truncate">
-                    {{ selectedPlantilla?.name || filenameFromKey(form.plantillaArchivo) }}
-                  </p>
-                  <p v-if="selectedPlantilla" class="text-xs text-[var(--text-color-secondary)]">
-                    {{ (selectedPlantilla.size / 1024).toFixed(1) }} KB
-                  </p>
-                </div>
-                <div v-if="plantillaProgress === 'uploading'" class="flex-shrink-0">
-                  <i class="pi pi-spin pi-spinner text-violet-500" />
-                </div>
-                <div v-else-if="plantillaProgress === 'done'" class="flex-shrink-0">
-                  <i class="pi pi-check-circle text-green-500" />
-                </div>
-                <div v-else-if="plantillaProgress === 'error'" class="flex-shrink-0">
-                  <i class="pi pi-times-circle text-red-500" />
-                </div>
-                <Button
-                  v-if="plantillaProgress !== 'uploading'"
-                  icon="pi pi-times"
-                  size="small"
-                  severity="secondary"
-                  text
-                  rounded
-                  v-tooltip.top="'Quitar plantilla'"
-                  @click="clearPlantilla"
-                />
-              </div>
-
-              <input
-                ref="plantillaInputRef"
-                type="file"
-                class="hidden"
-                accept="*/*"
-                @change="onPlantillaChange"
               />
             </div>
 
@@ -488,7 +447,7 @@ onMounted(async () => {
                 type="submit"
                 label="Crear Instrumento"
                 icon="pi pi-check"
-                :loading="saving || uploadingPlantilla"
+                :loading="saving"
               />
             </div>
 

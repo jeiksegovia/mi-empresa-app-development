@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { authMiddleware, requireRole } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
+import { requireDomain } from '../middleware/domainAccess.js'
 import { forbidLegacy } from '../middleware/forbidLegacy.js'
 import * as nominaService from '../services/nominaService.js'
 import { logger } from '../config/logger.js'
@@ -9,6 +10,10 @@ import { getPrisma } from '../config/database.js'
 
 const router = Router()
 router.use(authMiddleware())
+
+// fixes-jul17-2 §1.2: nomina domain — CONTRATOS has full access;
+// GERONTOLOGA gets 403 (matrix false), null-EMPLEADO + ADMIN/AUDITOR/OPERADOR fall through.
+router.use(requireDomain('nomina'))
 
 const contratoSchema = z.object({
   tipoContrato: z.enum(['OPS', 'OBRA_O_LABOR', 'TERMINO_FIJO', 'TERMINO_INDEFINIDO']),
@@ -22,7 +27,14 @@ const contratoSchema = z.object({
   // intentionally omits the legacy field).
   cargoId: z.number().int().positive(),
   activo: z.boolean().optional(),
+  // nomina-asistencia-jul-18: API-required on CREATE via explicit route check
+  // (so response surfaces top-level `field: 'valorJornada'` — not only Zod errors map).
+  valorJornada: z.number().nonnegative().optional().nullable(),
 })
+
+const contratoCreateSchema = contratoSchema
+// Update keeps same required identity fields as before; valorJornada optional.
+const contratoUpdateSchema = contratoSchema
 
 const nominaPeriodoSchema = z.object({
   empleadoId: z.number().int().positive(),
@@ -38,6 +50,12 @@ const nominaPeriodoSchema = z.object({
       }),
     )
     .optional(),
+  // nomina-asistencia-jul-18 calc fields
+  mediasJornadas: z.number().nonnegative().optional(),
+  valorJornada: z.number().nonnegative().optional(),
+  subtotalCalculado: z.number().nonnegative().optional(),
+  aportesSociales: z.number().nonnegative().optional(),
+  totalPagado: z.number().nonnegative().optional(),
 })
 
 // ─── Contratos (nested under employees) ─────────────────────────────────────
@@ -53,7 +71,7 @@ router.get('/employees/:id/contratos', async (req: Request, res: Response): Prom
   }
 })
 
-router.post('/employees/:id/contratos', requireRole('ADMIN'), forbidLegacy(['cargo']), validate(contratoSchema), async (req: Request, res: Response): Promise<void> => {
+router.post('/employees/:id/contratos', requireRole('ADMIN'), forbidLegacy(['cargo']), validate(contratoCreateSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid employee ID' }); return }
@@ -66,16 +84,26 @@ router.post('/employees/:id/contratos', requireRole('ADMIN'), forbidLegacy(['car
         return
       }
     }
+    // Explicit field surface for valorJornada (Zod already requires it; service double-checks)
+    if (req.body.valorJornada === undefined || req.body.valorJornada === null) {
+      res.status(400).json({ success: false, message: 'valorJornada es requerido', field: 'valorJornada' })
+      return
+    }
     const created = await nominaService.createContrato(id, req.body)
     res.status(201).json({ success: true, data: created })
   } catch (e: any) {
-    if (e?.status) { res.status(e.status).json({ success: false, message: e.message }); return }
+    if (e?.status) {
+      const body: Record<string, unknown> = { success: false, message: e.message }
+      if (e.field) body.field = e.field
+      res.status(e.status).json(body)
+      return
+    }
     logger.error('Create contrato error:', e)
     res.status(500).json({ success: false, message: 'Error creating contrato' })
   }
 })
 
-router.put('/employees/:id/contratos/:cid', requireRole('ADMIN'), forbidLegacy(['cargo']), validate(contratoSchema), async (req: Request, res: Response): Promise<void> => {
+router.put('/employees/:id/contratos/:cid', requireRole('ADMIN'), forbidLegacy(['cargo']), validate(contratoUpdateSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     const cid = parseInt(req.params.cid as string)
@@ -91,7 +119,12 @@ router.put('/employees/:id/contratos/:cid', requireRole('ADMIN'), forbidLegacy([
     const updated = await nominaService.updateContrato(id, cid, req.body)
     res.json({ success: true, data: updated })
   } catch (e: any) {
-    if (e?.status) { res.status(e.status).json({ success: false, message: e.message }); return }
+    if (e?.status) {
+      const body: Record<string, unknown> = { success: false, message: e.message }
+      if (e.field) body.field = e.field
+      res.status(e.status).json(body)
+      return
+    }
     logger.error('Update contrato error:', e)
     res.status(500).json({ success: false, message: 'Error updating contrato' })
   }
