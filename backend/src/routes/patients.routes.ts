@@ -91,6 +91,17 @@ const updatePatientSchema = createPatientSchema
   .partial()
   .omit({ contactosEmergencia: true })
 
+function patientActorFromRequest(req: Request): patientService.PatientActor {
+  // authMiddleware guarantees req.user; requireDomain('pacientes') enriches
+  // EMPLEADO callers with tipoEmpleado before the route handler runs.
+  const user = req.user! as typeof req.user & { tipoEmpleado?: string | null }
+  return {
+    userId: user.id,
+    rol: user.rol,
+    tipoEmpleado: user.tipoEmpleado ?? null,
+  }
+}
+
 // jul-9 B1: fechaIncidente is REQUIRED and must satisfy L3 2-business-day rule
 const createNoteSchema = z.object({
   tipo: z.enum(['POSITIVA', 'NEGATIVA', 'NEUTRAL', 'ALERTA']),
@@ -166,7 +177,10 @@ router.get('/:id', requireDomain('pacientes'), async (req: Request, res: Respons
 // fixes-jul17-2 §1.2: pacientes domain. CONTRATOS create-only → POST allowed.
 router.post('/', requireDomain('pacientes'), validate(createPatientSchema), async (req: Request, res: Response): Promise<void> => {
   try {
-    const patient = await patientService.createPatient(req.body)
+    const patient = await patientService.createPatient(
+      req.body,
+      patientActorFromRequest(req),
+    )
     res.status(201).json({ success: true, data: patient })
   } catch (error: any) {
     logger.error('Create patient error:', error)
@@ -187,9 +201,21 @@ router.put('/:id', requireDomain('pacientes'), validate(updatePatientSchema), as
       res.status(400).json({ success: false, message: 'Invalid patient ID' })
       return
     }
-    const patient = await patientService.updatePatient(id, req.body)
+    const patient = await patientService.updatePatient(
+      id,
+      req.body,
+      patientActorFromRequest(req),
+    )
     res.json({ success: true, data: patient })
   } catch (error: any) {
+    if (error instanceof patientService.PatientStateForbiddenError) {
+      res.status(403).json({
+        success: false,
+        message: error.message,
+        code: error.code,
+      })
+      return
+    }
     logger.error('Update patient error:', error)
     if (error.message === 'Patient not found') {
       res.status(404).json({ success: false, message: 'Patient not found' })

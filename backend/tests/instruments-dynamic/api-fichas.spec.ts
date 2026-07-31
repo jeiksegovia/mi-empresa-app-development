@@ -90,7 +90,7 @@ test.describe('W4 — API endpoints for dynamic instruments', () => {
 
   // -------------------------------------------------------------------------
   test('GET /instruments → 200, includes activeVersion metadata (§4.1)', async ({ request }) => {
-    // W5 note: limit=100 (was 10). The seed leaves 6 dynamic instruments
+    // W5 note: limit=100 (was 10). The seed leaves multiple dynamic instruments
     // at ids 156-161, but ad-hoc test runs create additional FULL-* /
     // TEST-* instruments that can push BARTHEL below the limit=10
     // cutoff. Higher limit keeps the assertion deterministic without

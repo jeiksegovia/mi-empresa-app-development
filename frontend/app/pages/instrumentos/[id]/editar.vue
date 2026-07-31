@@ -16,6 +16,10 @@ const toast = useToast()
 
 const instEditarDraftKey = computed(() => `instrumento-editar-draft:${route.params.id}`)
 
+// ─── Jul-22 §8: unsaved-changes guard (W2-frontend task #8). ───────────────
+const isDirty = ref(false)
+const { markClean } = useUnsavedGuard(isDirty)
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface InstrumentEdit {
   id: number
@@ -145,6 +149,7 @@ async function onSubmit() {
     })
 
     clearInstEditarDraft()
+    markClean()
 
     await navigateTo(`/instrumentos/${route.params.id}`)
   } catch (e: any) {
@@ -230,7 +235,10 @@ async function restoreInstEditarDraft() {
 
 watch(
   () => [form.nombreInstrumento, form.codigo, form.descripcion, form.tipo, form.periodicidad, form.estado, rolesArray.value],
-  () => writeInstEditarDraft(),
+  () => {
+    writeInstEditarDraft()
+    isDirty.value = true
+  },
   { deep: true }
 )
 
@@ -416,7 +424,7 @@ onMounted(async () => {
                 severity="secondary"
                 outlined
                 :disabled="saving"
-                @click="navigateTo(`/instrumentos/${route.params.id}`)"
+                @click="() => { markClean(); navigateTo(`/instrumentos/${route.params.id}`) }"
               />
               <Button
                 type="submit"

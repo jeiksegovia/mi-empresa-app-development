@@ -70,6 +70,15 @@ export interface InstrumentDetail {
   activeVersion?: ActiveVersionSummary | null
 }
 
+export type InstrumentTemplateCodigo =
+  | 'BARTHEL'
+  | 'MINI_MENTAL'
+  | 'TINETTI'
+  | 'YESAVAGE'
+  | 'MNA_CUADRO'
+  | 'FICHA_NUTRICIONAL'
+  | 'VALORACION_INTEGRAL'
+
 export interface CreateInstrumentInput {
   nombreInstrumento: string
   codigo?: string
@@ -79,7 +88,7 @@ export interface CreateInstrumentInput {
   rolesPermitidos: string
   estado?: 'ACTIVO' | 'INACTIVO'
   // fixes-jul17-2 §3.1: optional template deep-copy.
-  templateCodigo?: 'BARTHEL' | 'MINI_MENTAL' | 'TINETTI' | 'YESAVAGE' | 'MNA_CUADRO' | 'FICHA_NUTRICIONAL'
+  templateCodigo?: InstrumentTemplateCodigo
 }
 
 export type UpdateInstrumentInput = Partial<Omit<CreateInstrumentInput, 'templateCodigo'>>

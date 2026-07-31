@@ -7,7 +7,7 @@
  *
  * Coverage per task #19 acceptance:
  *   - Per instrument — all-min → 0 / worst label; all-max → canonical max / best label.
- *     BARTHEL 100, MINI_MENTAL 30, TINETTI 28, YESAVAGE 15, MNA 30, FICHA_NUTRICIONAL → null/null.
+ *     BARTHEL 100, MINI_MENTAL 30, TINETTI v2 27, YESAVAGE 15, MNA 30, FICHA_NUTRICIONAL → null/null.
  *   - Every resultEvaluation boundary (min and max of each range hit exactly).
  *   - MNA specials:
  *       - cribaje=11 → evaluación required (validated).
@@ -154,7 +154,7 @@ test.describe('W4 scoring engine — per-instrument all-min / all-max', () => {
   const allMaxExpectations: Array<{ codigo: string; maxTotal: number; bestLabel: string }> = [
     { codigo: 'BARTHEL', maxTotal: 100, bestLabel: 'Dependencia ligera' },
     { codigo: 'MINI_MENTAL', maxTotal: 30, bestLabel: 'Normal' },
-    { codigo: 'TINETTI', maxTotal: 28, bestLabel: 'Riesgo bajo' },
+    { codigo: 'TINETTI', maxTotal: 27, bestLabel: 'Riesgo bajo' },
     { codigo: 'YESAVAGE', maxTotal: 15, bestLabel: 'Depresión establecida' },
     { codigo: 'MNA_CUADRO', maxTotal: 30, bestLabel: 'Estado nutricional normal' },
   ]
@@ -374,16 +374,19 @@ test.describe('W4 scoring engine — validation failures', () => {
     }
   })
 
-  test('group-info: missing a row → INVALID_ANSWER_PAYLOAD', () => {
+  test('group-info: missing a required coordinate → INVALID_ANSWER_PAYLOAD', () => {
     const def = definitions['MNA_CUADRO']
     const cuadroItem = def.sections.find((s) => s.id === 'cuadro_alimentos')!.items[0]
-    const partialGroup = cuadroItem.rows!.slice(0, 3).map((r) => ({
-      rowId: r.id,
-      columnId: 'diario',
-    }))
+    const completeGroup = cuadroItem.cellInput === 'text'
+      ? cuadroItem.rows!.flatMap((row) => cuadroItem.columns!.map((column) => ({
+          rowId: row.id,
+          columnId: column.id,
+          value: '',
+        })))
+      : cuadroItem.rows!.map((row) => ({ rowId: row.id, columnId: 'diario' }))
     const payload: Respuestas = {
       ...mnaCribajeAnswer(12),
-      [cuadroItem.id]: partialGroup,
+      [cuadroItem.id]: completeGroup.slice(0, -1),
     }
     const result = validateRespuestas(def, payload)
     expect(result.ok).toBe(false)
@@ -395,13 +398,17 @@ test.describe('W4 scoring engine — validation failures', () => {
   test('group-info: invalid columnId → INVALID_ANSWER_PAYLOAD', () => {
     const def = definitions['MNA_CUADRO']
     const cuadroItem = def.sections.find((s) => s.id === 'cuadro_alimentos')!.items[0]
-    const allRows = cuadroItem.rows!.map((r) => ({
-      rowId: r.id,
-      columnId: 'no_existe',
-    }))
+    const allCoordinates = cuadroItem.cellInput === 'text'
+      ? cuadroItem.rows!.flatMap((row) => cuadroItem.columns!.map((column) => ({
+          rowId: row.id,
+          columnId: column.id,
+          value: '',
+        })))
+      : cuadroItem.rows!.map((row) => ({ rowId: row.id, columnId: 'diario' }))
+    allCoordinates[0] = { ...allCoordinates[0], columnId: 'no_existe' }
     const payload: Respuestas = {
       ...mnaCribajeAnswer(12),
-      [cuadroItem.id]: allRows,
+      [cuadroItem.id]: allCoordinates,
     }
     const result = validateRespuestas(def, payload)
     expect(result.ok).toBe(false)
@@ -466,6 +473,17 @@ function mnaEvaluacionMaxAnswer(): Respuestas {
 
 function mnaCuadroAlimentosAnswer(): Respuestas {
   const cuadroItem = definitions['MNA_CUADRO'].sections.find((s) => s.id === 'cuadro_alimentos')!.items[0]
+  if (cuadroItem.cellInput === 'text') {
+    return {
+      [cuadroItem.id]: cuadroItem.rows!.flatMap((row) => (
+        cuadroItem.columns!.map((column) => ({
+          rowId: row.id,
+          columnId: column.id,
+          value: `${row.id}-${column.id}`,
+        }))
+      )),
+    }
+  }
   return {
     [cuadroItem.id]: cuadroItem.rows!.map((r) => ({ rowId: r.id, columnId: 'diario' })),
   }
@@ -496,10 +514,18 @@ function buildCompleteAnswer(def: InstrumentDefinition, overrides: Respuestas = 
           answers[item.id] = 'texto de prueba'
           break
         case 'group-info':
-          answers[item.id] = (item.rows ?? []).map((r) => ({
-            rowId: r.id,
-            columnId: item.columns?.[0]?.id ?? '',
-          }))
+          answers[item.id] = item.cellInput === 'text'
+            ? (item.rows ?? []).flatMap((row) => (
+                (item.columns ?? []).map((column) => ({
+                  rowId: row.id,
+                  columnId: column.id,
+                  value: 'texto de prueba',
+                }))
+              ))
+            : (item.rows ?? []).map((row) => ({
+                rowId: row.id,
+                columnId: item.columns?.[0]?.id ?? '',
+              }))
           break
       }
     }

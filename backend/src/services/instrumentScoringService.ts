@@ -50,6 +50,15 @@ export interface RowDef {
   label: string
 }
 
+export interface GroupSelectAnswer {
+  rowId: string
+  columnId: string
+}
+
+export interface GroupTextAnswer extends GroupSelectAnswer {
+  value: string
+}
+
 export interface ItemDef {
   id: string
   label: string
@@ -61,6 +70,8 @@ export interface ItemDef {
   constraints?: ConstraintsDef
   columns?: ColumnDef[]
   rows?: RowDef[]
+  /** group-info only: omitted/select preserves v1; text uses row×column text cells. */
+  cellInput?: 'select' | 'text'
 }
 
 export interface RangeDef {
@@ -103,7 +114,7 @@ export interface InstrumentDefinition {
   scoring: ScoringShape
 }
 
-export type AnswerValue = string | number | Array<{ rowId: string; columnId: string }>
+export type AnswerValue = string | number | GroupSelectAnswer[] | GroupTextAnswer[]
 
 export type Respuestas = Record<string, AnswerValue>
 
@@ -425,18 +436,83 @@ function validateItemValue(item: ItemDef, value: AnswerValue): ScoringError | nu
         return {
           code: 'INVALID_ANSWER_PAYLOAD',
           field: `respuestas.${item.id}`,
-          message: `El valor debe ser una lista de {rowId, columnId}`,
+          message: item.cellInput === 'text'
+            ? `El valor debe ser una lista de {rowId, columnId, value}`
+            : `El valor debe ser una lista de {rowId, columnId}`,
         }
       }
       const rowIds = new Set((item.rows ?? []).map((r) => r.id))
       const columnIds = new Set((item.columns ?? []).map((c) => c.id))
+
+      // fixes-jul-22 R8/R9: text mode represents every row × column cell as
+      // { rowId, columnId, value }. Empty strings are valid; presence of the
+      // coordinate, not truthiness of value, is the completeness criterion.
+      if (item.cellInput === 'text') {
+        const seenCells = new Set<string>()
+        for (const entry of value) {
+          if (
+            !entry
+            || typeof entry !== 'object'
+            || typeof (entry as { rowId?: unknown }).rowId !== 'string'
+            || typeof (entry as { columnId?: unknown }).columnId !== 'string'
+            || typeof (entry as { value?: unknown }).value !== 'string'
+          ) {
+            return {
+              code: 'INVALID_ANSWER_PAYLOAD',
+              field: `respuestas.${item.id}`,
+              message: `Cada celda debe tener rowId, columnId y value como cadenas`,
+            }
+          }
+          const cell = entry as GroupTextAnswer
+          if (!rowIds.has(cell.rowId)) {
+            return {
+              code: 'INVALID_ANSWER_PAYLOAD',
+              field: `respuestas.${item.id}`,
+              message: `rowId "${cell.rowId}" no existe en las filas del ítem`,
+            }
+          }
+          if (!columnIds.has(cell.columnId)) {
+            return {
+              code: 'INVALID_ANSWER_PAYLOAD',
+              field: `respuestas.${item.id}`,
+              message: `columnId "${cell.columnId}" no existe en las columnas del ítem`,
+            }
+          }
+          const coordinate = `${cell.rowId}::${cell.columnId}`
+          if (seenCells.has(coordinate)) {
+            return {
+              code: 'INVALID_ANSWER_PAYLOAD',
+              field: `respuestas.${item.id}`,
+              message: `Celda "${cell.rowId}/${cell.columnId}" contestada más de una vez`,
+            }
+          }
+          seenCells.add(coordinate)
+        }
+
+        if (item.required) {
+          for (const rowId of rowIds) {
+            for (const columnId of columnIds) {
+              if (!seenCells.has(`${rowId}::${columnId}`)) {
+                return {
+                  code: 'INVALID_ANSWER_PAYLOAD',
+                  field: `respuestas.${item.id}`,
+                  message: `Falta la celda "${rowId}/${columnId}" en el grupo`,
+                }
+              }
+            }
+          }
+        }
+        return null
+      }
+
+      // Legacy/select mode: exactly one selected column per row.
       const seenRows = new Set<string>()
       for (const entry of value) {
         if (
-          !entry ||
-          typeof entry !== 'object' ||
-          typeof (entry as { rowId?: unknown }).rowId !== 'string' ||
-          typeof (entry as { columnId?: unknown }).columnId !== 'string'
+          !entry
+          || typeof entry !== 'object'
+          || typeof (entry as { rowId?: unknown }).rowId !== 'string'
+          || typeof (entry as { columnId?: unknown }).columnId !== 'string'
         ) {
           return {
             code: 'INVALID_ANSWER_PAYLOAD',
@@ -444,31 +520,30 @@ function validateItemValue(item: ItemDef, value: AnswerValue): ScoringError | nu
             message: `Cada entrada debe tener rowId y columnId como cadenas`,
           }
         }
-        const e = entry as { rowId: string; columnId: string }
-        if (!rowIds.has(e.rowId)) {
+        const pair = entry as GroupSelectAnswer
+        if (!rowIds.has(pair.rowId)) {
           return {
             code: 'INVALID_ANSWER_PAYLOAD',
             field: `respuestas.${item.id}`,
-            message: `rowId "${e.rowId}" no existe en las filas del ítem`,
+            message: `rowId "${pair.rowId}" no existe en las filas del ítem`,
           }
         }
-        if (!columnIds.has(e.columnId)) {
+        if (!columnIds.has(pair.columnId)) {
           return {
             code: 'INVALID_ANSWER_PAYLOAD',
             field: `respuestas.${item.id}`,
-            message: `columnId "${e.columnId}" no existe en las columnas del ítem`,
+            message: `columnId "${pair.columnId}" no existe en las columnas del ítem`,
           }
         }
-        if (seenRows.has(e.rowId)) {
+        if (seenRows.has(pair.rowId)) {
           return {
             code: 'INVALID_ANSWER_PAYLOAD',
             field: `respuestas.${item.id}`,
-            message: `Fila "${e.rowId}" contestada más de una vez`,
+            message: `Fila "${pair.rowId}" contestada más de una vez`,
           }
         }
-        seenRows.add(e.rowId)
+        seenRows.add(pair.rowId)
       }
-      // If the group is required, every row must be answered.
       if (item.required) {
         for (const rowId of rowIds) {
           if (!seenRows.has(rowId)) {

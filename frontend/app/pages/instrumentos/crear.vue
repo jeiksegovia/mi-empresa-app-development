@@ -21,6 +21,10 @@ const route = useRoute()
 
 const INST_CREAR_DRAFT_KEY = 'instrumento-crear:draft'
 
+// ─── Jul-22 §8: unsaved-changes guard (W2-frontend task #8). ───────────────
+const isDirty = ref(false)
+const { markDirty, markClean } = useUnsavedGuard(isDirty)
+
 // ─── §3.2: Template (plantilla) selector ──────────────────────────────────────
 // The 6 seeded templates (§3.1). Selecting one sends `templateCodigo` in POST
 // so the backend deep-copies its active definition into v1 of the new
@@ -172,6 +176,7 @@ async function onSubmit() {
     })
 
     clearInstCrearDraft()
+    markClean()
 
     const returnTo = route.query.return
     if (typeof returnTo === 'string' && returnTo.startsWith('/')) {
@@ -259,9 +264,17 @@ async function restoreInstCrearDraft() {
 
 watch(
   () => [form.nombreInstrumento, form.codigo, form.descripcion, form.tipo, form.periodicidad, rolesArray.value],
-  () => writeInstCrearDraft(),
+  () => {
+    writeInstCrearDraft()
+    isDirty.value = true
+  },
   { deep: true }
 )
+
+// Also flag dirty on template selection changes.
+watch(() => selectedTemplate.value, () => {
+  isDirty.value = true
+})
 
 onMounted(async () => {
   await restoreInstCrearDraft()
@@ -279,7 +292,7 @@ onMounted(async () => {
           icon="pi pi-times"
           severity="secondary"
           outlined
-          @click="navigateTo('/instrumentos')"
+          @click="() => { markClean(); navigateTo('/instrumentos') }"
         />
       </template>
     </AppPageHeader>

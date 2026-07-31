@@ -30,6 +30,8 @@ const { apiFetch } = useApi()
 // ── Fixture loader ──────────────────────────────────────────────────────────
 // We resolve fixtures via `import.meta.glob` so the dev server bundles them
 // without any HTTP round-trip. `eager: true` makes them available at runtime.
+// Per contract (seed/upgrade rule), for a given codigo we pick the highest
+// `*.v{n}.json` — so loading `MNA_CUADRO` resolves `MNA_CUADRO.v2.json` first.
 const FIXTURES = import.meta.glob(
   '../../../tests/fixtures/instrument-templates/*.json',
   { eager: true },
@@ -42,14 +44,27 @@ function normalize(mod: { default: InstrumentDefinition } | InstrumentDefinition
   return mod as InstrumentDefinition
 }
 
+interface FixtureEntry {
+  codigo: string
+  version: number
+  definition: InstrumentDefinition
+}
+
+const FIXTURE_TABLE: FixtureEntry[] = Object.entries(FIXTURES)
+  .map(([path, mod]) => {
+    const m = path.match(/\/([^/]+)\.v(\d+)\.json$/)
+    if (!m) return null
+    return {
+      codigo: m[1],
+      version: Number(m[2]),
+      definition: normalize(mod),
+    }
+  })
+  .filter((e): e is FixtureEntry => e !== null)
+  .sort((a, b) => (a.codigo === b.codigo ? b.version - a.version : 0))
+
 const availableCodigos = computed(() =>
-  Object.keys(FIXTURES)
-    .map((path) => {
-      const m = path.match(/\/([^/]+)\.v\d+\.json$/)
-      return m?.[1] ?? null
-    })
-    .filter((c): c is string => Boolean(c))
-    .sort()
+  Array.from(new Set(FIXTURE_TABLE.map((e) => e.codigo))).sort(),
 )
 
 const codigo = computed(() => {
@@ -60,10 +75,8 @@ const codigo = computed(() => {
 
 const definition = computed<InstrumentDefinition | null>(() => {
   const wanted = codigo.value
-  for (const [path, mod] of Object.entries(FIXTURES)) {
-    if (path.endsWith(`/${wanted}.v1.json`)) {
-      return normalize(mod)
-    }
+  for (const entry of FIXTURE_TABLE) {
+    if (entry.codigo === wanted) return entry.definition
   }
   return null
 })

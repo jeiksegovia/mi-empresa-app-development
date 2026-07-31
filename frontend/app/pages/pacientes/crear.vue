@@ -8,6 +8,20 @@ const { apiFetch } = useApi()
 const toast = useToast()
 const saving = ref(false)
 
+// ─── Jul-22 §1.2: hide estado control for CONTRATOS. ────────────────────────
+// `useDomainAccess` mirrors the backend RBAC matrix. CONTRATOS has create-only
+// access on `pacientes` and the backend will force `estado = ACTIVO` regardless
+// of the body value, so the UI simply omits the control AND the payload field.
+const { profile } = useDomainAccess()
+const hideEstadoCreate = computed(() => profile.value === 'CONTRATOS')
+
+// ─── Jul-22 §8: unsaved-changes guard (W2-frontend task #8). ───────────────
+// `dirty` flips true on the first user-driven change after mount; the guard
+// blocks SPA route changes + browser unload until `markClean` is called
+// (which happens inside `handleSubmit` only after the server returns 201).
+const isDirty = ref(false)
+const { markDirty, markClean } = useUnsavedGuard(isDirty)
+
 // Form state
 const form = reactive({
   nombre: '',
@@ -54,10 +68,12 @@ function addEmergencyContact() {
     parentescoSelect: '',
     parentescoCustom: '',
   })
+  markDirty()
 }
 
 function removeEmergencyContact(index: number) {
   emergencyContacts.value.splice(index, 1)
+  markDirty()
 }
 
 // Validation
@@ -96,7 +112,13 @@ async function handleSubmit() {
       numeroDocumento: form.numeroDocumento.trim(),
       fechaNacimiento: form.fechaNacimiento,
       genero: generoResolved,
-      estado: form.estado,
+    }
+
+    // Jul-22 §1.2: CONTRATOS callers must not send `estado` — backend ignores
+    // the field for them and forces ACTIVO. Hiding the Select + omitting the
+    // payload key keeps the wire payload aligned with the contract.
+    if (!hideEstadoCreate.value) {
+      payload.estado = form.estado
     }
 
     if (form.telefono.trim()) payload.telefono = form.telefono.trim()
@@ -145,6 +167,8 @@ async function handleSubmit() {
       life: 4000,
     })
 
+    // Mark clean BEFORE navigation so the guard does not prompt on the way out.
+    markClean()
     await navigateTo(`/pacientes/${res.data.id}`)
   } catch (e: any) {
     const msg = e?.data?.message || e?.message || 'Error al crear el paciente'
@@ -155,8 +179,70 @@ async function handleSubmit() {
 }
 
 function handleCancel() {
+  // Cancel is an explicit user intent — bypass the guard by clearing dirty.
+  markClean()
   navigateTo('/pacientes')
 }
+
+// ─── Wire dirty tracking ───────────────────────────────────────────────────
+// Snapshot initial values once; a field is considered "changed" if its current
+// value no longer matches the snapshot. We watch all form scalars + the two
+// genero refs + the emergencyContacts array (deep) in a single watcher so the
+// first edit flips dirty to true exactly once.
+const initialSnapshot = {
+  ...form,
+  generoSelect: generoSelect.value,
+  generoCustom: generoCustom.value,
+  contactos: JSON.stringify(emergencyContacts.value),
+}
+
+watch(
+  () => [
+    form.nombre,
+    form.tipoDocumento,
+    form.numeroDocumento,
+    form.fechaNacimiento,
+    form.fechaCumpleanos,
+    form.tipoSangre,
+    form.eps,
+    form.telefono,
+    form.email,
+    form.direccion,
+    form.informacionSeguro,
+    form.observacionesEspeciales,
+    form.estado,
+    generoSelect.value,
+    generoCustom.value,
+    JSON.stringify(emergencyContacts.value),
+  ],
+  () => {
+    const current = {
+      ...form,
+      generoSelect: generoSelect.value,
+      generoCustom: generoCustom.value,
+      contactos: JSON.stringify(emergencyContacts.value),
+    }
+    const changed =
+      current.nombre !== initialSnapshot.nombre ||
+      current.tipoDocumento !== initialSnapshot.tipoDocumento ||
+      current.numeroDocumento !== initialSnapshot.numeroDocumento ||
+      current.fechaNacimiento !== initialSnapshot.fechaNacimiento ||
+      current.fechaCumpleanos !== initialSnapshot.fechaCumpleanos ||
+      current.tipoSangre !== initialSnapshot.tipoSangre ||
+      current.eps !== initialSnapshot.eps ||
+      current.telefono !== initialSnapshot.telefono ||
+      current.email !== initialSnapshot.email ||
+      current.direccion !== initialSnapshot.direccion ||
+      current.informacionSeguro !== initialSnapshot.informacionSeguro ||
+      current.observacionesEspeciales !== initialSnapshot.observacionesEspeciales ||
+      current.estado !== initialSnapshot.estado ||
+      current.generoSelect !== initialSnapshot.generoSelect ||
+      current.generoCustom !== initialSnapshot.generoCustom ||
+      current.contactos !== initialSnapshot.contactos
+    if (changed) isDirty.value = true
+  },
+  { deep: true },
+)
 
 const tipoDocumentoOptions = [
   { label: 'CC', value: 'CC' },
@@ -297,7 +383,9 @@ const tipoSangreOptions = [
                 <small v-if="formErrors.genero" class="text-red-500">{{ formErrors.genero }}</small>
               </div>
 
-              <div>
+              <!-- Jul-22 §1.2: estado control hidden for CONTRATOS (create-only
+                   access on `pacientes`). Backend forces ACTIVO regardless. -->
+              <div v-if="!hideEstadoCreate" data-testid="estado-field">
                 <label class="block text-sm font-medium mb-2">Estado</label>
                 <Select
                   v-model="form.estado"
@@ -305,6 +393,7 @@ const tipoSangreOptions = [
                   option-label="label"
                   option-value="value"
                   class="w-full"
+                  data-testid="estado-select"
                 />
               </div>
 

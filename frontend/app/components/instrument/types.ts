@@ -103,6 +103,12 @@ export interface GroupInfoItem extends ItemBase {
   type: 'group-info'
   columns: ScoredOption[]
   rows: OptionBase[]
+  /**
+   * fixes-jul-22 §4: when `text`, every row×column coordinate stores a free-
+   * text string instead of an exclusive column selection. Legacy group-info
+   * without this flag keeps the {rowId,columnId}[] selection shape.
+   */
+  cellInput?: 'text'
 }
 export type Item =
   | SingleSelectScoredItem
@@ -128,11 +134,24 @@ export interface InstrumentDefinition {
 export type AnswerValue =
   | string // single-select-scored | single-select-info | text-info
   | number // number-info
-  | GroupAnswerPair[] // group-info
+  | GroupAnswerPair[] // legacy group-info: one column selection per row
+  | GroupTextCellValue[] // fixes-jul-22 §4: text-cell matrix (every row×col)
 
 export interface GroupAnswerPair {
   rowId: string
   columnId: string
+}
+
+/**
+ * fixes-jul-22 §4: text-cell matrix answer. `cellInput: 'text'` group-info
+ * items emit ONE object per row × column coordinate (an N×M matrix → N×M
+ * entries). `value` is a string (empty allowed). The text NEVER contributes
+ * to scoring — the engine treats it as informational only.
+ */
+export interface GroupTextCellValue {
+  rowId: string
+  columnId: string
+  value: string
 }
 
 /** Flat object per the contract §5.1. */

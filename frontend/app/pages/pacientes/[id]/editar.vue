@@ -10,6 +10,21 @@ const toast = useToast()
 const loading = ref(true)
 const saving = ref(false)
 
+// ─── Jul-22 §1.3: edit-time `estado` ownership = ADMIN or GERONTOLOGA only. ─
+// Backend fails closed with HTTP 403 + PATIENT_STATE_FORBIDDEN for any other
+// caller. Hide the control + omit the payload field so the wire request never
+// carries the `estado` key for non-owners (the spec explicitly says the rule
+// is triggered by the PRESENCE of a validated `estado` field).
+const authStore = useAuthStore()
+const { profile } = useDomainAccess()
+const canEditEstado = computed(
+  () => authStore.isAdmin || profile.value === 'GERONTOLOGA',
+)
+
+// ─── Jul-22 §8: unsaved-changes guard (W2-frontend task #8). ───────────────
+const isDirty = ref(false)
+const { markDirty, markClean } = useUnsavedGuard(isDirty)
+
 // Form state
 const form = reactive({
   nombre: '',
@@ -62,6 +77,7 @@ function addEmergencyContact() {
     parentescoSelect: '',
     parentescoCustom: '',
   })
+  markDirty()
 }
 
 const generoOptions = [
@@ -97,6 +113,7 @@ function isParentescoValue(v: string): v is ParentescoValue {
 
 function removeEmergencyContact(index: number) {
   emergencyContacts.value.splice(index, 1)
+  markDirty()
 }
 
 // Load patient data
@@ -144,6 +161,14 @@ async function loadPatient() {
           parentescoCustom: !isKnownValue && c.parentesco ? c.parentesco : '',
         }
       })
+    }
+
+    // Capture the post-load snapshot so the dirty watcher has a baseline.
+    initialSnapshot.value = {
+      form: { ...form },
+      generoSelect: generoSelect.value,
+      generoCustom: generoCustom.value,
+      contactos: JSON.stringify(emergencyContacts.value),
     }
   } catch (e: any) {
     toast.add({
@@ -194,7 +219,14 @@ async function handleSubmit() {
       numeroDocumento: form.numeroDocumento.trim(),
       fechaNacimiento: form.fechaNacimiento,
       genero: generoResolved,
-      estado: form.estado,
+    }
+
+    // Jul-22 §1.3: only ADMIN or GERONTOLOGA may send `estado` on PUT — any
+    // other caller receives 403 PATIENT_STATE_FORBIDDEN. Hide the control
+    // AND omit the payload key entirely (presence of the key triggers the
+    // backend rule, so absence keeps the existing update behavior intact).
+    if (canEditEstado.value) {
+      payload.estado = form.estado
     }
 
     // Resolve parentesco for each emergency contact (OTRO uses custom text)
@@ -241,6 +273,7 @@ async function handleSubmit() {
       life: 4000,
     })
 
+    markClean()
     await navigateTo(`/pacientes/${route.params.id}`)
   } catch (e: any) {
     const msg = e?.data?.message || e?.message || 'Error al actualizar el paciente'
@@ -251,8 +284,69 @@ async function handleSubmit() {
 }
 
 function handleCancel() {
+  markClean()
   navigateTo(`/pacientes/${route.params.id}`)
 }
+
+// ─── Wire dirty tracking ───────────────────────────────────────────────────
+// The initial snapshot is captured AFTER `loadPatient` finishes (see watcher
+// below). Until then isDirty stays false; the first user edit flips it on.
+const initialSnapshot = ref<{
+  form: typeof form
+  generoSelect: typeof generoSelect.value
+  generoCustom: string
+  contactos: string
+} | null>(null)
+
+watch(
+  () => [
+    form.nombre,
+    form.tipoDocumento,
+    form.numeroDocumento,
+    form.fechaNacimiento,
+    form.fechaCumpleanos,
+    form.tipoSangre,
+    form.eps,
+    form.telefono,
+    form.email,
+    form.direccion,
+    form.informacionSeguro,
+    form.observacionesEspeciales,
+    form.estado,
+    generoSelect.value,
+    generoCustom.value,
+    JSON.stringify(emergencyContacts.value),
+  ],
+  () => {
+    if (!initialSnapshot.value) return
+    const current = {
+      form: { ...form },
+      generoSelect: generoSelect.value,
+      generoCustom: generoCustom.value,
+      contactos: JSON.stringify(emergencyContacts.value),
+    }
+    const init = initialSnapshot.value
+    const changed =
+      current.form.nombre !== init.form.nombre ||
+      current.form.tipoDocumento !== init.form.tipoDocumento ||
+      current.form.numeroDocumento !== init.form.numeroDocumento ||
+      current.form.fechaNacimiento !== init.form.fechaNacimiento ||
+      current.form.fechaCumpleanos !== init.form.fechaCumpleanos ||
+      current.form.tipoSangre !== init.form.tipoSangre ||
+      current.form.eps !== init.form.eps ||
+      current.form.telefono !== init.form.telefono ||
+      current.form.email !== init.form.email ||
+      current.form.direccion !== init.form.direccion ||
+      current.form.informacionSeguro !== init.form.informacionSeguro ||
+      current.form.observacionesEspeciales !== init.form.observacionesEspeciales ||
+      current.form.estado !== init.form.estado ||
+      current.generoSelect !== init.generoSelect ||
+      current.generoCustom !== init.generoCustom ||
+      current.contactos !== init.contactos
+    if (changed) isDirty.value = true
+  },
+  { deep: true },
+)
 
 const tipoDocumentoOptions = [
   { label: 'CC', value: 'CC' },
@@ -374,7 +468,10 @@ onMounted(loadPatient)
                   <small v-if="formErrors.genero" class="text-red-500">{{ formErrors.genero }}</small>
                 </div>
 
-                <div>
+                <!-- Jul-22 §1.3: estado control visible only for ADMIN or GERONTOLOGA.
+                   Other roles (CONTRATOS, AUDITOR/OPERADOR) never see the
+                   Select AND the field is omitted from the PUT payload. -->
+                <div v-if="canEditEstado" data-testid="estado-field">
                   <label class="block text-sm font-medium mb-2">Estado</label>
                   <Select
                     v-model="form.estado"
@@ -382,6 +479,7 @@ onMounted(loadPatient)
                     option-label="label"
                     option-value="value"
                     class="w-full"
+                    data-testid="estado-select"
                   />
                 </div>
 

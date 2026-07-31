@@ -1,0 +1,568 @@
+{
+  "codigo": "MNA_CUADRO",
+  "nombre": "Mini Nutritional Assessment (MNA) + Cuadro de Alimentos",
+  "version": 2,
+  "tipo": "NUTRICION",
+  "mergeOf": [
+    "MNA",
+    "CUADRO_ALIMENTOS"
+  ],
+  "descripcion": "Evalúa el estado nutricional del abuelo/a mediante cribaje + evaluación (MNA completo de Nestlé Nutrition Institute) y registra texto libre de frecuencia por grupo de alimentos.",
+  "instructions": "Complete el cribaje (preguntas A–F). Si el subtotal de cribaje es ≥ 12, la evaluación es opcional (estado nutricional normal probable). De lo contrario, complete la evaluación (G–R) para obtener la clasificación final. El Cuadro de Alimentos siempre se completa.",
+  "sections": [
+    {
+      "id": "cribaje",
+      "titulo": "Cribaje (screening)",
+      "instructions": "Responda a la primera parte del cuestionario indicando la puntuación adecuada para cada pregunta. Sume los puntos correspondientes al cribaje (máx 14).",
+      "subtotal": {
+        "max": 14,
+        "resultEvaluation": [
+          {
+            "min": 12,
+            "max": 14,
+            "label": "Estado nutricional normal"
+          },
+          {
+            "min": 8,
+            "max": 11,
+            "label": "Riesgo de malnutrición"
+          },
+          {
+            "min": 0,
+            "max": 7,
+            "label": "Malnutrición"
+          }
+        ]
+      },
+      "items": [
+        {
+          "id": "a_apetito",
+          "label": "A. ¿Ha perdido el apetito? ¿Ha comido menos por falta de apetito, problemas digestivos, dificultades de masticación o deglución en los últimos 3 meses?",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "mucho_menos",
+              "label": "Ha comido mucho menos",
+              "score": 0
+            },
+            {
+              "value": "menos",
+              "label": "Ha comido menos",
+              "score": 1
+            },
+            {
+              "value": "igual",
+              "label": "Ha comido igual",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "b_peso",
+          "label": "B. Pérdida reciente de peso (<3 meses)",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "mas_3kg",
+              "label": "Pérdida de peso > 3 kg",
+              "score": 0
+            },
+            {
+              "value": "no_sabe",
+              "label": "No lo sabe",
+              "score": 1
+            },
+            {
+              "value": "entre_1_3",
+              "label": "Pérdida de peso entre 1 y 3 kg",
+              "score": 2
+            },
+            {
+              "value": "sin_perdida",
+              "label": "No ha habido pérdida de peso",
+              "score": 3
+            }
+          ]
+        },
+        {
+          "id": "c_movilidad",
+          "label": "C. Movilidad",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "cama_sillon",
+              "label": "De la cama al sillón",
+              "score": 0
+            },
+            {
+              "value": "interior",
+              "label": "Autonomía en el interior",
+              "score": 1
+            },
+            {
+              "value": "sale",
+              "label": "Sale del domicilio",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "d_enfermedad",
+          "label": "D. ¿Ha tenido una enfermedad aguda o situación de estrés psicológico en los últimos 3 meses?",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "si",
+              "label": "Sí",
+              "score": 0
+            },
+            {
+              "value": "no",
+              "label": "No",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "e_neuropsico",
+          "label": "E. Problemas neuropsicológicos",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "demencia_grave",
+              "label": "Demencia o depresión grave",
+              "score": 0
+            },
+            {
+              "value": "demencia_leve",
+              "label": "Demencia leve",
+              "score": 1
+            },
+            {
+              "value": "sin_problemas",
+              "label": "Sin problemas psicológicos",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "f1_peso",
+          "label": "F1. Peso en kg (para cálculo de IMC)",
+          "type": "number-info",
+          "required": true,
+          "constraints": {
+            "min": 20,
+            "max": 300
+          }
+        },
+        {
+          "id": "f2_talla",
+          "label": "F2. Talla en cm (para cálculo de IMC)",
+          "type": "number-info",
+          "required": true,
+          "constraints": {
+            "min": 80,
+            "max": 230
+          }
+        },
+        {
+          "id": "f_imc",
+          "label": "F. Índice de masa corporal (IMC) = peso en kg / (talla en m)²",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "imc_lt_19",
+              "label": "IMC < 19",
+              "score": 0
+            },
+            {
+              "value": "imc_19_21",
+              "label": "19 ≤ IMC < 21",
+              "score": 1
+            },
+            {
+              "value": "imc_21_23",
+              "label": "21 ≤ IMC < 23",
+              "score": 2
+            },
+            {
+              "value": "imc_ge_23",
+              "label": "IMC ≥ 23",
+              "score": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "evaluacion",
+      "titulo": "Evaluación",
+      "instructions": "Complete la evaluación si el subtotal de cribaje fue < 12. Si el cribaje fue ≥ 12 esta sección es opcional: puede omitirse (la clasificación se toma del cribaje) o completarse para una evaluación más detallada (la clasificación global 0–30 aplica).",
+      "subtotal": {
+        "max": 16
+      },
+      "condition": {
+        "skipIf": {
+          "sectionId": "cribaje",
+          "op": ">=",
+          "value": 12
+        }
+      },
+      "items": [
+        {
+          "id": "g_vive_independiente",
+          "label": "G. El paciente vive independiente (en su casa, no en una residencia)",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "si",
+              "label": "Sí",
+              "score": 1
+            },
+            {
+              "value": "no",
+              "label": "No",
+              "score": 0
+            }
+          ]
+        },
+        {
+          "id": "h_medicamentos",
+          "label": "H. ¿Toma más de 3 medicamentos al día?",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "si",
+              "label": "Sí",
+              "score": 0
+            },
+            {
+              "value": "no",
+              "label": "No",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "i_ulceras",
+          "label": "I. ¿Úlceras o lesiones cutáneas?",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "si",
+              "label": "Sí",
+              "score": 0
+            },
+            {
+              "value": "no",
+              "label": "No",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "j_comidas",
+          "label": "J. ¿Cuántas comidas completas toma al día?",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "una",
+              "label": "1 comida",
+              "score": 0
+            },
+            {
+              "value": "dos",
+              "label": "2 comidas",
+              "score": 1
+            },
+            {
+              "value": "tres",
+              "label": "3 comidas",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "k_consumo",
+          "label": "K. Consume el paciente: (marque sí/no para cada grupo y luego seleccione el total de \"Sí\") — productos lácteos al menos una vez al día; huevos o legumbres 1 o 2 veces a la semana; carne, pescado o aves diariamente",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "0_si",
+              "label": "0 sí",
+              "score": 0
+            },
+            {
+              "value": "1_si",
+              "label": "1 sí",
+              "score": 0.5
+            },
+            {
+              "value": "2_si",
+              "label": "2 sí",
+              "score": 1
+            },
+            {
+              "value": "3_si",
+              "label": "3 sí",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "l_frutas_verduras",
+          "label": "L. ¿Consume frutas o verduras al menos 2 veces al día?",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "no",
+              "label": "No",
+              "score": 0
+            },
+            {
+              "value": "si",
+              "label": "Sí",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "m_vasos",
+          "label": "M. ¿Cuántos vasos de agua u otros líquidos toma al día? (agua, zumo, café, té, leche, vino, cerveza...)",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "lt_3",
+              "label": "Menos de 3 vasos",
+              "score": 0
+            },
+            {
+              "value": "3_5",
+              "label": "De 3 a 5 vasos",
+              "score": 0.5
+            },
+            {
+              "value": "gt_5",
+              "label": "Más de 5 vasos",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "n_forma",
+          "label": "N. Forma de alimentarse",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "ayuda",
+              "label": "Necesita ayuda",
+              "score": 0
+            },
+            {
+              "value": "dificultad",
+              "label": "Se alimenta solo con dificultad",
+              "score": 1
+            },
+            {
+              "value": "sin_dificultad",
+              "label": "Se alimenta solo sin dificultad",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "o_bien_nutrido",
+          "label": "O. ¿Se considera el paciente que está bien nutrido?",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "malnutricion_grave",
+              "label": "Malnutrición grave",
+              "score": 0
+            },
+            {
+              "value": "malnutricion_moderada",
+              "label": "No lo sabe o malnutrición moderada",
+              "score": 1
+            },
+            {
+              "value": "sin_problemas",
+              "label": "Sin problemas de nutrición",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "p_salud",
+          "label": "P. En comparación con las personas de su edad, ¿cómo encuentra el paciente su estado de salud?",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "peor",
+              "label": "Peor",
+              "score": 0
+            },
+            {
+              "value": "no_sabe",
+              "label": "No lo sabe",
+              "score": 0.5
+            },
+            {
+              "value": "igual",
+              "label": "Igual",
+              "score": 1
+            },
+            {
+              "value": "mejor",
+              "label": "Mejor",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "q_cb",
+          "label": "Q. Circunferencia braquial (CB en cm)",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "cb_lt_21",
+              "label": "CB < 21",
+              "score": 0
+            },
+            {
+              "value": "cb_21_22",
+              "label": "21 ≤ CB < 22",
+              "score": 0.5
+            },
+            {
+              "value": "cb_ge_22",
+              "label": "CB ≥ 22",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "r_cp",
+          "label": "R. Circunferencia de la pantorrilla (CP en cm)",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "cp_lt_31",
+              "label": "CP < 31",
+              "score": 0
+            },
+            {
+              "value": "cp_ge_31",
+              "label": "CP ≥ 31",
+              "score": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cuadro_alimentos",
+      "titulo": "Cuadro de Alimentos",
+      "instructions": "Registre texto libre en cada celda de frecuencia para cada grupo de alimentos. Esta información es complementaria y no aporta al puntaje MNA.",
+      "items": [
+        {
+          "id": "frecuencia_grupos",
+          "label": "Frecuencia de consumo por grupo de alimentos",
+          "type": "group-info",
+          "required": true,
+          "columns": [
+            {
+              "id": "diario",
+              "label": "Diario",
+              "score": null
+            },
+            {
+              "id": "semanal",
+              "label": "Semanal",
+              "score": null
+            },
+            {
+              "id": "mensual",
+              "label": "Mensual",
+              "score": null
+            },
+            {
+              "id": "nunca",
+              "label": "Nunca",
+              "score": null
+            }
+          ],
+          "rows": [
+            {
+              "id": "cereales",
+              "label": "Cereales y RTP's"
+            },
+            {
+              "id": "frutas",
+              "label": "Frutas"
+            },
+            {
+              "id": "verduras",
+              "label": "Verduras"
+            },
+            {
+              "id": "carnes",
+              "label": "Carnes y sustitutos"
+            },
+            {
+              "id": "lacteos",
+              "label": "Lácteos y sustitutos"
+            },
+            {
+              "id": "grasas",
+              "label": "Grasas"
+            },
+            {
+              "id": "dulces",
+              "label": "Dulces"
+            }
+          ],
+          "cellInput": "text"
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "total": "sum",
+    "resultEvaluation": [
+      {
+        "min": 24,
+        "max": 30,
+        "label": "Estado nutricional normal"
+      },
+      {
+        "min": 17,
+        "max": 23.5,
+        "label": "Riesgo de malnutrición"
+      },
+      {
+        "min": 0,
+        "max": 16.5,
+        "label": "Malnutrición"
+      }
+    ]
+  }
+}

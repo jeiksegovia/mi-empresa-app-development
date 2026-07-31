@@ -79,6 +79,7 @@ type Item = {
   constraints?: { min: number; max: number };
   columns?: { id: string; label: string; score: null }[];
   rows?: { id: string; label: string }[];
+  cellInput?: 'select' | 'text';
 };
 
 const VALID_TYPES = new Set([
@@ -157,6 +158,9 @@ function validateDefinition(def: Definition, source: string): void {
         const rows = it.rows ?? [];
         if (cols.length < 2) errors.push(`item[${it.id}] (group-info): must have >= 2 columns`);
         if (rows.length < 1) errors.push(`item[${it.id}] (group-info): must have >= 1 row`);
+        if (it.cellInput !== undefined && !['select', 'text'].includes(it.cellInput)) {
+          errors.push(`item[${it.id}] (group-info): cellInput must be 'select' or 'text'`);
+        }
         for (const c of cols) {
           if (c.score !== null) errors.push(`item[${it.id}] (group-info): column '${c.id}' must have score=null`);
         }
@@ -222,6 +226,19 @@ function checkRanges(ranges: ScoringRange[], ctx: string, errors: string[]): voi
 
 const TEMPLATE_DIR = resolve(process.cwd(), 'prisma/instrument-templates');
 
+const PERIODICIDAD_BY_CODIGO: Record<
+  string,
+  'UNICA' | 'ANUAL' | 'MENSUAL' | 'TRIMESTRAL' | 'SEMESTRAL'
+> = {
+  BARTHEL: 'SEMESTRAL',
+  MINI_MENTAL: 'ANUAL',
+  TINETTI: 'SEMESTRAL',
+  YESAVAGE: 'ANUAL',
+  MNA_CUADRO: 'SEMESTRAL',
+  FICHA_NUTRICIONAL: 'SEMESTRAL',
+  VALORACION_INTEGRAL: 'UNICA',
+};
+
 function loadTemplates(): Definition[] {
   const files = readdirSync(TEMPLATE_DIR).filter((f) => /\.v\d+\.json$/.test(f));
   if (files.length === 0) throw new Error(`No template JSONs found in ${TEMPLATE_DIR}`);
@@ -268,6 +285,67 @@ function deepEqualJson(a: unknown, b: unknown): boolean {
   return true;
 }
 
+function latestDefinitionsByCodigo(defs: Definition[]): Definition[] {
+  const latest = new Map<string, Definition>();
+  for (const def of defs) {
+    const current = latest.get(def.codigo);
+    if (!current || def.version > current.version) latest.set(def.codigo, def);
+  }
+  return [...latest.values()].sort((a, b) => a.codigo.localeCompare(b.codigo));
+}
+
+async function ensureInstrumentRows(defs: Definition[], createdBy: number): Promise<void> {
+  console.log('📋 Ensuring template Instrumento rows …');
+  for (const def of latestDefinitionsByCodigo(defs)) {
+    const existing = await prisma.instrumento.findUnique({ where: { codigo: def.codigo } });
+    if (existing) {
+      console.log(`  ⏭  ${def.codigo} Instrumento row exists`);
+      continue;
+    }
+
+    await prisma.instrumento.create({
+      data: {
+        codigo: def.codigo,
+        nombreInstrumento: def.nombre,
+        descripcion: def.descripcion,
+        tipo: def.tipo as any,
+        periodicidad: (PERIODICIDAD_BY_CODIGO[def.codigo] ?? 'UNICA') as any,
+        rolesPermitidos: 'ADMIN,EMPLEADO',
+        estado: 'ACTIVO',
+        creadoPor: createdBy,
+      },
+    });
+    console.log(`  ➕ ${def.codigo} Instrumento row created`);
+  }
+}
+
+async function activateLatestDefinitions(defs: Definition[]): Promise<void> {
+  console.log('🎯 Activating highest template versions …');
+  for (const def of latestDefinitionsByCodigo(defs)) {
+    const instrumento = await prisma.instrumento.findUnique({ where: { codigo: def.codigo } });
+    if (!instrumento) throw new Error(`Instrumento row missing after ensure: ${def.codigo}`);
+    const version = await prisma.instrumentoVersion.findUnique({
+      where: { instrumentoId_version: { instrumentoId: instrumento.id, version: def.version } },
+    });
+    if (!version) throw new Error(`Version missing after apply: ${def.codigo} v${def.version}`);
+    if (version.activo) {
+      console.log(`  ⏭  ${def.codigo} v${def.version} already active`);
+      continue;
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.instrumentoVersion.updateMany({
+        where: { instrumentoId: instrumento.id, activo: true },
+        data: { activo: false },
+      });
+      await tx.instrumentoVersion.update({
+        where: { id: version.id },
+        data: { activo: true },
+      });
+    });
+    console.log(`  ✓ ${def.codigo} v${def.version} activated`);
+  }
+}
+
 // ============================================================
 // Upgrade logic
 // ============================================================
@@ -278,11 +356,11 @@ type UpgradeAction =
   | { kind: 'update-definition'; codigo: string; version: number; fichas: number }
   | { kind: 'locked'; codigo: string; version: number; fichas: number };
 
-async function upgradeOne(def: Definition, defsByCodigo: Map<string, Definition[]>): Promise<UpgradeAction> {
+async function upgradeOne(def: Definition): Promise<UpgradeAction> {
   // Pick highest version for this codigo (single template per codigo per call is normal,
   // but allow multiple `*.v{n}.json` files — we process highest version last so it's activo).
   const instrumento = await prisma.instrumento.findUnique({ where: { codigo: def.codigo } });
-  if (!instrumento) throw new Error(`Instrumento row missing for codigo=${def.codigo} (run seed first)`);
+  if (!instrumento) return { kind: 'insert', codigo: def.codigo, version: def.version };
 
   const existing = await prisma.instrumentoVersion.findUnique({
     where: { instrumentoId_version: { instrumentoId: instrumento.id, version: def.version } },
@@ -388,11 +466,28 @@ async function main(): Promise<void> {
   console.log('🔍 Probing existing state …');
   const actions: { def: Definition; action: UpgradeAction }[] = [];
   for (const def of defs) {
-    const action = await upgradeOne(def, new Map());
+    const action = await upgradeOne(def);
     actions.push({ def, action });
   }
 
-  // Phase 2: apply in order (fail-fast on VERSION_LOCKED)
+  const lockedActions = actions.filter(
+    (entry): entry is { def: Definition; action: Extract<UpgradeAction, { kind: 'locked' }> } =>
+      entry.action.kind === 'locked',
+  );
+  if (lockedActions.length > 0) {
+    for (const { action } of lockedActions) {
+      console.error(
+        `  🔒 REFUSE ${action.codigo} v${action.version}: VERSION_LOCKED (${action.fichas} ficha(s) reference it)`,
+      );
+    }
+    throw new Error('VERSION_LOCKED: one or more referenced definitions differ; no upgrade actions applied.');
+  }
+
+  // Missing Instrumento rows are created only after every existing-version lock
+  // probe passes, so a refused upgrade does not leave metadata-only templates.
+  await ensureInstrumentRows(defs, admin.id);
+
+  // Phase 2: apply in order (all VERSION_LOCKED cases were rejected above)
   console.log('🚀 Applying …');
   for (const { def, action } of actions) {
     try {
@@ -403,6 +498,8 @@ async function main(): Promise<void> {
       process.exit(1);
     }
   }
+
+  await activateLatestDefinitions(defs);
 
   console.log('\n✅ instruments:upgrade complete.');
 }

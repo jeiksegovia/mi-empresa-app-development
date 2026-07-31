@@ -1,0 +1,428 @@
+{
+  "codigo": "VALORACION_INTEGRAL",
+  "nombre": "Valoración Integral",
+  "version": 1,
+  "tipo": "VALORACION",
+  "descripcion": "Valoración integral inicial de EMKASA Abuelitos Felices. Recopila datos generales, antecedentes, estados cognitivo, emocional, espiritual y social, examen corporal, diagnóstico, plan, evoluciones y datos del acudiente.",
+  "instructions": "Lea con atención y registre información verídica y legible para apoyar una atención integral. Este instrumento es informativo y no genera puntaje.",
+  "sections": [
+    {
+      "id": "datos_generales",
+      "titulo": "Datos generales del abuelo(a)",
+      "items": [
+        {
+          "id": "tipo_documento",
+          "label": "Tipo de documento",
+          "type": "single-select-info",
+          "required": true,
+          "options": [
+            {
+              "value": "cc",
+              "label": "C.C.",
+              "score": null
+            },
+            {
+              "value": "otro",
+              "label": "Otro",
+              "score": null
+            }
+          ]
+        },
+        {
+          "id": "documento_otro",
+          "label": "Otro tipo de documento — ¿cuál?",
+          "type": "text-info",
+          "required": false
+        },
+        {
+          "id": "nombre_apellido",
+          "label": "Nombre y apellido",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "fecha_nacimiento",
+          "label": "Fecha de nacimiento",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "AAAA-MM-DD"
+        },
+        {
+          "id": "edad",
+          "label": "Edad",
+          "type": "number-info",
+          "required": true,
+          "constraints": {
+            "min": 0,
+            "max": 130
+          }
+        },
+        {
+          "id": "sexo",
+          "label": "Sexo",
+          "type": "single-select-info",
+          "required": true,
+          "options": [
+            {
+              "value": "masculino",
+              "label": "Masculino",
+              "score": null
+            },
+            {
+              "value": "femenino",
+              "label": "Femenino",
+              "score": null
+            }
+          ]
+        },
+        {
+          "id": "fecha_ingreso",
+          "label": "Fecha de ingreso",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "AAAA-MM-DD"
+        },
+        {
+          "id": "rhgs",
+          "label": "R.H.G.S. / grupo sanguíneo",
+          "type": "text-info",
+          "required": false
+        },
+        {
+          "id": "observacion_ingreso",
+          "label": "Observación de ingreso",
+          "type": "text-info",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "informe_diagnostico",
+      "titulo": "Informe y diagnóstico actual",
+      "items": [
+        {
+          "id": "informe",
+          "label": "Informe",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "diagnostico_actual",
+          "label": "Diagnóstico actual",
+          "type": "text-info",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "antecedentes",
+      "titulo": "Antecedentes (golpes, fracturas o enfermedades)",
+      "items": [
+        {
+          "id": "antecedentes_patologicos",
+          "label": "Antecedentes patológicos",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "antecedentes_quirurgicos",
+          "label": "Antecedentes quirúrgicos",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "antecedentes_hospitalarios",
+          "label": "Antecedentes hospitalarios",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "antecedentes_alergicos",
+          "label": "Antecedentes alérgicos",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "antecedentes_medicamentosos",
+          "label": "Antecedentes medicamentosos",
+          "type": "text-info",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "antecedentes_familiares",
+      "titulo": "Antecedentes familiares",
+      "items": [
+        {
+          "id": "familiar_hta",
+          "label": "Antecedentes familiares de hipertensión arterial (HTA)",
+          "type": "single-select-info",
+          "required": true,
+          "options": [
+            {
+              "value": "si",
+              "label": "Sí",
+              "score": null
+            },
+            {
+              "value": "no",
+              "label": "No",
+              "score": null
+            }
+          ]
+        },
+        {
+          "id": "familiar_cancer",
+          "label": "Antecedentes familiares de cáncer",
+          "type": "single-select-info",
+          "required": true,
+          "options": [
+            {
+              "value": "si",
+              "label": "Sí",
+              "score": null
+            },
+            {
+              "value": "no",
+              "label": "No",
+              "score": null
+            }
+          ]
+        },
+        {
+          "id": "familiar_diabetes",
+          "label": "Antecedentes familiares de diabetes",
+          "type": "single-select-info",
+          "required": true,
+          "options": [
+            {
+              "value": "si",
+              "label": "Sí",
+              "score": null
+            },
+            {
+              "value": "no",
+              "label": "No",
+              "score": null
+            }
+          ]
+        },
+        {
+          "id": "familiar_otro",
+          "label": "Otro antecedente familiar",
+          "type": "text-info",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "estado_cognitivo",
+      "titulo": "Estado cognitivo",
+      "items": [
+        {
+          "id": "cognitivo_tiempo_espacio",
+          "label": "Ubicación en tiempo y espacio",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "cognitivo_persona",
+          "label": "Ubicación en persona",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "cognitivo_funciones_superiores",
+          "label": "Funciones cognitivas superiores",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "cognitivo_otros",
+          "label": "Otros hallazgos cognitivos",
+          "type": "text-info",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "estado_emocional_espiritual",
+      "titulo": "Estado emocional y espiritual",
+      "items": [
+        {
+          "id": "emocional_depresion",
+          "label": "Depresión",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "emocional_ansiedad",
+          "label": "Ansiedad",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "emocional_crisis_nerviosas",
+          "label": "Crisis nerviosas",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "espiritual_religion",
+          "label": "Asiste a misa y/u otro encuentro de su religión",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "emocional_otro",
+          "label": "Otro aspecto emocional o espiritual",
+          "type": "text-info",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "estado_social",
+      "titulo": "Estado social",
+      "items": [
+        {
+          "id": "social_integracion",
+          "label": "Se integra socialmente con facilidad o dificultad",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "social_personalidad",
+          "label": "Rasgos de personalidad importantes",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "social_frecuencia_salidas",
+          "label": "Frecuencia con que sale del domicilio",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "social_grupos_apoyo",
+          "label": "Asiste a grupos recreacionales o de apoyo",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "social_otro",
+          "label": "Otro aspecto social",
+          "type": "text-info",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "cuerpo",
+      "titulo": "Cuerpo",
+      "items": [
+        {
+          "id": "cuerpo_cabeza",
+          "label": "Cabeza",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "cuerpo_cuello",
+          "label": "Cuello",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "cuerpo_brazos_manos",
+          "label": "Brazos o manos",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "cuerpo_torax_abdomen",
+          "label": "Tórax y abdomen",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "cuerpo_piernas_pies",
+          "label": "Piernas y pies",
+          "type": "text-info",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "diagnostico_plan_evoluciones",
+      "titulo": "Diagnóstico integral, plan y evoluciones",
+      "items": [
+        {
+          "id": "diagnostico_integral",
+          "label": "Diagnóstico integral",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "plan_integral",
+          "label": "Plan integral",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "evoluciones",
+          "label": "Evoluciones",
+          "type": "text-info",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "acudiente_principal",
+      "titulo": "Datos del acudiente principal",
+      "items": [
+        {
+          "id": "acudiente_nombre",
+          "label": "Nombre completo",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "acudiente_documento",
+          "label": "C.C. / número de documento",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "acudiente_parentesco",
+          "label": "Parentesco",
+          "type": "text-info",
+          "required": true
+        },
+        {
+          "id": "acudiente_telefono",
+          "label": "Teléfono",
+          "type": "text-info",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "firma_profesional",
+      "titulo": "Firma profesional",
+      "items": [
+        {
+          "id": "firma_sello_profesional",
+          "label": "Firma o sello del profesional de EMKASA",
+          "type": "text-info",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "total": "none",
+    "resultEvaluation": []
+  }
+}

@@ -548,6 +548,7 @@ async function submitForm() {
     await fetchPatient()
     showFormDialog.value = false
     selectedInstrumentId.value = null
+    formDialogIsDirty.value = false
     toast.add({
       severity: 'success',
       summary: 'Ficha guardada',
@@ -566,9 +567,43 @@ async function submitForm() {
   }
 }
 
+// Jul-22 §8: form-fill dialog cancel-with-dirty guard. The fill dialog is not
+// a separate route, so SPA-leave doesn't apply; we protect the Cancel button
+// and the dialog hide event with a confirm() prompt when there are unsaved
+// answers/notes/fechaVencimiento. Submit (above) resets dirty on success.
+const formDialogIsDirty = ref(false)
+watch(
+  () => [
+    JSON.stringify(formRespuestas.value),
+    formNotas.value,
+    formFechaVencimiento.value ? '1' : '',
+  ],
+  () => {
+    const resp = formRespuestas.value ?? {}
+    const hasAnswers =
+      Object.keys(resp).length > 0 &&
+      Object.values(resp).some((v) => {
+        if (v === undefined || v === null || v === '') return false
+        if (Array.isArray(v)) return v.length > 0
+        return true
+      })
+    formDialogIsDirty.value =
+      hasAnswers || !!formNotas.value.trim() || !!formFechaVencimiento.value
+  },
+  { deep: true },
+)
+
 function closeFormDialog() {
+  if (formDialogIsDirty.value && !submittingForm.value) {
+    // eslint-disable-next-line no-alert
+    const ok = window.confirm(
+      'Tienes respuestas sin guardar en esta evaluación. ¿Cerrar y descartar?',
+    )
+    if (!ok) return
+  }
   showFormDialog.value = false
   selectedInstrumentId.value = null
+  formDialogIsDirty.value = false
 }
 
 function closeResultDialog() {

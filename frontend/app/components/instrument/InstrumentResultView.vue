@@ -15,6 +15,7 @@
 import { computed } from 'vue'
 import type {
   GroupAnswerPair,
+  GroupTextCellValue,
   InstrumentDefinition,
   Item,
   Respuestas,
@@ -53,6 +54,21 @@ function optionLabel(item: Item, value: unknown): string {
     return v === '' ? '—' : v
   }
   if (item.type === 'group-info') {
+    // Text-cell matrix (fixes-jul-22 §4): render as a compact "row: col, col"
+    // list, omitting empty cells so the print view stays readable.
+    if (item.cellInput === 'text') {
+      const cells = value as GroupTextCellValue[] | undefined
+      if (!cells || !Array.isArray(cells) || cells.length === 0) return '—'
+      return cells
+        .filter((c) => c && c.value && c.value.trim() !== '')
+        .map((c) => {
+          const col = item.columns.find((cc) => cc.id === c.columnId)
+          const row = item.rows.find((r) => r.id === c.rowId)
+          return `${row?.label ?? c.rowId}: ${col?.label ?? c.columnId} = ${c.value}`
+        })
+        .join(' · ') || '—'
+    }
+    // Legacy select-per-row.
     const pairs = value as GroupAnswerPair[] | undefined
     if (!pairs || !Array.isArray(pairs) || pairs.length === 0) return '—'
     return pairs

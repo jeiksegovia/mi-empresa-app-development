@@ -113,7 +113,7 @@ async function getSeededPatient(): Promise<number> {
 }
 
 async function getSeededInstrumentCodigo(): Promise<string> {
-  // Find any instrument with an active version (one of the 6 dynamic ones).
+  // Find any instrument with an active version (one of the dynamic templates).
   // BARTHEL is always seeded by db:seed.
   const r = await prisma.instrumento.findUnique({ where: { codigo: 'BARTHEL' } })
   if (!r) throw new Error('BARTHEL template not seeded — run npm run db:seed first')

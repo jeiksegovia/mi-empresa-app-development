@@ -271,12 +271,12 @@ test.describe('W5 — qa-contract validations', () => {
     })
     const defBody = await def.json()
     const items = defBody.data.version.definition.sections.flatMap((s: any) => s.items)
-    expect(items.length).toBe(20)
+    expect(items.length).toBe(17)
 
-    // TINETTI items have heterogeneous scoring:
-    //   - 8 items with ternary options (max=2, mid=1, min=0)
-    //   - 12 items with binary options (max=1, min=0)
-    // Global max = 8*2 + 12*1 = 28 (per contract §6.1).
+    // TINETTI v2 items have heterogeneous scoring:
+    //   - 10 items with max=2
+    //   - 7 items with max=1
+    // Global max = 10*2 + 7*1 = 27 (fixes-jul-22 contract §3).
     const itemsMax2: any[] = []
     const itemsMax1: any[] = []
     for (const it of items as any[]) {
@@ -285,8 +285,8 @@ test.describe('W5 — qa-contract validations', () => {
       if ((opts[0].score ?? 0) === 2) itemsMax2.push(it)
       else itemsMax1.push(it)
     }
-    expect(itemsMax2.length).toBe(8)
-    expect(itemsMax1.length).toBe(12)
+    expect(itemsMax2.length).toBe(10)
+    expect(itemsMax1.length).toBe(7)
 
     // answerSet: start with all-max; demote the first N ternary items to
     // min (delta=-2 each) and the first M binary items to min (delta=-1
@@ -346,13 +346,13 @@ test.describe('W5 — qa-contract validations', () => {
       createdFichaIds.push(body.data.id)
     }
 
-    // TINETTI ranges: 25-28 Riesgo bajo, 19-24 Riesgo moderado,
+    // TINETTI v2 ranges: 25-27 Riesgo bajo, 19-24 Riesgo moderado,
     // 0-18 Alto riesgo de caídas.
-    await postAndAssert(28, 0, 0, 'Riesgo bajo')              // top of "bajo"
-    await postAndAssert(25, 1, 1, 'Riesgo bajo')              // 28-2-1=25
-    await postAndAssert(24, 2, 0, 'Riesgo moderado')         // 28-4=24
-    await postAndAssert(19, 4, 1, 'Riesgo moderado')         // 28-8-1=19
-    await postAndAssert(18, 5, 0, 'Alto riesgo de caídas')    // 28-10=18
+    await postAndAssert(27, 0, 0, 'Riesgo bajo')              // all-max
+    await postAndAssert(25, 1, 0, 'Riesgo bajo')              // 27-2=25
+    await postAndAssert(24, 1, 1, 'Riesgo moderado')          // 27-2-1=24
+    await postAndAssert(19, 4, 0, 'Riesgo moderado')          // 27-8=19
+    await postAndAssert(18, 4, 1, 'Alto riesgo de caídas')    // 27-8-1=18
   })
 
   // ─── 4. INVALID_STATE: completar on COMPLETADO ──────────────────────────
@@ -401,8 +401,8 @@ test.describe('W5 — qa-contract validations', () => {
     // a_apetito=2 + b_peso=3 + c_movilidad=2 + d_enfermedad=2 +
     // e_neuropsico=2 + f_imc=2 = 13. f1_peso + f2_talla are number-info
     // (no score contribution). evaluación is absent → skipped.
-    // cuadro_alimentos is ALWAYS required (no skipIf) — its
-    // group-info "frecuencia_grupos" must be present (1 entry per row).
+    // cuadro_alimentos is ALWAYS required (no skipIf) — its v2
+    // group-info "frecuencia_grupos" must contain all 7×4 text cells.
     const respuestas = {
       a_apetito: 'igual', // 2
       b_peso: 'sin_perdida', // 3
@@ -412,16 +412,8 @@ test.describe('W5 — qa-contract validations', () => {
       f1_peso: 70, // number-info, no score
       f2_talla: 170, // number-info, no score
       f_imc: 'imc_21_23', // 2
-      // cuadro_alimentos — group-info (always required).
-      frecuencia_grupos: [
-        { rowId: 'cereales', columnId: 'diario' },
-        { rowId: 'frutas', columnId: 'diario' },
-        { rowId: 'verduras', columnId: 'diario' },
-        { rowId: 'carnes', columnId: 'semanal' },
-        { rowId: 'lacteos', columnId: 'diario' },
-        { rowId: 'grasas', columnId: 'semanal' },
-        { rowId: 'dulces', columnId: 'mensual' },
-      ],
+      // cuadro_alimentos — v2 group-info text matrix (7 rows × 4 columns).
+      frecuencia_grupos: mnaTextFrequencyCells(),
     }
     const res = await request.post(`${API_BASE}/api/v1/patients/${patientId}/fichas`, {
       headers: { Cookie: adminCookie },
@@ -495,4 +487,18 @@ function barthelMaxAnswer(): Record<string, string> {
     deambulacion: 'independiente',
     desniveles: 'independiente',
   }
+}
+
+function mnaTextFrequencyCells(): Array<{
+  rowId: string
+  columnId: string
+  value: string
+}> {
+  const rows = ['cereales', 'frutas', 'verduras', 'carnes', 'lacteos', 'grasas', 'dulces']
+  const columns = ['diario', 'semanal', 'mensual', 'nunca']
+  return rows.flatMap((rowId) => columns.map((columnId) => ({
+    rowId,
+    columnId,
+    value: columnId === 'diario' ? `${rowId}: diario` : '',
+  })))
 }

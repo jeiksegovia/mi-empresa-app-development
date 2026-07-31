@@ -11,7 +11,7 @@
  *     1. Clean slate (dev only)
  *     2. Create 4 users + 1 empresa
  *     3. Create 3 placeholder instruments (FVM-001 / NUT-001 / ADM-001)
- *     4. Upsert 6 dynamic instruments + active v1 (idempotent — re-runnable)
+ *     4. Upsert 7 dynamic instruments + highest active versions (idempotent — re-runnable)
  */
 
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -132,9 +132,9 @@ async function main() {
   // ========================================
   // DYNAMIC INSTRUMENTS (W2 T5 — instrumentos-dynamic-fichas)
   // ========================================
-  // Upsert the 6 contract codigos (idempotent — safe to re-run without wipe).
+  // Upsert the 7 contract codigos (idempotent — safe to re-run without wipe).
   // Contract §6.1: codigo / nombre / tipo / periodicidad per table.
-  // Contract §6.3: rolesPermitidos = 'ADMIN,EMPLEADO' for all 6.
+  // Contract §6.3: rolesPermitidos = 'ADMIN,EMPLEADO' for all dynamic templates.
   // Schema column drops: plantillaArchivo + versionPlantilla were removed by migration.
   console.log('📋 Upserting dynamic instruments + versions …');
 
@@ -149,15 +149,26 @@ async function main() {
     { codigo: 'TINETTI',           nombre: 'Escala de Tinetti (Marcha y Equilibrio)',          tipo: 'VALORACION', periodicidad: 'SEMESTRAL' },
     { codigo: 'YESAVAGE',          nombre: 'Escala de Depresión Geriátrica de Yesavage',       tipo: 'VALORACION', periodicidad: 'ANUAL' },
     { codigo: 'MNA_CUADRO',        nombre: 'Mini Nutritional Assessment + Cuadro de Alimentos', tipo: 'NUTRICION', periodicidad: 'SEMESTRAL' },
-    { codigo: 'FICHA_NUTRICIONAL', nombre: 'Ficha Nutricional 1.8.4',                          tipo: 'NUTRICION', periodicidad: 'SEMESTRAL' },
+    { codigo: 'FICHA_NUTRICIONAL',  nombre: 'Ficha Nutricional 1.8.4',                          tipo: 'NUTRICION', periodicidad: 'SEMESTRAL' },
+    { codigo: 'VALORACION_INTEGRAL', nombre: 'Valoración Integral',                              tipo: 'VALORACION', periodicidad: 'UNICA' },
   ];
 
   const TEMPLATE_DIR = resolve(process.cwd(), 'prisma/instrument-templates');
 
   function loadTemplate(codigo: string): { version: number; definition: unknown } {
-    const file = readdirSync(TEMPLATE_DIR).find((f) => f.startsWith(`${codigo}.v`) && f.endsWith('.json'));
-    if (!file) throw new Error(`Template not found for codigo=${codigo} in ${TEMPLATE_DIR}`);
-    const parsed = JSON.parse(readFileSync(join(TEMPLATE_DIR, file), 'utf8'));
+    const candidates = readdirSync(TEMPLATE_DIR)
+      .map((file) => {
+        const match = file.match(new RegExp(`^${codigo}\\.v(\\d+)\\.json$`));
+        return match ? { file, version: Number(match[1]) } : null;
+      })
+      .filter((entry): entry is { file: string; version: number } => entry !== null)
+      .sort((a, b) => b.version - a.version);
+    const selected = candidates[0];
+    if (!selected) throw new Error(`Template not found for codigo=${codigo} in ${TEMPLATE_DIR}`);
+    const parsed = JSON.parse(readFileSync(join(TEMPLATE_DIR, selected.file), 'utf8'));
+    if (parsed.version !== selected.version) {
+      throw new Error(`Template filename/version mismatch: ${selected.file} declares v${parsed.version}`);
+    }
     return { version: parsed.version, definition: parsed };
   }
 
@@ -260,8 +271,8 @@ async function main() {
   console.log('\n📊 Summary:');
   console.log(`   Users: 4 (admin, empleado, auditor, operador)`);
   console.log(`   Empresa: 1 (default)`);
-  console.log(`   Instruments: 9 (3 legacy + 6 dynamic)`);
-  console.log(`   Active versions: 6 (one per dynamic instrumento)`);
+  console.log(`   Instruments: 10 (3 legacy + 7 dynamic)`);
+  console.log(`   Active versions: 7 (one per dynamic instrumento)`);
   console.log('\n🔑 Login credentials:');
   console.log('   Admin: admin@miempresa.com / password123');
   console.log('   Empleado: empleado@miempresa.com / password123');

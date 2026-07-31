@@ -37,15 +37,24 @@ const baseInstrumentFields = {
   estado: z.enum(['ACTIVO', 'INACTIVO']).optional(),
 }
 
-// fixes-jul17-2 §3.1 — the 6 dynamic templates the W2 seed writes. Their
-// definitions live in prisma/instrument-templates/{codigo}.v1.json.
-const TEMPLATE_CODIGOS = ['BARTHEL', 'MINI_MENTAL', 'TINETTI', 'YESAVAGE', 'MNA_CUADRO', 'FICHA_NUTRICIONAL'] as const
+// fixes-jul17-2 §3.1 + fixes-jul-22 R15 — dynamic templates seeded by the backend.
+// Definitions live in prisma/instrument-templates/{codigo}.v{n}.json; the seed
+// and upgrade path activate the highest available version per codigo.
+const TEMPLATE_CODIGOS = [
+  'BARTHEL',
+  'MINI_MENTAL',
+  'TINETTI',
+  'YESAVAGE',
+  'MNA_CUADRO',
+  'FICHA_NUTRICIONAL',
+  'VALORACION_INTEGRAL',
+] as const
 
 const createInstrumentSchema = z.object({
   ...baseInstrumentFields,
   // Optional: when present, the service deep-copies the named template's
-  // active v1 definition into the new instrumento (and creates an active
-  // InstrumentoVersion v1). Without it, legacy metadata-only creation is
+  // active definition into the new instrumento (and creates an active
+  // InstrumentoVersion v1 copy). Without it, legacy metadata-only creation is
   // preserved (the instrument is "sin definición" until a definition is
   // uploaded through the editor flow).
   templateCodigo: z.enum(TEMPLATE_CODIGOS).optional(),

@@ -1,17 +1,18 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * W2 smoke spec — verifies the 6 dynamic instruments have been seeded with active v1 versions.
+ * W2/fixes-jul-22 smoke spec — verifies the 7 dynamic instruments have active definitions.
  *
  * Direct-prisma style: imports PrismaClient directly and asserts on the seed results.
  * This is an integration test that runs against the local DB; if the seed has not been
  * applied yet, it fails loudly with the specific missing instruments.
  *
  * Coverage (per task #15 acceptance):
- *   - 6 Instrumento rows present with the contract codigos
- *   - 6 active InstrumentoVersion rows (one per codigo, version=1, activo=true)
+ *   - 7 Instrumento rows present with the contract codigos
+ *   - 7 active InstrumentoVersion rows (one per codigo; highest repo version active)
  *   - Each `definition` JSON parses and has the expected number of sections:
- *       BARTHEL=1, MINI_MENTAL=11, TINETTI=2, YESAVAGE=1, MNA_CUADRO=3, FICHA_NUTRICIONAL=4
+ *       BARTHEL=1, MINI_MENTAL=11, TINETTI=2, YESAVAGE=1, MNA_CUADRO=3,
+ *       FICHA_NUTRICIONAL=4, VALORACION_INTEGRAL=11
  *   - Partial unique index ensures exactly ONE active version per codigo
  *
  * NOTE: This spec is NOT marked as `.skip` even though W2's migration is gated. Running it
@@ -25,29 +26,30 @@ const connectionString = process.env.DATABASE_URL ?? 'postgresql://miempresa:mie
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
-const EXPECTED: Array<{ codigo: string; sectionCount: number }> = [
-  { codigo: 'BARTHEL', sectionCount: 1 },
-  { codigo: 'MINI_MENTAL', sectionCount: 11 },
-  { codigo: 'TINETTI', sectionCount: 2 },
-  { codigo: 'YESAVAGE', sectionCount: 1 },
-  { codigo: 'MNA_CUADRO', sectionCount: 3 },
-  { codigo: 'FICHA_NUTRICIONAL', sectionCount: 4 },
+const EXPECTED: Array<{ codigo: string; sectionCount: number; version: number }> = [
+  { codigo: 'BARTHEL', sectionCount: 1, version: 1 },
+  { codigo: 'MINI_MENTAL', sectionCount: 11, version: 1 },
+  { codigo: 'TINETTI', sectionCount: 2, version: 2 },
+  { codigo: 'YESAVAGE', sectionCount: 1, version: 1 },
+  { codigo: 'MNA_CUADRO', sectionCount: 3, version: 2 },
+  { codigo: 'FICHA_NUTRICIONAL', sectionCount: 4, version: 1 },
+  { codigo: 'VALORACION_INTEGRAL', sectionCount: 11, version: 1 },
 ];
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test.describe('W2 — dynamic instruments seed (6 codigos with active v1)', () => {
-  test('all 6 Instrumento rows exist with the contract codigos', async () => {
+test.describe('Dynamic instruments seed (7 codigos, highest versions active)', () => {
+  test('all 7 Instrumento rows exist with the contract codigos', async () => {
     for (const { codigo } of EXPECTED) {
       const inst = await prisma.instrumento.findUnique({ where: { codigo } });
       expect(inst, `Instrumento row missing for codigo=${codigo}`).not.toBeNull();
     }
   });
 
-  test('each codigo has exactly one active InstrumentoVersion row (v1)', async () => {
-    for (const { codigo } of EXPECTED) {
+  test('each codigo has exactly one highest active InstrumentoVersion row', async () => {
+    for (const { codigo, version } of EXPECTED) {
       const inst = await prisma.instrumento.findUnique({ where: { codigo } });
       expect(inst, `codigo=${codigo} missing`).not.toBeNull();
 
@@ -58,7 +60,7 @@ test.describe('W2 — dynamic instruments seed (6 codigos with active v1)', () =
         activeVersions.length,
         `codigo=${codigo}: expected exactly 1 active version, got ${activeVersions.length}`,
       ).toBe(1);
-      expect(activeVersions[0].version).toBe(1);
+      expect(activeVersions[0].version).toBe(version);
     }
   });
 

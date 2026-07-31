@@ -1,4 +1,5 @@
 import { getPrisma } from '../config/database.js'
+import { logger } from '../config/logger.js'
 import {
   validateAndScore,
   type Respuestas,
@@ -135,6 +136,37 @@ export interface CreatePatientInput {
 }
 
 export type UpdatePatientInput = Partial<Omit<CreatePatientInput, 'contactosEmergencia'>>
+
+/**
+ * Authenticated caller context supplied by the HTTP layer.
+ *
+ * `tipoEmpleado` is attached by `requireDomain('pacientes')` for EMPLEADO
+ * callers. Keeping this explicit at the service boundary prevents estado
+ * authorization from depending on a client-controlled request body.
+ */
+export interface PatientActor {
+  userId: number
+  rol: string
+  tipoEmpleado: string | null
+}
+
+export class PatientStateForbiddenError extends Error {
+  readonly code = 'PATIENT_STATE_FORBIDDEN' as const
+
+  constructor() {
+    super('Solo ADMIN o GERONTOLOGA pueden cambiar el estado del paciente')
+    this.name = 'PatientStateForbiddenError'
+  }
+}
+
+function isContratosActor(actor: PatientActor): boolean {
+  return actor.rol === 'EMPLEADO' && actor.tipoEmpleado === 'CONTRATOS'
+}
+
+function canManagePatientState(actor: PatientActor): boolean {
+  return actor.rol === 'ADMIN'
+    || (actor.rol === 'EMPLEADO' && actor.tipoEmpleado === 'GERONTOLOGA')
+}
 
 const ALL_RELATIONS = {
   contactosEmergencia: true,
@@ -281,17 +313,38 @@ export async function getPatient(id: number): Promise<PatientDetail | null> {
   }
 }
 
-export async function createPatient(input: CreatePatientInput): Promise<PatientDetail> {
+export async function createPatient(
+  input: CreatePatientInput,
+  actor: PatientActor,
+): Promise<PatientDetail> {
   const prisma = getPrisma()
 
-  const { contactosEmergencia, fechaCumpleanos, tipoSangre, eps, ...baseFields } = input
+  const {
+    contactosEmergencia,
+    fechaCumpleanos,
+    tipoSangre,
+    eps,
+    estado: requestedEstado,
+    ...baseFields
+  } = input
+  const effectiveEstado = isContratosActor(actor)
+    ? 'ACTIVO'
+    : (requestedEstado ?? 'ACTIVO')
+
+  if (isContratosActor(actor) && requestedEstado !== undefined) {
+    logger.info('Patient create estado overridden for CONTRATOS', {
+      actorId: actor.userId,
+      requestedEstado,
+      effectiveEstado,
+    })
+  }
 
   const cliente = await prisma.cliente.create({
     data: {
       ...baseFields,
       fechaNacimiento: new Date(baseFields.fechaNacimiento),
       tipoDocumento: baseFields.tipoDocumento as any,
-      estado: (baseFields.estado ?? 'ACTIVO') as any,
+      estado: effectiveEstado as any,
       ...(fechaCumpleanos ? { fechaCumpleanos: new Date(fechaCumpleanos) } : {}),
       ...(tipoSangre ? { tipoSangre: tipoSangre as any } : {}),
       ...(eps ? { eps } : {}),
@@ -353,8 +406,23 @@ export async function createPatient(input: CreatePatientInput): Promise<PatientD
   }
 }
 
-export async function updatePatient(id: number, input: UpdatePatientInput): Promise<PatientDetail> {
+export async function updatePatient(
+  id: number,
+  input: UpdatePatientInput,
+  actor: PatientActor,
+): Promise<PatientDetail> {
   const prisma = getPrisma()
+
+  if (input.estado !== undefined && !canManagePatientState(actor)) {
+    logger.warn('Patient estado update denied', {
+      actorId: actor.userId,
+      rol: actor.rol,
+      tipoEmpleado: actor.tipoEmpleado,
+      patientId: id,
+      requestedEstado: input.estado,
+    })
+    throw new PatientStateForbiddenError()
+  }
 
   const existing = await prisma.cliente.findUnique({ where: { id } })
   if (!existing) {
