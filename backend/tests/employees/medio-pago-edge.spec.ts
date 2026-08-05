@@ -111,7 +111,8 @@ test.describe('Medio de pago edges (jul-18)', () => {
       data: {
         ...baseEmployee('T2'),
         medioPagoTipo: 'NEQUI',
-        medioPagoNequi: '3001112233',
+        // qa-session-jul-24 R1: Nequi llave must be email or alphanumeric (letter+digit).
+        medioPagoNequi: 'LlaveXYZ789',
         bancoNombre: 'ShouldClear',
         bancoTipoCuenta: 'CORRIENTE',
         bancoNumeroCuenta: '999',
@@ -126,7 +127,7 @@ test.describe('Medio de pago edges (jul-18)', () => {
     });
     const e1 = (await get1.json()).data;
     expect(e1.medioPagoTipo).toBe('NEQUI');
-    expect(e1.medioPagoNequi).toBe('3001112233');
+    expect(e1.medioPagoNequi).toBe('LlaveXYZ789');
     expect(e1.bancoNombre ?? null).toBeNull();
     expect(e1.bancoTipoCuenta ?? null).toBeNull();
     expect(e1.bancoNumeroCuenta ?? null).toBeNull();
@@ -177,7 +178,8 @@ test.describe('Medio de pago edges (jul-18)', () => {
       data: {
         ...baseEmployee('T4'),
         medioPagoTipo: 'NEQUI',
-        medioPagoNequi: '3004445566',
+        // qa-session-jul-24 R1: valid alphanumeric llave.
+        medioPagoNequi: 'LlaveXYZ444',
       },
     });
     expect(create.status()).toBe(201);

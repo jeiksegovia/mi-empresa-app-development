@@ -17,6 +17,7 @@ interface EmployeeSummary {
   fechaRegistro: string
   cargo: string | null
   ubicacion: string | null
+  bloqueado: boolean
 }
 
 interface EmployeeListResponse {
@@ -227,7 +228,15 @@ onMounted(async () => {
                   size="normal"
                 />
                 <div>
-                  <p class="font-medium text-[var(--text-color)]">{{ fullName(data) }}</p>
+                  <p class="font-medium text-[var(--text-color)] flex items-center gap-1.5">
+                    {{ fullName(data) }}
+                    <!-- qa-jul-31 followup: bloqueador indicator -->
+                    <i
+                      v-if="data.bloqueado"
+                      class="pi pi-lock text-amber-600 text-xs"
+                      data-testid="empleado-lock-icon"
+                      title="Bloqueado: solo un administrador puede editarlo" />
+                  </p>
                   <p class="text-xs text-[var(--text-color-secondary)]">{{ data.email || '—' }}</p>
                 </div>
               </div>

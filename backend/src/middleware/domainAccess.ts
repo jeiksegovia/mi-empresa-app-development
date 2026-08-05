@@ -173,3 +173,54 @@ export function requireDomain(domain: Domain) {
     }
   }
 }
+
+/**
+ * requireEmployeeUnlocked — qa-session-jul-31 followup (aug-04): admin "bloqueador".
+ *
+ * When an empleado is `bloqueado`, only ADMIN may mutate it (its record, medio de
+ * pago, and contratos). Every other role gets 403 EMPLOYEE_LOCKED. Apply this
+ * per-route on the mutating endpoints reachable by non-admins (PUT/DELETE
+ * /employees/:id and the contratos create/edit/delete). Runs AFTER
+ * requireDomain, so the caller already passed the domain matrix.
+ *
+ * Security/efficiency: ADMIN bypasses before any DB hit; otherwise exactly one
+ * `SELECT bloqueado` per request. The lock state is read from the DB (never the
+ * client), and the `bloqueado*` columns are absent from the create/update Zod
+ * schemas, so there is no request path for a non-admin to flip the lock.
+ *
+ * @param param name of the route param carrying the empleado id (default 'id').
+ */
+export function requireEmployeeUnlocked(param: string = 'id') {
+  return async (req: AuthedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      // ADMIN always allowed to edit, even when locked (they own lock/unlock).
+      if (req.user?.rol === 'ADMIN') {
+        next()
+        return
+      }
+      const empleadoId = Number.parseInt(String(req.params[param]), 10)
+      if (Number.isNaN(empleadoId)) {
+        // Malformed id — let the route handler return its own 400.
+        next()
+        return
+      }
+      const prisma = getPrisma()
+      const empleado = await prisma.empleado.findUnique({
+        where: { id: empleadoId },
+        select: { bloqueado: true },
+      })
+      if (empleado?.bloqueado) {
+        res.status(403).json({
+          success: false,
+          message: 'Empleado bloqueado: solo un administrador puede editarlo',
+          code: 'EMPLOYEE_LOCKED',
+        })
+        return
+      }
+      next()
+    } catch (error) {
+      logger.error('requireEmployeeUnlocked error:', error)
+      res.status(500).json({ success: false, message: 'Lock check failed' })
+    }
+  }
+}

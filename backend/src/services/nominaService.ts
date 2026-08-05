@@ -13,8 +13,10 @@ export interface ContratoInput {
   // a Zod `.optional()` upstream has been removed in nomina.routes.ts.
   cargoId: number
   activo?: boolean
-  // nomina-asistencia-jul-18: required on CREATE at route layer
+  // nomina-asistencia-jul-18: required on CREATE for OPS at route layer
   valorJornada?: number | null
+  // qa-session-jul-24 R7: required on CREATE for non-OPS at route layer
+  valorMensual?: number | null
 }
 
 export interface NominaPeriodoArchivoInput {
@@ -35,6 +37,10 @@ export interface NominaPeriodoInput {
   subtotalCalculado?: number
   aportesSociales?: number
   totalPagado?: number
+  // qa-session-jul-24 R7: optional override for non-OPS base. Per-period
+  // `valorMensual` is NOT persisted on nomina_periodos (snapshot per D2);
+  // the contract's `valorMensual` lives on the Contrato row.
+  valorMensual?: number | null
 }
 
 const APORTES_ALLOWED: ReadonlySet<string> = new Set(['TERMINO_FIJO', 'TERMINO_INDEFINIDO'])
@@ -62,17 +68,33 @@ export async function createContrato(
   if (input.tipoContrato !== 'TERMINO_INDEFINIDO' && !input.fechaFin) {
     throw Object.assign(new Error('fechaFin es requerido para este tipo de contrato'), { status: 400 })
   }
-  if (input.valorJornada === undefined || input.valorJornada === null) {
-    throw Object.assign(new Error('valorJornada es requerido'), {
-      status: 400,
-      field: 'valorJornada',
-    })
-  }
-  if (typeof input.valorJornada === 'number' && input.valorJornada < 0) {
-    throw Object.assign(new Error('valorJornada debe ser ≥ 0'), {
-      status: 400,
-      field: 'valorJornada',
-    })
+  // qa-session-jul-24 R7: branch required-field on tipoContrato.
+  if (input.tipoContrato === 'OPS') {
+    if (input.valorJornada === undefined || input.valorJornada === null) {
+      throw Object.assign(new Error('valorJornada es requerido para OPS'), {
+        status: 400,
+        field: 'valorJornada',
+      })
+    }
+    if (typeof input.valorJornada === 'number' && input.valorJornada < 0) {
+      throw Object.assign(new Error('valorJornada debe ser ≥ 0'), {
+        status: 400,
+        field: 'valorJornada',
+      })
+    }
+  } else {
+    if (input.valorMensual === undefined || input.valorMensual === null) {
+      throw Object.assign(
+        new Error(`valorMensual es requerido para ${input.tipoContrato}`),
+        { status: 400, field: 'valorMensual' },
+      )
+    }
+    if (typeof input.valorMensual === 'number' && input.valorMensual < 0) {
+      throw Object.assign(new Error('valorMensual debe ser ≥ 0'), {
+        status: 400,
+        field: 'valorMensual',
+      })
+    }
   }
 
   const wantsActivo = input.activo !== false // default true
@@ -92,7 +114,8 @@ export async function createContrato(
         archivoUrl: input.archivoUrl ?? null,
         archivoFirmadoUrl: input.archivoFirmadoUrl ?? null,
         cargoId: input.cargoId,
-        valorJornada: input.valorJornada,
+        valorJornada: input.tipoContrato === 'OPS' ? input.valorJornada : null,
+        valorMensual: input.tipoContrato === 'OPS' ? null : input.valorMensual,
         activo: wantsActivo,
       },
       include: { cargo: true },
@@ -130,8 +153,16 @@ export async function updateContrato(
       cargoId: input.cargoId,
       activo: wantsActivo,
     }
-    if (input.valorJornada !== undefined) {
-      data.valorJornada = input.valorJornada
+    if (input.tipoContrato === 'OPS') {
+      if (input.valorJornada !== undefined) {
+        data.valorJornada = input.valorJornada
+      }
+      data.valorMensual = null
+    } else {
+      if (input.valorMensual !== undefined) {
+        data.valorMensual = input.valorMensual
+      }
+      data.valorJornada = null
     }
     return tx.contrato.update({
       where: { id: cid },
@@ -232,9 +263,14 @@ export async function getNominaMonth(
   return empleados.map((e: any) => {
     const mediasJornadas = mediasByEmp.get(e.id) ?? 0
     const contrato = e.contratos[0] ?? null
+    const tipoContrato = contrato?.tipoContrato ?? null
+    const isNonOps = tipoContrato && tipoContrato !== 'OPS'
     const valorJornada = contrato ? toNum(contrato.valorJornada) : null
+    const valorMensual = contrato ? toNum(contrato.valorMensual) : null
+    // qa-session-jul-24 R7: branch sugerido on tipoContrato.
     const subtotal =
-      valorJornada !== null ? mediasJornadas * valorJornada : 0
+      isNonOps ? null : (valorJornada !== null ? mediasJornadas * valorJornada : 0)
+    const totalPagado = isNonOps ? valorMensual ?? 0 : subtotal
     return {
       empleado: {
         id: e.id,
@@ -255,11 +291,12 @@ export async function getNominaMonth(
         horas: mediasJornadas * 4,
       },
       sugerido: {
-        mediasJornadas,
-        valorJornada,
+        mediasJornadas: isNonOps ? null : mediasJornadas,
+        valorJornada: isNonOps ? null : valorJornada,
+        valorMensual: isNonOps ? valorMensual : null,
         subtotalCalculado: subtotal,
         aportesSociales: 0,
-        totalPagado: subtotal,
+        totalPagado,
       },
     }
   })
@@ -275,11 +312,20 @@ export async function getNominaPeriodo(id: number) {
 
 /**
  * Resolve calc fields for create/update.
+ * qa-session-jul-24 R7: branch on tipoContrato:
+ *   - OPS: existing rule (mediasJornadas * valorJornada - aportes).
+ *   - non-OPS (OBRA_O_LABOR / TERMINO_FIJO / TERMINO_INDEFINIDO):
+ *       totalPagado = valorMensual - aportesSociales.
+ *       mediasJornadas/subtotal snapshot may be null (acceptable per D2).
+ *
+ * Backward compat: existing non-OPS contracts with null valorMensual → treat
+ * as 0 so we don't crash; the snapshot remains computable.
  */
 async function resolveCalcFields(
   input: Partial<NominaPeriodoInput> & { empleadoId: number; periodo: string },
   tipoContrato: string,
   contratoValorJornada: unknown,
+  contratoValorMensual: unknown = null,
 ): Promise<{
   mediasJornadas: number | null
   valorJornada: number | null
@@ -287,6 +333,7 @@ async function resolveCalcFields(
   aportesSociales: number
   totalPagado: number | null
   salario: number | null
+  valorMensual: number | null
 }> {
   const aportes = input.aportesSociales ?? 0
   if (aportes > 0 && !APORTES_ALLOWED.has(tipoContrato)) {
@@ -296,9 +343,14 @@ async function resolveCalcFields(
     )
   }
 
+  const isNonOps = tipoContrato !== 'OPS'
+
   let medias: number | null
   if (input.mediasJornadas !== undefined && input.mediasJornadas !== null) {
     medias = input.mediasJornadas
+  } else if (isNonOps) {
+    // non-OPS: snapshot is null (asistencia is per-jornada, not monthly).
+    medias = null
   } else {
     medias = await sumMediasForEmpleadoPeriodo(input.empleadoId, input.periodo)
   }
@@ -306,13 +358,23 @@ async function resolveCalcFields(
   let valor: number | null
   if (input.valorJornada !== undefined && input.valorJornada !== null) {
     valor = input.valorJornada
+  } else if (isNonOps) {
+    valor = null
   } else {
     valor = toNum(contratoValorJornada)
   }
 
+  const valorMensual: number | null =
+    input.valorMensual !== undefined && input.valorMensual !== null
+      ? input.valorMensual
+      : toNum(contratoValorMensual)
+
   let subtotal: number | null
   if (input.subtotalCalculado !== undefined && input.subtotalCalculado !== null) {
     subtotal = input.subtotalCalculado
+  } else if (isNonOps) {
+    // Per contract §4: mediasJornadas/subtotalCalculado snapshot is null for non-OPS.
+    subtotal = null
   } else if (medias !== null && valor !== null) {
     subtotal = medias * valor
   } else {
@@ -322,6 +384,9 @@ async function resolveCalcFields(
   let total: number | null
   if (input.totalPagado !== undefined && input.totalPagado !== null) {
     total = input.totalPagado
+  } else if (isNonOps) {
+    // non-OPS: base = valorMensual (treat null as 0 to avoid crash on legacy rows).
+    total = (valorMensual ?? 0) + aportes
   } else {
     total = (subtotal ?? 0) + aportes
   }
@@ -341,6 +406,7 @@ async function resolveCalcFields(
     aportesSociales: aportes,
     totalPagado: total,
     salario,
+    valorMensual,
   }
 }
 
@@ -374,7 +440,7 @@ export async function createNominaPeriodo(input: NominaPeriodoInput, userId: num
         }
       }
 
-      const calc = await resolveCalcFields(input, contrato.tipoContrato, contrato.valorJornada)
+      const calc = await resolveCalcFields(input, contrato.tipoContrato, contrato.valorJornada, contrato.valorMensual)
 
       const row = await tx.nominaPeriodo.create({
         data: {
@@ -496,6 +562,7 @@ export async function updateNominaPeriodo(id: number, input: Partial<NominaPerio
         mergedInput,
         existing.tipoContrato,
         existing.contrato?.valorJornada ?? existing.valorJornada,
+        existing.contrato?.valorMensual ?? null,
       )
       data.mediasJornadas = calc.mediasJornadas
       data.valorJornada = calc.valorJornada

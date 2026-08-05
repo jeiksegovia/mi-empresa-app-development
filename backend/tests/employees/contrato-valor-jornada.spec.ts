@@ -1,8 +1,12 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * LOCAL QA — nomina-asistencia-jul-18: valorJornada required on contrato CREATE.
- * Self-seeds employee + cargo when seed is sparse.
+ * LOCAL QA — qa-session-jul-24 R7 contract.
+ * - OPS requires valorJornada.
+ * - OBRA_O_LABOR / TERMINO_FIJO / TERMINO_INDEFINIDO requires valorMensual.
+ *
+ * (Updated from jul-18 contract that uniformly required valorJornada; per
+ * R7 the required field is now branched on tipoContrato.)
  */
 
 const API_BASE = process.env.TEST_API_URL || 'http://localhost:3101';
@@ -88,7 +92,44 @@ test.describe('Contrato valorJornada (jul-18)', () => {
     }).catch(() => {});
   });
 
-  test('POST contrato without valorJornada → 400 field valorJornada', async ({ request }) => {
+  test('POST contrato OPS without valorJornada → 400 field=valorJornada', async ({ request }) => {
+    expect(employeeId && cargoId).toBeTruthy();
+    const resp = await request.post(`${API_BASE}/api/v1/nomina/employees/${employeeId}/contratos`, {
+      headers: { Cookie: adminCookie },
+      data: {
+        tipoContrato: 'OPS',
+        fechaInicio: '2026-01-01',
+        fechaFin: '2027-01-01',
+        cargoId,
+      },
+    });
+    expect(resp.status()).toBe(400);
+    const body = await resp.json();
+    expect(body.success).toBe(false);
+    expect(body.field).toBe('valorJornada');
+  });
+
+  test('POST contrato OPS with valorJornada → 201', async ({ request }) => {
+    expect(employeeId && cargoId).toBeTruthy();
+    const resp = await request.post(`${API_BASE}/api/v1/nomina/employees/${employeeId}/contratos`, {
+      headers: { Cookie: adminCookie },
+      data: {
+        tipoContrato: 'OPS',
+        fechaInicio: '2026-01-01',
+        fechaFin: '2027-01-01',
+        cargoId,
+        valorJornada: 45000,
+        activo: true,
+      },
+    });
+    expect(resp.status()).toBe(201);
+    const body = await resp.json();
+    expect(body.success).toBe(true);
+    expect(Number(body.data.valorJornada)).toBe(45000);
+    createdContratoIds.push(body.data.id);
+  });
+
+  test('POST contrato TERMINO_INDEFINIDO without valorMensual → 400 field=valorMensual', async ({ request }) => {
     expect(employeeId && cargoId).toBeTruthy();
     const resp = await request.post(`${API_BASE}/api/v1/nomina/employees/${employeeId}/contratos`, {
       headers: { Cookie: adminCookie },
@@ -101,10 +142,10 @@ test.describe('Contrato valorJornada (jul-18)', () => {
     expect(resp.status()).toBe(400);
     const body = await resp.json();
     expect(body.success).toBe(false);
-    expect(body.field).toBe('valorJornada');
+    expect(body.field).toBe('valorMensual');
   });
 
-  test('POST contrato with valorJornada → 201', async ({ request }) => {
+  test('POST contrato TERMINO_INDEFINIDO with valorMensual → 201', async ({ request }) => {
     expect(employeeId && cargoId).toBeTruthy();
     const resp = await request.post(`${API_BASE}/api/v1/nomina/employees/${employeeId}/contratos`, {
       headers: { Cookie: adminCookie },
@@ -112,14 +153,15 @@ test.describe('Contrato valorJornada (jul-18)', () => {
         tipoContrato: 'TERMINO_INDEFINIDO',
         fechaInicio: '2026-01-01',
         cargoId,
-        valorJornada: 45000,
+        valorMensual: 1500000,
         activo: true,
       },
     });
     expect(resp.status()).toBe(201);
     const body = await resp.json();
     expect(body.success).toBe(true);
-    expect(Number(body.data.valorJornada)).toBe(45000);
+    expect(Number(body.data.valorMensual)).toBe(1500000);
+    expect(body.data.valorJornada ?? null).toBeNull();
     createdContratoIds.push(body.data.id);
   });
 });

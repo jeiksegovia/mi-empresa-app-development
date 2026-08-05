@@ -52,6 +52,22 @@ interface EmployeeDetail {
   fechaRegistro: string
   // D3: nullable VARCHAR(500) for the identification document.
   documentoIdentificacionUrl: string | null
+  // qa-session-jul-24 R1: payment-method fields surfaced on the
+  // Información Personal tab via a read-only preview card.
+  medioPagoTipo: 'NEQUI' | 'TRANSFERENCIA_BANCARIA' | 'EFECTIVO' | null
+  medioPagoNequi: string | null
+  bancoNombre: string | null
+  bancoTipoCuenta: 'AHORRO' | 'CORRIENTE' | null
+  bancoNumeroCuenta: string | null
+  // qa-session-jul-31 R3: social-security free-text fields surfaced on
+  // the Información Personal tab alongside the Datos Personales card.
+  eps: string | null
+  fondoPensiones: string | null
+  arl: string | null
+  // qa-session-jul-31 followup (aug-04): admin "bloqueador" lock state.
+  bloqueado: boolean
+  bloqueadoPor: number | null
+  bloqueadoEn: string | null
   nucleoFamiliar: FamilyMember[]
   contactosEmergencia: EmergencyContact[]
   cargos: Cargo[]
@@ -73,6 +89,36 @@ const employee = ref<EmployeeDetail | null>(null)
 const loading = ref(true)
 const error = ref('')
 const activeTab = ref(0)
+
+// qa-session-jul-31 followup (aug-04): admin "bloqueador" lock toggle.
+// Only ADMIN sees the control; backend re-enforces (requireRole ADMIN).
+const lockBusy = ref(false)
+async function toggleLock() {
+  if (!employee.value || lockBusy.value) return
+  const action = employee.value.bloqueado ? 'unlock' : 'lock'
+  lockBusy.value = true
+  try {
+    const res = await apiFetch<{ success: boolean; data: EmployeeDetail }>(
+      `/employees/${employee.value.id}/${action}`,
+      { method: 'PUT' },
+    )
+    employee.value.bloqueado = res.data.bloqueado
+    employee.value.bloqueadoPor = res.data.bloqueadoPor
+    employee.value.bloqueadoEn = res.data.bloqueadoEn
+    toast.add({
+      severity: 'success',
+      summary: res.data.bloqueado ? 'Empleado bloqueado' : 'Empleado desbloqueado',
+      detail: res.data.bloqueado
+        ? 'Solo un administrador puede editarlo mientras esté bloqueado.'
+        : 'Los demás roles pueden editarlo nuevamente.',
+      life: 3500,
+    })
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar el bloqueo.', life: 3500 })
+  } finally {
+    lockBusy.value = false
+  }
+}
 
 const tabs = [
   { label: 'Información Personal', icon: 'pi pi-user' },
@@ -160,6 +206,38 @@ const currentCargo = computed(() => {
     (a, b) => new Date(b.fechaIngreso).getTime() - new Date(a.fechaIngreso).getTime()
   )[0]
 })
+
+// qa-session-jul-24 R1 (UI preview): normalize the payment-method fields
+// into a single shape consumed by the preview card on the Información
+// Personal tab. Returns null when nothing is configured (renders empty
+// state). Bank account number is masked to last 4 digits.
+type MedioPagoPreview =
+  | { kind: 'NEQUI'; llave: string }
+  | { kind: 'TRANSFERENCIA_BANCARIA'; banco: string; tipoCuenta: string; masked: string }
+  | { kind: 'EFECTIVO' }
+
+const medioPagoPreview = computed<MedioPagoPreview | null>(() => {
+  const e = employee.value
+  if (!e || !e.medioPagoTipo) return null
+  if (e.medioPagoTipo === 'NEQUI') {
+    return { kind: 'NEQUI', llave: e.medioPagoNequi ?? '' }
+  }
+  if (e.medioPagoTipo === 'TRANSFERENCIA_BANCARIA') {
+    const last4 = (e.bancoNumeroCuenta ?? '').replace(/\D/g, '').slice(-4) || '••••'
+    return {
+      kind: 'TRANSFERENCIA_BANCARIA',
+      banco: e.bancoNombre ?? '',
+      tipoCuenta: e.bancoTipoCuenta ?? '',
+      masked: last4,
+    }
+  }
+  return { kind: 'EFECTIVO' }
+})
+
+const bancoTipoCuentaLabels: Record<'AHORRO' | 'CORRIENTE', string> = {
+  AHORRO: 'Ahorro',
+  CORRIENTE: 'Corriente',
+}
 
 onMounted(async () => {
   await fetchEmployee()
@@ -441,6 +519,15 @@ function openNovedadDetail(n: Novedad) {
             @click="navigateTo('/empleados')" />
           <Button label="Historial" icon="pi pi-history" severity="secondary"
             @click="navigateTo(`/empleados/${employee.id}/historial`)" />
+          <!-- qa-jul-31 followup: admin bloqueador toggle -->
+          <Button
+            v-if="authStore.isAdmin"
+            :label="employee.bloqueado ? 'Desbloquear' : 'Bloquear'"
+            :icon="employee.bloqueado ? 'pi pi-lock-open' : 'pi pi-lock'"
+            :severity="employee.bloqueado ? 'warn' : 'secondary'"
+            :loading="lockBusy"
+            data-testid="empleado-lock-toggle"
+            @click="toggleLock" />
           <Button label="Editar" icon="pi pi-pencil" severity="info"
             @click="navigateTo(`/empleados/${employee.id}/editar`)" />
         </template>
@@ -459,6 +546,14 @@ function openNovedadDetail(n: Novedad) {
                   {{ employee.nombre }} {{ employee.apellido }}
                 </h2>
                 <AppStatusBadge :status="employee.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'" />
+                <!-- qa-jul-31 followup: bloqueador indicator (all roles see it) -->
+                <span
+                  v-if="employee.bloqueado"
+                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300"
+                  data-testid="empleado-lock-badge"
+                  title="Bloqueado: solo un administrador puede editarlo">
+                  <i class="pi pi-lock text-[0.7rem]" /> Bloqueado
+                </span>
               </div>
               <p v-if="currentCargo" class="text-[var(--text-color-secondary)] mb-2">
                 {{ currentCargo.nombreCargo }}
@@ -532,6 +627,106 @@ function openNovedadDetail(n: Novedad) {
               <div class="sm:col-span-2 lg:col-span-3">
                 <p class="text-xs text-[var(--text-color-secondary)] mb-1">Dirección</p>
                 <p class="font-medium">{{ employee.direccion || '—' }}</p></div>
+            </div>
+          </template>
+        </Card>
+
+        <!-- qa-session-jul-31 R3: Seguridad Social card. Surfaces the
+             optional free-text EPS / Fondo de pensiones / ARL fields.
+             Hidden entirely when no field is set so the detail stays
+             compact for the common case. -->
+        <Card
+          v-if="employee.eps || employee.fondoPensiones || employee.arl"
+          data-testid="seguridad-social-card"
+        >
+          <template #header>
+            <div class="px-6 pt-5 pb-0">
+              <h3 class="text-base font-semibold text-[var(--text-color)] flex items-center gap-2">
+                <i class="pi pi-shield text-violet-500" /> Seguridad Social
+              </h3>
+            </div>
+          </template>
+          <template #content>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-4">
+              <div>
+                <p class="text-xs text-[var(--text-color-secondary)] mb-1">EPS</p>
+                <p class="font-medium" data-testid="seguridad-social-eps">{{ employee.eps || '—' }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-[var(--text-color-secondary)] mb-1">Fondo de pensiones</p>
+                <p class="font-medium" data-testid="seguridad-social-fondoPensiones">{{ employee.fondoPensiones || '—' }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-[var(--text-color-secondary)] mb-1">ARL</p>
+                <p class="font-medium" data-testid="seguridad-social-arl">{{ employee.arl || '—' }}</p>
+              </div>
+            </div>
+          </template>
+        </Card>
+
+        <!-- qa-session-jul-24 R1: read-only preview of the configured
+             payment method. Replaces the empty "Sin medio de pago"
+             placeholder with a friendly summary when configured. -->
+        <Card data-testid="medio-pago-preview-card">
+          <template #header>
+            <div class="px-6 pt-5 pb-0">
+              <h3 class="text-base font-semibold text-[var(--text-color)] flex items-center gap-2">
+                <i class="pi pi-wallet text-violet-500" /> Medio de Pago de Nómina
+              </h3>
+            </div>
+          </template>
+          <template #content>
+            <div
+              v-if="!medioPagoPreview"
+              class="text-center py-6 text-[var(--text-color-secondary)] text-sm"
+              data-testid="medio-pago-preview-empty"
+            >
+              <i class="pi pi-wallet text-3xl mb-2 block opacity-40" />
+              Sin medio de pago configurado.
+            </div>
+            <div
+              v-else-if="medioPagoPreview.kind === 'NEQUI'"
+              class="flex flex-col gap-1"
+              data-testid="medio-pago-preview-nequi"
+            >
+              <p class="text-xs text-[var(--text-color-secondary)]">Tipo</p>
+              <!-- qa-session-jul-31 R1: surface the Bre-B alias. Stored
+                   enum value stays `NEQUI`; this is display-only. -->
+              <p class="font-medium">Nequi/Bre-B</p>
+              <p class="text-xs text-[var(--text-color-secondary)] mt-2">Llave</p>
+              <p class="font-medium font-mono">{{ medioPagoPreview.llave || '—' }}</p>
+            </div>
+            <div
+              v-else-if="medioPagoPreview.kind === 'TRANSFERENCIA_BANCARIA'"
+              class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-3"
+              data-testid="medio-pago-preview-transferencia"
+            >
+              <div>
+                <p class="text-xs text-[var(--text-color-secondary)] mb-1">Tipo</p>
+                <p class="font-medium">Transferencia bancaria</p>
+              </div>
+              <div>
+                <p class="text-xs text-[var(--text-color-secondary)] mb-1">Banco</p>
+                <p class="font-medium">{{ medioPagoPreview.banco || '—' }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-[var(--text-color-secondary)] mb-1">Tipo de cuenta</p>
+                <p class="font-medium">
+                  {{ medioPagoPreview.tipoCuenta ? bancoTipoCuentaLabels[medioPagoPreview.tipoCuenta] : '—' }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-[var(--text-color-secondary)] mb-1">N° de cuenta</p>
+                <p class="font-medium font-mono">•••• {{ medioPagoPreview.masked }}</p>
+              </div>
+            </div>
+            <div
+              v-else
+              class="flex items-center gap-2"
+              data-testid="medio-pago-preview-efectivo"
+            >
+              <i class="pi pi-money-bill text-violet-500" />
+              <p class="font-medium">Efectivo</p>
             </div>
           </template>
         </Card>

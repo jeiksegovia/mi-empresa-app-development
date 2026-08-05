@@ -1,7 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * LOCAL QA — nomina-asistencia-jul-18: nómina enrichment + calc + aportes rules.
+ * LOCAL QA — qa-session-jul-24 R7: nómina enrichment + calc + aportes rules.
+ * Branches on tipoContrato:
+ *   - OPS:       total = mediasJornadas * valorJornada + aportes
+ *   - non-OPS:   total = valorMensual + aportes (snapshot null per D2)
  * Self-seeds FIJO + OPS employees with contratos when seed is sparse.
  * Uses far-future periods to avoid unique collisions.
  */
@@ -47,7 +50,7 @@ async function ensureCargo(request: any): Promise<number> {
 async function createEmployeeWithContrato(
   request: any,
   tipoContrato: 'TERMINO_FIJO' | 'OPS',
-  valorJornada: number,
+  valorJornadaOrMensual: number = 50000,
 ): Promise<number> {
   const suffix = `${tipoContrato.slice(0, 3)}${Date.now().toString().slice(-6)}`;
   const emp = await request.post(`${API_BASE}/api/v1/employees`, {
@@ -65,21 +68,20 @@ async function createEmployeeWithContrato(
   const id = (await emp.json()).data.id as number;
   createdEmployeeIds.push(id);
 
+  // qa-session-jul-24 R7: branch required-field on tipoContrato.
   const contratoBody: any = {
     tipoContrato,
     fechaInicio: '2026-01-01',
     cargoId,
-    valorJornada,
     activo: true,
-  };
-  if (tipoContrato !== 'TERMINO_INDEFINIDO' as any) {
-    contratoBody.fechaFin = '2027-01-01';
-  }
-  if (tipoContrato === 'TERMINO_FIJO') {
-    contratoBody.fechaFin = '2027-01-01';
   }
   if (tipoContrato === 'OPS') {
-    contratoBody.fechaFin = '2026-12-31';
+    contratoBody.valorJornada = valorJornadaOrMensual
+    contratoBody.fechaFin = '2026-12-31'
+  } else {
+    // TERMINO_FIJO: requires valorMensual
+    contratoBody.valorMensual = valorJornadaOrMensual
+    contratoBody.fechaFin = '2027-01-01'
   }
 
   const c = await request.post(`${API_BASE}/api/v1/nomina/employees/${id}/contratos`, {
@@ -159,7 +161,7 @@ test.describe('Nómina calc + asistencia enrichment (jul-18)', () => {
     }
   });
 
-  test('POST periodos FIJO with aportes → 201 + dual-write salario=totalPagado', async ({ request }) => {
+  test('POST periodos FIJO with aportes → 201 + totalPagado = valorMensual + aportes', async ({ request }) => {
     expect(fijoEmpleadoId).toBeTruthy();
     // Clean residue for period
     const list = await request.get(`${API_BASE}/api/v1/nomina?periodo=${PERIODO}`, {
@@ -173,25 +175,27 @@ test.describe('Nómina calc + asistencia enrichment (jul-18)', () => {
       });
     }
 
+    // qa-session-jul-24 R7: non-OPS base is valorMensual from the contrato.
+    // fijoEmpleadoId was created in beforeAll with valorMensual=50000 (jul-18 era)
+    // — we don't rely on that, just override with valorMensual=500000 explicitly.
     const resp = await request.post(`${API_BASE}/api/v1/nomina/periodos`, {
       headers: { Cookie: adminCookie },
       data: {
         empleadoId: fijoEmpleadoId,
         periodo: PERIODO,
-        mediasJornadas: 10,
-        valorJornada: 50000,
+        valorMensual: 500000,
         aportesSociales: 100000,
       },
     });
     expect(resp.status()).toBe(201);
     const body = await resp.json();
     createdPeriodoIds.push(body.data.id);
-    expect(Number(body.data.mediasJornadas)).toBe(10);
-    expect(Number(body.data.valorJornada)).toBe(50000);
-    expect(Number(body.data.subtotalCalculado)).toBe(500000);
     expect(Number(body.data.aportesSociales)).toBe(100000);
     expect(Number(body.data.totalPagado)).toBe(600000);
     expect(Number(body.data.salario)).toBe(600000);
+    // Snapshot null for non-OPS (D2)
+    expect(body.data.mediasJornadas ?? null).toBeNull();
+    expect(body.data.subtotalCalculado ?? null).toBeNull();
   });
 
   test('POST periodos OPS with aportes > 0 → 400 field aportesSociales', async ({ request }) => {

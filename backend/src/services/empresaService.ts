@@ -28,18 +28,26 @@ export interface CreateEmpresaInput {
   email?: string
 }
 
-// W6: single-empresa system — must match the 7 seeds from the
-// jul9_cargo_empresa migration so a fresh DB has the same catalog
-// after a bootstrap create. Keep this list in lockstep with the
-// migration SQL (`backend/prisma/migrations/20260710024928_jul9_cargo_empresa`).
+// W6: single-empresa system — must match the 10 cargo seeds from the
+// qa_jul24_cargos_efectivo_valormensual migration so a fresh DB has the
+// same catalog after a bootstrap create. Keep this list in lockstep with
+// the migration SQL (under backend/prisma/migrations/<ts>_qa_jul24_*).
+// qa-session-jul-24 R4 (decision D1): delete+recreate to target list.
+// Base (5): Administrador, Auxiliar de Enfermería, Gerontólogo/Gerontóloga,
+//           Servicios Generales, Temporal.
+// Profesional (5): Terapeuta Ocupacional, Fisioterapeuta, Psicólogo,
+//                  Educador Físico, Artes y Manualidades.
 export const DEFAULT_CARGOS = [
-  'Fisioterapeuta',
-  'Terapeuta Ocupacional',
-  'Educador Físico',
-  'Manualidades',
+  'Administrador',
   'Auxiliar de Enfermería',
-  'Auxiliar de Servicios Generales',
-  'Otro',
+  'Gerontólogo/Gerontóloga',
+  'Servicios Generales',
+  'Temporal',
+  'Terapeuta Ocupacional',
+  'Fisioterapeuta',
+  'Psicólogo',
+  'Educador Físico',
+  'Artes y Manualidades',
 ] as const
 
 export async function getEmpresa(): Promise<EmpresaDetail | null> {

@@ -29,7 +29,7 @@ const prisma = new PrismaClient({ adapter });
 const EXPECTED: Array<{ codigo: string; sectionCount: number; version: number }> = [
   { codigo: 'BARTHEL', sectionCount: 1, version: 1 },
   { codigo: 'MINI_MENTAL', sectionCount: 11, version: 1 },
-  { codigo: 'TINETTI', sectionCount: 2, version: 2 },
+  { codigo: 'TINETTI', sectionCount: 2, version: 3 },
   { codigo: 'YESAVAGE', sectionCount: 1, version: 1 },
   { codigo: 'MNA_CUADRO', sectionCount: 3, version: 2 },
   { codigo: 'FICHA_NUTRICIONAL', sectionCount: 4, version: 1 },

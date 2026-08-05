@@ -41,20 +41,49 @@ const step1 = reactive({
   documentoIdentificacionUrl: '',
   documentoFile: null as File | null,
   documentoFilename: '',
-  // nomina-asistencia-jul-18: medio de pago de nómina (optional on create).
-  // '' = Sin definir (null on wire).
-  medioPagoTipo: '' as '' | 'NEQUI' | 'TRANSFERENCIA_BANCARIA',
+  // qa-session-jul-24 R1: medio de pago de nómina (optional on create).
+  // '' = Sin definir (null on wire). EFECTIVO added this migration.
+  medioPagoTipo: '' as '' | 'NEQUI' | 'TRANSFERENCIA_BANCARIA' | 'EFECTIVO',
   medioPagoNequi: '',
   bancoNombre: '',
   bancoTipoCuenta: '' as '' | 'AHORRO' | 'CORRIENTE',
   bancoNumeroCuenta: '',
+  // qa-session-jul-31 R3: free-text optional social-security fields.
+  // No catalog; persisted as VARCHAR(100) on empleados.eps /
+  // empleados.fondo_pensiones / empleados.arl. Omitted from payload
+  // when blank (submit() guard).
+  eps: '',
+  fondoPensiones: '',
+  arl: '',
 })
 const step1Errors = reactive<Record<string, string>>({})
 const medioPagoTipoOptions = [
   { label: 'Sin definir', value: '' },
-  { label: 'Nequi', value: 'NEQUI' },
+  // qa-session-jul-31 R1: display label updated to surface "Bre-B" (the
+  // second brand allowed under Nequi). Stored enum value stays `NEQUI`.
+  { label: 'Nequi/Bre-B', value: 'NEQUI' },
   { label: 'Transferencia bancaria', value: 'TRANSFERENCIA_BANCARIA' },
+  { label: 'Efectivo', value: 'EFECTIVO' },
 ]
+// R1 (qa-session-jul-24 §3): Nequi "llave" — email OR alphanumeric handle
+// with letters+digits, 6–25 chars. Pure numeric strings are rejected.
+const NEQUI_LLAVE_REGEX =
+  /^(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{6,25})$/
+function validateNequiLlave(): boolean {
+  // Only enforced when medioPagoTipo === 'NEQUI'. Empty value is caught by
+  // the per-medio required-field matrix (backend mirrors this).
+  if (step1.medioPagoTipo !== 'NEQUI') {
+    delete step1Errors.medioPagoNequi
+    return true
+  }
+  if (!NEQUI_LLAVE_REGEX.test(step1.medioPagoNequi.trim())) {
+    step1Errors.medioPagoNequi =
+      'Llave Nequi inválida: debe ser email o alfanumérica con letras y dígitos (6–25 chars).'
+    return false
+  }
+  delete step1Errors.medioPagoNequi
+  return true
+}
 const bancoTipoCuentaOptions = [
   { label: 'Ahorro', value: 'AHORRO' },
   { label: 'Corriente', value: 'CORRIENTE' },
@@ -91,6 +120,7 @@ function validateStep1() {
   if (!step1.numeroDocumento.trim()) step1Errors.numeroDocumento = 'Requerido'
   if (!step1.genero) step1Errors.genero = 'Requerido'
   if (!step1.fechaNacimiento) step1Errors.fechaNacimiento = 'Requerido'
+  validateNequiLlave()
   return Object.keys(step1Errors).length === 0
 }
 
@@ -120,14 +150,6 @@ function removeFamilyMember(i: number) {
 }
 
 // ─── Step 3 – Información Laboral ────────────────────────────────────────────
-interface CargoForm {
-  nombreCargo: string
-  ubicacion: string
-  fechaIngreso: string
-  fechaTerminacion: string
-  salario: number | null
-}
-
 interface EmergencyContactForm {
   nombre: string
   apellido: string
@@ -135,16 +157,7 @@ interface EmergencyContactForm {
   parentesco: string
 }
 
-const cargos = ref<CargoForm[]>([])
 const emergencyContacts = ref<EmergencyContactForm[]>([])
-
-function addCargo() {
-  cargos.value.push({ nombreCargo: '', ubicacion: '', fechaIngreso: '', fechaTerminacion: '', salario: null })
-}
-
-function removeCargo(i: number) {
-  cargos.value.splice(i, 1)
-}
 
 function addEmergencyContact() {
   emergencyContacts.value.push({ nombre: '', apellido: '', telefono: '', parentesco: '' })
@@ -295,8 +308,9 @@ async function submit() {
       payload.documentoIdentificacionUrl = step1.documentoIdentificacionUrl
     }
 
-    // nomina-asistencia-jul-18: optional medio de pago.
+    // qa-session-jul-24 R1: optional medio de pago.
     // Omit when Sin definir; when set, send tipo + conditional fields.
+    // EFECTIVO ships no extra fields (contract §2 per-medio matrix).
     if (step1.medioPagoTipo === 'NEQUI') {
       payload.medioPagoTipo = 'NEQUI'
       payload.medioPagoNequi = step1.medioPagoNequi.trim() || undefined
@@ -305,7 +319,16 @@ async function submit() {
       if (step1.bancoNombre.trim()) payload.bancoNombre = step1.bancoNombre.trim()
       if (step1.bancoTipoCuenta) payload.bancoTipoCuenta = step1.bancoTipoCuenta
       if (step1.bancoNumeroCuenta.trim()) payload.bancoNumeroCuenta = step1.bancoNumeroCuenta.trim()
+    } else if (step1.medioPagoTipo === 'EFECTIVO') {
+      payload.medioPagoTipo = 'EFECTIVO'
     }
+
+    // qa-session-jul-31 R3: EPS / Fondo de pensiones / ARL. All
+    // optional free-text; omit when blank so the BE sees an absent key
+    // and keeps the column null (matches contrato §2 update semantics).
+    if (step1.eps.trim()) payload.eps = step1.eps.trim()
+    if (step1.fondoPensiones.trim()) payload.fondoPensiones = step1.fondoPensiones.trim()
+    if (step1.arl.trim()) payload.arl = step1.arl.trim()
 
     const validFamily = familyMembers.value.filter((f) => f.nombre.trim() && f.apellido.trim() && f.fechaNacimiento && f.genero && f.parentesco)
     if (validFamily.length) {
@@ -318,17 +341,6 @@ async function submit() {
         genero: f.genero,
         parentesco: f.parentesco,
         telefono: f.telefono.trim() || undefined,
-      }))
-    }
-
-    const validCargos = cargos.value.filter((c) => c.nombreCargo.trim() && c.ubicacion.trim() && c.fechaIngreso)
-    if (validCargos.length) {
-      payload.cargos = validCargos.map((c) => ({
-        nombreCargo: c.nombreCargo.trim(),
-        ubicacion: c.ubicacion.trim(),
-        fechaIngreso: c.fechaIngreso,
-        fechaTerminacion: c.fechaTerminacion || undefined,
-        salario: c.salario != null ? c.salario : undefined,
       }))
     }
 
@@ -677,13 +689,21 @@ const tiposVehiculo = [
                   />
                 </div>
                 <div v-if="step1.medioPagoTipo === 'NEQUI'" class="flex flex-col gap-1">
-                  <label class="text-sm font-medium" for="medio-pago-nequi">Número Nequi</label>
+                  <label class="text-sm font-medium" for="medio-pago-nequi">
+                    Llave
+                    <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(email o alfanumérica 6–25)</span>
+                  </label>
                   <InputText
                     id="medio-pago-nequi"
                     v-model="step1.medioPagoNequi"
-                    placeholder="Número Nequi"
+                    placeholder="Ej: mi.llave@correo.com o LlaveABC123"
+                    :class="{ 'p-invalid': step1Errors.medioPagoNequi }"
                     data-testid="medio-pago-nequi"
+                    @blur="validateNequiLlave"
                   />
+                  <small v-if="step1Errors.medioPagoNequi" class="text-red-500" data-testid="medio-pago-nequi-error">
+                    {{ step1Errors.medioPagoNequi }}
+                  </small>
                 </div>
                 <template v-if="step1.medioPagoTipo === 'TRANSFERENCIA_BANCARIA'">
                   <div class="flex flex-col gap-1">
@@ -718,6 +738,52 @@ const tiposVehiculo = [
                     />
                   </div>
                 </template>
+              </div>
+            </div>
+
+            <!-- qa-session-jul-31 R3: social-security free-text fields.
+                 Belongs to Datos personales step (no new wizard step).
+                 Pattern mirrors bancoNombre: optional, max length
+                 enforced by BE Zod (100). -->
+            <div
+              class="flex flex-col gap-3 sm:col-span-2 lg:col-span-3 border-t border-[var(--surface-border)] pt-4 mt-1"
+              data-testid="seguridad-social-section"
+            >
+              <h4 class="text-sm font-semibold flex items-center gap-2 text-[var(--text-color)]">
+                <i class="pi pi-shield text-violet-500" /> Seguridad Social
+                <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
+              </h4>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="flex flex-col gap-1">
+                  <label class="text-sm font-medium" for="eps">EPS</label>
+                  <InputText
+                    id="eps"
+                    v-model="step1.eps"
+                    placeholder="Ej: Sura"
+                    maxlength="100"
+                    data-testid="eps-input"
+                  />
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="text-sm font-medium" for="fondoPensiones">Fondo de pensiones</label>
+                  <InputText
+                    id="fondoPensiones"
+                    v-model="step1.fondoPensiones"
+                    placeholder="Ej: Porvenir"
+                    maxlength="100"
+                    data-testid="fondoPensiones-input"
+                  />
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="text-sm font-medium" for="arl">ARL</label>
+                  <InputText
+                    id="arl"
+                    v-model="step1.arl"
+                    placeholder="Ej: Positiva"
+                    maxlength="100"
+                    data-testid="arl-input"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -794,69 +860,11 @@ const tiposVehiculo = [
     </div>
 
     <!-- ───────────────────── STEP 3: Información Laboral ────────────────────── -->
+    <!-- qa-session-jul-24 R4 (UI only): the per-employee "Cargo en la Empresa"
+         block was removed — it duplicated Experiencia Laboral in the wizard
+         flow and is now owned by the empresa-scoped cargo catalog. The
+         backend model/endpoint is untouched. -->
     <div v-show="currentStep === 3" data-step="3" class="space-y-4">
-      <!-- Cargos -->
-      <Card>
-        <template #header>
-          <div class="px-6 pt-5 pb-0 flex items-center justify-between">
-            <h3 class="text-base font-semibold flex items-center gap-2 text-[var(--text-color)]">
-              <i class="pi pi-building text-violet-500" /> Cargo en la Empresa
-              <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
-            </h3>
-            <Button label="Agregar" icon="pi pi-plus" size="small" severity="secondary" outlined @click="addCargo" />
-          </div>
-        </template>
-        <template #content>
-          <div v-if="cargos.length === 0"
-            class="text-center py-8 text-[var(--text-color-secondary)] text-sm">
-            <i class="pi pi-building text-3xl mb-2 block opacity-40" />
-            Sin cargos registrados.
-          </div>
-          <div v-else class="space-y-4">
-            <div v-for="(cargo, i) in cargos" :key="i"
-              class="border border-[var(--surface-border)] rounded-lg p-4">
-              <div class="flex items-center justify-between mb-3">
-                <span class="text-sm font-medium text-[var(--text-color-secondary)]">Cargo {{ i + 1 }}</span>
-                <Button icon="pi pi-trash" size="small" severity="danger" text rounded @click="removeCargo(i)" />
-              </div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div class="flex flex-col gap-1">
-                  <label class="text-xs text-[var(--text-color-secondary)]">Nombre del Cargo</label>
-                  <InputText v-model="cargo.nombreCargo" placeholder="Ej: Técnico Electricista" size="small" />
-                </div>
-                <div class="flex flex-col gap-1">
-                  <label class="text-xs text-[var(--text-color-secondary)]">Ubicación</label>
-                  <InputText v-model="cargo.ubicacion" placeholder="Ej: Bogotá - Sede Norte" size="small" />
-                </div>
-                <div class="flex flex-col gap-1">
-                  <label class="text-xs text-[var(--text-color-secondary)]">Fecha de Ingreso</label>
-                  <InputText v-model="cargo.fechaIngreso" type="date" size="small" />
-                </div>
-                <div class="flex flex-col gap-1">
-                  <label class="text-xs text-[var(--text-color-secondary)]">Fecha Terminación (si aplica)</label>
-                  <InputText v-model="cargo.fechaTerminacion" type="date" size="small" />
-                </div>
-                <div class="flex flex-col gap-1 sm:col-span-2">
-                  <label class="text-xs text-[var(--text-color-secondary)]">Salario (opcional)</label>
-                  <InputNumber
-                    v-model="cargo.salario"
-                    mode="decimal"
-                    :min-fraction-digits="0"
-                    :max-fraction-digits="2"
-                    placeholder="0.00"
-                    size="small"
-                    input-class="w-full"
-                  />
-                  <p class="text-xs text-[var(--text-color-secondary)]">
-                    Se extraerá de nómina cuando el módulo esté activo
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
-      </Card>
-
       <!-- Contactos de Emergencia -->
       <Card>
         <template #header>
@@ -1152,7 +1160,6 @@ const tiposVehiculo = [
                 <li><strong>Empleado:</strong> {{ step1.nombre }} {{ step1.apellido }}</li>
                 <li><strong>Documento:</strong> {{ step1.tipoDocumento }} {{ step1.numeroDocumento }}</li>
                 <li v-if="familyMembers.length"><strong>Núcleo familiar:</strong> {{ familyMembers.length }} miembro(s)</li>
-                <li v-if="cargos.length"><strong>Cargos:</strong> {{ cargos.length }}</li>
                 <li v-if="emergencyContacts.length"><strong>Contactos emergencia:</strong> {{ emergencyContacts.length }}</li>
               </ul>
             </div>

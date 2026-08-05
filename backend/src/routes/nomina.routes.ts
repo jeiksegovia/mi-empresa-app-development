@@ -27,9 +27,11 @@ const contratoSchema = z.object({
   // intentionally omits the legacy field).
   cargoId: z.number().int().positive(),
   activo: z.boolean().optional(),
-  // nomina-asistencia-jul-18: API-required on CREATE via explicit route check
+  // nomina-asistencia-jul-18: API-required on CREATE for OPS via explicit route check
   // (so response surfaces top-level `field: 'valorJornada'` — not only Zod errors map).
   valorJornada: z.number().nonnegative().optional().nullable(),
+  // qa-session-jul-24 R7: required for non-OPS contract types at API layer.
+  valorMensual: z.number().nonnegative().optional().nullable(),
 })
 
 const contratoCreateSchema = contratoSchema
@@ -56,6 +58,8 @@ const nominaPeriodoSchema = z.object({
   subtotalCalculado: z.number().nonnegative().optional(),
   aportesSociales: z.number().nonnegative().optional(),
   totalPagado: z.number().nonnegative().optional(),
+  // qa-session-jul-24 R7: optional override for non-OPS base calc.
+  valorMensual: z.number().nonnegative().optional(),
 })
 
 // ─── Contratos (nested under employees) ─────────────────────────────────────
@@ -84,10 +88,22 @@ router.post('/employees/:id/contratos', requireRole('ADMIN'), forbidLegacy(['car
         return
       }
     }
-    // Explicit field surface for valorJornada (Zod already requires it; service double-checks)
-    if (req.body.valorJornada === undefined || req.body.valorJornada === null) {
-      res.status(400).json({ success: false, message: 'valorJornada es requerido', field: 'valorJornada' })
-      return
+    // qa-session-jul-24 R7: branch required-field on tipoContrato.
+    const tipoContrato = req.body.tipoContrato
+    if (tipoContrato === 'OPS') {
+      if (req.body.valorJornada === undefined || req.body.valorJornada === null) {
+        res.status(400).json({ success: false, message: 'valorJornada es requerido para OPS', field: 'valorJornada' })
+        return
+      }
+    } else {
+      if (req.body.valorMensual === undefined || req.body.valorMensual === null) {
+        res.status(400).json({
+          success: false,
+          message: `valorMensual es requerido para ${tipoContrato}`,
+          field: 'valorMensual',
+        })
+        return
+      }
     }
     const created = await nominaService.createContrato(id, req.body)
     res.status(201).json({ success: true, data: created })

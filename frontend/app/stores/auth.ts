@@ -51,6 +51,14 @@ export const useAuthStore = defineStore('auth', () => {
   async function login(email: string, password: string) {
     isLoading.value = true
     error.value = null
+    // Flush any stale identity BEFORE authenticating a new user. The RBAC route
+    // gate (domain-access.global.ts) reads this in-memory identity; a leftover
+    // profile from a prior session (e.g. GERONTOLOGA) would otherwise gate the
+    // new user off /empleados until a second login. Resetting here guarantees
+    // the fresh login response is the only identity in the store.
+    user.value = null
+    empresa.value = null
+    isAuthenticated.value = false
     try {
       const { apiFetch } = useApi()
       const response = await apiFetch<LoginResponse>('/auth/login', {

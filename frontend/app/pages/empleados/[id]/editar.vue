@@ -11,6 +11,10 @@ const authStore = useAuthStore()
 const { uploadFile, downloadFile } = useFileUpload()
 
 const loading = ref(true)
+// qa-session-jul-31 followup (aug-04): admin "bloqueador". When the empleado is
+// locked, non-admins cannot save (backend re-enforces with 403 EMPLOYEE_LOCKED).
+const empBloqueado = ref(false)
+const lockedForMe = computed(() => empBloqueado.value && !authStore.isAdmin)
 const error = ref('')
 const activeTab = ref(0)
 
@@ -41,20 +45,45 @@ const form = reactive({
   email: '',
   permisoTrabajo: false,
   estado: 'ACTIVO' as 'ACTIVO' | 'INACTIVO',
-  // nomina-asistencia-jul-18: medio de pago de nómina.
-  // '' = Sin definir (null on wire).
-  medioPagoTipo: '' as '' | 'NEQUI' | 'TRANSFERENCIA_BANCARIA',
+  // qa-session-jul-24 R1: medio de pago de nómina.
+  // '' = Sin definir (null on wire). EFECTIVO added this migration.
+  medioPagoTipo: '' as '' | 'NEQUI' | 'TRANSFERENCIA_BANCARIA' | 'EFECTIVO',
   medioPagoNequi: '',
   bancoNombre: '',
   bancoTipoCuenta: '' as '' | 'AHORRO' | 'CORRIENTE',
   bancoNumeroCuenta: '',
+  // qa-session-jul-31 R3: social-security free-text fields. Mirrored
+  // from nuevo.vue — pattern matches bancoNombre (string, optional).
+  eps: '',
+  fondoPensiones: '',
+  arl: '',
 })
 const formErrors = reactive<Record<string, string>>({})
 const medioPagoTipoOptions = [
   { label: 'Sin definir', value: '' },
-  { label: 'Nequi', value: 'NEQUI' },
+  // qa-session-jul-31 R1: display label updated to surface "Bre-B" (the
+  // second brand allowed under Nequi). Stored enum value stays `NEQUI`.
+  { label: 'Nequi/Bre-B', value: 'NEQUI' },
   { label: 'Transferencia bancaria', value: 'TRANSFERENCIA_BANCARIA' },
+  { label: 'Efectivo', value: 'EFECTIVO' },
 ]
+// R1 (qa-session-jul-24 §3): Nequi "llave" — email OR alphanumeric handle
+// with letters+digits, 6–25 chars. Pure numeric strings are rejected.
+const NEQUI_LLAVE_REGEX =
+  /^(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{6,25})$/
+function validateNequiLlave(): boolean {
+  if (form.medioPagoTipo !== 'NEQUI') {
+    delete formErrors.medioPagoNequi
+    return true
+  }
+  if (!NEQUI_LLAVE_REGEX.test(form.medioPagoNequi.trim())) {
+    formErrors.medioPagoNequi =
+      'Llave Nequi inválida: debe ser email o alfanumérica con letras y dígitos (6–25 chars).'
+    return false
+  }
+  delete formErrors.medioPagoNequi
+  return true
+}
 const bancoTipoCuentaOptions = [
   { label: 'Ahorro', value: 'AHORRO' },
   { label: 'Corriente', value: 'CORRIENTE' },
@@ -98,10 +127,15 @@ function validateForm() {
   if (!form.numeroDocumento.trim()) formErrors.numeroDocumento = 'Requerido'
   if (!form.genero) formErrors.genero = 'Requerido'
   if (!form.fechaNacimiento) formErrors.fechaNacimiento = 'Requerido'
+  validateNequiLlave()
   return Object.keys(formErrors).length === 0
 }
 
 async function savePersonal() {
+  if (lockedForMe.value) {
+    toast.add({ severity: 'warn', summary: 'Empleado bloqueado', detail: 'Solo un administrador puede editar este empleado.', life: 4000 })
+    return
+  }
   if (!validateForm()) return
   saving1.value = true
   try {
@@ -124,7 +158,16 @@ async function savePersonal() {
     // D3: include documentoIdentificacionUrl. Always send — null clears it.
     payload.documentoIdentificacionUrl = documentoIdentificacionUrl.value || null
 
-    // nomina-asistencia-jul-18: medio de pago (always send so clearing works).
+    // qa-session-jul-31 R3: EPS / Fondo de pensiones / ARL. Edit always
+    // sends the trimmed value (null clears, mirrors the always-send
+    // pattern used for documentoIdentificacionUrl above) so partial
+    // edits correctly persist "user cleared the field".
+    payload.eps = form.eps.trim() || null
+    payload.fondoPensiones = form.fondoPensiones.trim() || null
+    payload.arl = form.arl.trim() || null
+
+    // qa-session-jul-24 R1: medio de pago (always send so clearing works).
+    // EFECTIVO ships no extra fields (contract §2 per-medio matrix).
     if (form.medioPagoTipo === 'NEQUI') {
       payload.medioPagoTipo = 'NEQUI'
       payload.medioPagoNequi = form.medioPagoNequi.trim() || null
@@ -137,6 +180,12 @@ async function savePersonal() {
       payload.bancoTipoCuenta = form.bancoTipoCuenta || null
       payload.bancoNumeroCuenta = form.bancoNumeroCuenta.trim() || null
       payload.medioPagoNequi = null
+    } else if (form.medioPagoTipo === 'EFECTIVO') {
+      payload.medioPagoTipo = 'EFECTIVO'
+      payload.medioPagoNequi = null
+      payload.bancoNombre = null
+      payload.bancoTipoCuenta = null
+      payload.bancoNumeroCuenta = null
     } else {
       payload.medioPagoTipo = null
       payload.medioPagoNequi = null
@@ -238,7 +287,10 @@ async function downloadHojaVida() {
   await downloadFile(hojaVidaUrl.value)
 }
 
-interface CargoForm { nombreCargo: string; ubicacion: string; fechaIngreso: string; fechaTerminacion: string; salario: number | null }
+// qa-session-jul-24 R4 (UI only): CargoForm + the per-employee "cargos"
+// sub-collection removed from the edit page. The empresa-scoped cargo
+// catalog (used by Contrato) is the source of truth — see
+// cargosEmpresa[] and the Contrato dialog below.
 interface ContactoForm { nombre: string; apellido: string; telefono: string; parentesco: string }
 interface ExperienciaForm { empresa: string; telefonoEmpresa: string; cargo: string; sector: string; periodoInicio: string; periodoFin: string; funcionesLogros: string }
 
@@ -256,6 +308,12 @@ interface Contrato {
   cargoId: number | null
   // The API includes the resolved cargo object when cargoId is set.
   cargo?: { id: number; nombre: string; activo: boolean } | null
+  // nomina-asistencia-jul-18: valor media jornada (4h) — used only for OPS.
+  valorJornada: number | string | null
+  // qa-session-jul-24 R7: valor mensual — used for OBRA_O_LABOR /
+  // TERMINO_FIJO / TERMINO_INDEFINIDO. Both columns are nullable in the
+  // DB; the backend enforces the per-tipoContrato requirement.
+  valorMensual: number | string | null
   activo: boolean
   createdAt: string
 }
@@ -280,8 +338,11 @@ const contratoForm = reactive({
   // D7: cargoId replaces the legacy cargo string. Number FK to
   // cargos_empresa; the API accepts only `cargoId` per contract §4.7.
   cargoId: null as number | null,
-  // nomina-asistencia-jul-18: valor media jornada (4h). Required on CREATE.
+  // qa-session-jul-24 R7: salary fields are branched on tipoContrato.
+  // OPS → valorJornada (per media-jornada, 4h). OBRA_O_LABOR /
+  // TERMINO_FIJO / TERMINO_INDEFINIDO → valorMensual. Both nullable.
   valorJornada: null as number | null,
+  valorMensual: null as number | null,
   activo: true,
 })
 
@@ -390,6 +451,7 @@ function resetContratoForm() {
   contratoForm.archivoFirmadoUrl = ''
   contratoForm.cargoId = null
   contratoForm.valorJornada = null
+  contratoForm.valorMensual = null
   contratoForm.activo = true
   contratoEditingId.value = null
   // W9: clear the underlying HTML file input so picking a file for one
@@ -443,6 +505,8 @@ function openEditContrato(c: Contrato) {
   contratoForm.cargoId = (c as any).cargoId ?? null
   // nomina-asistencia-jul-18: hydrate valorJornada (Decimal may arrive as string).
   contratoForm.valorJornada = (c as any).valorJornada != null ? Number((c as any).valorJornada) : null
+  // qa-session-jul-24 R7: hydrate valorMensual (Decimal may arrive as string).
+  contratoForm.valorMensual = (c as any).valorMensual != null ? Number((c as any).valorMensual) : null
   contratoForm.activo = c.activo
   // D7: ensure cargos catalog is loaded before showing the dialog so the
   // Select can display the cargo name even if it was archived since.
@@ -461,12 +525,20 @@ async function saveContrato() {
     })
     return
   }
-  // nomina-asistencia-jul-18: valorJornada required on CREATE.
-  if (!contratoEditingId.value && (contratoForm.valorJornada == null || Number.isNaN(Number(contratoForm.valorJornada)))) {
+  // qa-session-jul-24 R7: salary is required on CREATE, branched on
+  // tipoContrato. OPS → valorJornada; OBRA_O_LABOR / TERMINO_FIJO /
+  // TERMINO_INDEFINIDO → valorMensual. The backend Zod mirrors this.
+  const isOps = contratoForm.tipoContrato === 'OPS'
+  const salaryField = isOps ? 'valorJornada' : 'valorMensual'
+  const salaryLabel = isOps ? 'media jornada (4h)' : 'mensual'
+  if (
+    !contratoEditingId.value &&
+    (contratoForm[salaryField] == null || Number.isNaN(Number(contratoForm[salaryField])))
+  ) {
     toast.add({
       severity: 'warn',
-      summary: 'Valor media jornada requerido',
-      detail: 'Ingresa el valor de media jornada (4h) para el nuevo contrato.',
+      summary: 'Valor requerido',
+      detail: `Ingresa el valor ${salaryLabel} para el nuevo contrato.`,
       life: 4000,
     })
     return
@@ -486,9 +558,20 @@ async function saveContrato() {
     if (contratoForm.archivoFirmadoUrl) payload.archivoFirmadoUrl = contratoForm.archivoFirmadoUrl
     // D7: cargoId — number FK; legacy cargo string is rejected per contract §4.7.
     if (contratoForm.cargoId) payload.cargoId = contratoForm.cargoId
-    // nomina-asistencia-jul-18: valorJornada required on create; optional on update.
-    if (contratoForm.valorJornada != null && !Number.isNaN(Number(contratoForm.valorJornada))) {
-      payload.valorJornada = Number(contratoForm.valorJornada)
+    // qa-session-jul-24 R7: send only the matching salary field per
+    // tipoContrato (avoids noisy 400s when OPS form accidentally carries
+    // a valorMensual). On PUT, also send the *opposite* field as null
+    // so the DB clears the stale column for switched tipos.
+    if (isOps) {
+      if (contratoForm.valorJornada != null && !Number.isNaN(Number(contratoForm.valorJornada))) {
+        payload.valorJornada = Number(contratoForm.valorJornada)
+      }
+      payload.valorMensual = null
+    } else {
+      if (contratoForm.valorMensual != null && !Number.isNaN(Number(contratoForm.valorMensual))) {
+        payload.valorMensual = Number(contratoForm.valorMensual)
+      }
+      payload.valorJornada = null
     }
 
     if (contratoEditingId.value) {
@@ -550,6 +633,7 @@ async function unsetContratoActivo(c: Contrato) {
 async function saveContratoActivo(cid: number, activo: boolean) {
   try {
     const current = contratos.value.find((x) => x.id === cid)
+    const isOps = current?.tipoContrato === 'OPS'
     await apiFetch(`/nomina/employees/${route.params.id}/contratos/${cid}`, {
       method: 'PUT',
       body: {
@@ -561,10 +645,14 @@ async function saveContratoActivo(cid: number, activo: boolean) {
         // get cleared when only flipping the activo bit.
         archivoFirmadoUrl: (current as any)?.archivoFirmadoUrl ?? undefined,
         cargoId: (current as any)?.cargoId ?? undefined,
-        // nomina-asistencia-jul-18: preserve valorJornada on activo toggle.
-        valorJornada: (current as any)?.valorJornada != null
+        // qa-session-jul-24 R7: preserve the matching salary column on
+        // activo toggle; clear the other one so tipo swaps persist.
+        valorJornada: isOps && (current as any)?.valorJornada != null
           ? Number((current as any).valorJornada)
-          : undefined,
+          : null,
+        valorMensual: !isOps && (current as any)?.valorMensual != null
+          ? Number((current as any).valorMensual)
+          : null,
         activo,
       },
     })
@@ -629,12 +717,9 @@ function formatShortDate(dateStr: string | null | undefined): string {
   return formatDate(dateStr, 'short')
 }
 
-const cargos = ref<CargoForm[]>([])
 const contactosEmergencia = ref<ContactoForm[]>([])
 const experiencias = ref<ExperienciaForm[]>([])
 
-function addCargo() { cargos.value.push({ nombreCargo: '', ubicacion: '', fechaIngreso: '', fechaTerminacion: '', salario: null }) }
-function removeCargo(i: number) { cargos.value.splice(i, 1) }
 function addContacto() { contactosEmergencia.value.push({ nombre: '', apellido: '', telefono: '', parentesco: '' }) }
 function removeContacto(i: number) { contactosEmergencia.value.splice(i, 1) }
 function addExperiencia() { experiencias.value.push({ empresa: '', telefonoEmpresa: '', cargo: '', sector: '', periodoInicio: '', periodoFin: '', funcionesLogros: '' }) }
@@ -643,12 +728,10 @@ function removeExperiencia(i: number) { experiencias.value.splice(i, 1) }
 async function saveLaboral() {
   saving3.value = true
   try {
-    const validCargos = cargos.value.filter(c => c.nombreCargo.trim() && c.ubicacion.trim() && c.fechaIngreso)
     const validContacts = contactosEmergencia.value.filter(c => c.nombre.trim() && c.apellido.trim() && c.telefono.trim() && c.parentesco)
     const validExp = experiencias.value.filter(e => e.empresa.trim() && e.cargo.trim() && e.periodoInicio)
 
     await Promise.all([
-      apiFetch(`/employees/${route.params.id}/cargos`, { method: 'PUT', body: { cargos: validCargos.map(c => ({ nombreCargo: c.nombreCargo.trim(), ubicacion: c.ubicacion.trim(), fechaIngreso: c.fechaIngreso, fechaTerminacion: c.fechaTerminacion || undefined, salario: c.salario != null ? c.salario : undefined })) } }),
       apiFetch(`/employees/${route.params.id}/contactos-emergencia`, { method: 'PUT', body: { contactosEmergencia: validContacts.map(c => ({ nombre: c.nombre.trim(), apellido: c.apellido.trim(), telefono: c.telefono.trim(), parentesco: c.parentesco })) } }),
       apiFetch(`/employees/${route.params.id}/experiencias-laborales`, { method: 'PUT', body: { experienciasLaborales: validExp.map(e => ({ empresa: e.empresa.trim(), telefonoEmpresa: e.telefonoEmpresa.trim() || undefined, cargo: e.cargo.trim(), sector: e.sector.trim() || undefined, periodoInicio: e.periodoInicio, periodoFin: e.periodoFin || undefined, funcionesLogros: e.funcionesLogros.trim() || undefined })) } }),
     ])
@@ -875,6 +958,7 @@ async function fetchEmployee() {
   try {
     const res = await apiFetch<{ success: boolean; data: any }>(`/employees/${route.params.id}`)
     const emp = res.data
+    empBloqueado.value = emp.bloqueado ?? false
 
     // Tab 1
     form.nombre = emp.nombre ?? ''
@@ -899,6 +983,11 @@ async function fetchEmployee() {
     form.bancoNombre = emp.bancoNombre ?? ''
     form.bancoTipoCuenta = emp.bancoTipoCuenta ?? ''
     form.bancoNumeroCuenta = emp.bancoNumeroCuenta ?? ''
+    // qa-session-jul-31 R3: hydrate the social-security free-text fields
+    // (nullable VARCHAR(100) on empleados).
+    form.eps = emp.eps ?? ''
+    form.fondoPensiones = emp.fondoPensiones ?? ''
+    form.arl = emp.arl ?? ''
 
     // Tab 2
     familyMembers.value = (emp.nucleoFamiliar ?? []).map((nf: any) => ({
@@ -915,12 +1004,9 @@ async function fetchEmployee() {
     // populated when the user opens it. Fire-and-forget is OK — the
     // dialog also calls ensureCargosEmpresa() right before opening.
     fetchCargosEmpresa()
-    cargos.value = (emp.cargos ?? []).map((c: any) => ({
-      nombreCargo: c.nombreCargo, ubicacion: c.ubicacion,
-      fechaIngreso: c.fechaIngreso ? new Date(c.fechaIngreso).toISOString().split('T')[0] : '',
-      fechaTerminacion: c.fechaTerminacion ? new Date(c.fechaTerminacion).toISOString().split('T')[0] : '',
-      salario: c.salario != null ? Number(c.salario) : null,
-    }))
+    // qa-session-jul-24 R4 (UI only): the per-employee cargos sub-list is
+    // no longer managed from the edit page. Empresa-scoped cargos are
+    // owned by Contrato (cargoId FK). The endpoint is untouched.
     contactosEmergencia.value = (emp.contactosEmergencia ?? []).map((c: any) => ({
       nombre: c.nombre, apellido: c.apellido, telefono: c.telefono, parentesco: c.parentesco,
     }))
@@ -1001,6 +1087,16 @@ onMounted(fetchEmployee)
             @click="navigateTo(`/empleados/${route.params.id}`)" />
         </template>
       </AppPageHeader>
+
+      <!-- qa-jul-31 followup: bloqueador banner for non-admins on a locked empleado -->
+      <Message
+        v-if="lockedForMe"
+        severity="warn"
+        :closable="false"
+        class="mb-4"
+        data-testid="empleado-locked-banner">
+        Este empleado está <strong>bloqueado</strong>. Solo un administrador puede editar sus datos; los cambios no se guardarán.
+      </Message>
 
       <!-- Tab Navigation -->
       <div class="mb-6 flex gap-1 border-b border-[var(--surface-border)] overflow-x-auto">
@@ -1160,13 +1256,21 @@ onMounted(fetchEmployee)
                     />
                   </div>
                   <div v-if="form.medioPagoTipo === 'NEQUI'" class="flex flex-col gap-1">
-                    <label class="text-sm font-medium" for="medio-pago-nequi">Número Nequi</label>
+                    <label class="text-sm font-medium" for="medio-pago-nequi">
+                      Llave
+                      <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(email o alfanumérica 6–25)</span>
+                    </label>
                     <InputText
                       id="medio-pago-nequi"
                       v-model="form.medioPagoNequi"
-                      placeholder="Número Nequi"
+                      placeholder="Ej: mi.llave@correo.com o LlaveABC123"
+                      :class="{ 'p-invalid': formErrors.medioPagoNequi }"
                       data-testid="medio-pago-nequi"
+                      @blur="validateNequiLlave"
                     />
+                    <small v-if="formErrors.medioPagoNequi" class="text-red-500" data-testid="medio-pago-nequi-error">
+                      {{ formErrors.medioPagoNequi }}
+                    </small>
                   </div>
                   <template v-if="form.medioPagoTipo === 'TRANSFERENCIA_BANCARIA'">
                     <div class="flex flex-col gap-1">
@@ -1203,9 +1307,55 @@ onMounted(fetchEmployee)
                   </template>
                 </div>
               </div>
+
+              <!-- qa-session-jul-31 R3: social-security free-text fields,
+                   mirrored from nuevo.vue (Datos personales step).
+                   Edit always sends trimmed value so blanking a field
+                   persists (matches documentoIdentificacionUrl pattern). -->
+              <div
+                class="flex flex-col gap-3 sm:col-span-2 lg:col-span-3 border-t border-[var(--surface-border)] pt-4 mt-1"
+                data-testid="seguridad-social-section"
+              >
+                <h4 class="text-sm font-semibold flex items-center gap-2 text-[var(--text-color)]">
+                  <i class="pi pi-shield text-violet-500" /> Seguridad Social
+                  <span class="text-xs font-normal text-[var(--text-color-secondary)] ml-1">(opcional)</span>
+                </h4>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div class="flex flex-col gap-1">
+                    <label class="text-sm font-medium" for="eps">EPS</label>
+                    <InputText
+                      id="eps"
+                      v-model="form.eps"
+                      placeholder="Ej: Sura"
+                      maxlength="100"
+                      data-testid="eps-input"
+                    />
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-sm font-medium" for="fondoPensiones">Fondo de pensiones</label>
+                    <InputText
+                      id="fondoPensiones"
+                      v-model="form.fondoPensiones"
+                      placeholder="Ej: Porvenir"
+                      maxlength="100"
+                      data-testid="fondoPensiones-input"
+                    />
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-sm font-medium" for="arl">ARL</label>
+                    <InputText
+                      id="arl"
+                      v-model="form.arl"
+                      placeholder="Ej: Positiva"
+                      maxlength="100"
+                      data-testid="arl-input"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="mt-4 flex justify-end">
-              <Button label="Guardar Datos Personales" icon="pi pi-check" severity="success" :loading="saving1" @click="savePersonal" />
+              <Button label="Guardar Datos Personales" icon="pi pi-check" severity="success" :loading="saving1" :disabled="lockedForMe" @click="savePersonal" />
             </div>
           </template>
         </Card>
@@ -1251,44 +1401,9 @@ onMounted(fetchEmployee)
 
       <!-- TAB 3: Info. Laboral -->
       <div v-show="activeTab === 2" class="space-y-4">
-        <!-- Cargos -->
-        <Card>
-          <template #header>
-            <div class="px-6 pt-5 pb-0 flex items-center justify-between">
-              <h3 class="text-base font-semibold flex items-center gap-2 text-[var(--text-color)]"><i class="pi pi-briefcase text-violet-500" /> Cargos</h3>
-              <Button label="Agregar" icon="pi pi-plus" size="small" severity="secondary" @click="addCargo" />
-            </div>
-          </template>
-          <template #content>
-            <div v-if="cargos.length === 0" class="text-center py-4 text-[var(--text-color-secondary)] text-sm">Sin cargos registrados</div>
-            <div v-for="(cargo, i) in cargos" :key="i" class="border border-[var(--surface-border)] rounded-lg p-4 mb-3">
-              <div class="flex justify-between items-start mb-3">
-                <span class="text-sm font-medium text-[var(--text-color-secondary)]">Cargo {{ i + 1 }}</span>
-                <Button icon="pi pi-trash" size="small" severity="danger" text @click="removeCargo(i)" />
-              </div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div class="flex flex-col gap-1"><label class="text-xs font-medium">Nombre del Cargo *</label><InputText v-model="cargo.nombreCargo" /></div>
-                <div class="flex flex-col gap-1"><label class="text-xs font-medium">Ubicación *</label><InputText v-model="cargo.ubicacion" /></div>
-                <div class="flex flex-col gap-1"><label class="text-xs font-medium">Fecha Ingreso *</label><InputText v-model="cargo.fechaIngreso" type="date" /></div>
-                <div class="flex flex-col gap-1"><label class="text-xs font-medium">Fecha Terminación</label><InputText v-model="cargo.fechaTerminacion" type="date" /></div>
-                <div class="flex flex-col gap-1 sm:col-span-2">
-                  <label class="text-xs font-medium">Salario (opcional)</label>
-                  <InputNumber
-                    v-model="cargo.salario"
-                    mode="decimal"
-                    :min-fraction-digits="0"
-                    :max-fraction-digits="2"
-                    placeholder="0.00"
-                    input-class="w-full"
-                  />
-                  <p class="text-xs text-[var(--text-color-secondary)]">
-                    Se extraerá de nómina cuando el módulo esté activo
-                  </p>
-                </div>
-              </div>
-            </div>
-          </template>
-        </Card>
+        <!-- qa-session-jul-24 R4 (UI only): the per-employee "Cargos" Card
+             was removed — it's now redundant with Experiencia Laboral and
+             the empresa-scoped cargo catalog. Backend model untouched. -->
 
         <!-- Hoja de vida -->
         <Card>
@@ -1656,6 +1771,15 @@ onMounted(fetchEmployee)
                       <i class="pi pi-money-bill mr-1" />
                       Media jornada: {{ Number((c as any).valorJornada).toLocaleString('es-CO') }}
                     </p>
+                    <!-- qa-session-jul-24 R7: monthly value for non-OPS contratos. -->
+                    <p
+                      v-else-if="(c as any).valorMensual != null"
+                      class="text-xs text-[var(--text-color-secondary)]"
+                      data-testid="contrato-valor-mensual-display"
+                    >
+                      <i class="pi pi-money-bill mr-1" />
+                      Mensual: {{ Number((c as any).valorMensual).toLocaleString('es-CO') }}
+                    </p>
                     <p v-if="c.archivoUrl" class="text-xs text-[var(--text-color-secondary)] truncate">
                       <i class="pi pi-paperclip" /> {{ filenameFromKey(c.archivoUrl) }}
                     </p>
@@ -1800,8 +1924,10 @@ onMounted(fetchEmployee)
                 ¿No ves el cargo? Usa «➕ Agregar otro cargo» para crearlo.
               </p>
             </div>
-            <!-- nomina-asistencia-jul-18: Valor media jornada (4h) — required on create -->
-            <div>
+            <!-- qa-session-jul-24 R7: salary is branched on tipoContrato.
+                 OPS → valorJornada (per media-jornada 4h). OBRA_O_LABOR /
+                 TERMINO_FIJO / TERMINO_INDEFINIDO → valorMensual. -->
+            <div v-if="contratoForm.tipoContrato === 'OPS'">
               <label class="block text-sm font-medium mb-1">
                 Valor media jornada (4h)
                 <span v-if="!contratoEditingId" class="text-red-500">*</span>
@@ -1819,6 +1945,26 @@ onMounted(fetchEmployee)
               />
               <p class="text-xs text-[var(--text-color-secondary)] mt-1">
                 Monto pagado por cada media jornada (AM o PM).
+              </p>
+            </div>
+            <div v-else>
+              <label class="block text-sm font-medium mb-1">
+                Valor mensual
+                <span v-if="!contratoEditingId" class="text-red-500">*</span>
+              </label>
+              <InputNumber
+                v-model="contratoForm.valorMensual"
+                mode="decimal"
+                :min="0"
+                :min-fraction-digits="0"
+                :max-fraction-digits="2"
+                input-class="w-full"
+                class="w-full"
+                placeholder="0"
+                data-testid="contrato-valor-mensual"
+              />
+              <p class="text-xs text-[var(--text-color-secondary)] mt-1">
+                Salario mensual del contrato.
               </p>
             </div>
             <div>

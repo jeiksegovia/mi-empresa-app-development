@@ -3,7 +3,8 @@ import { getPrisma } from '../config/database.js'
 /** Exact pendiente text for missing medio de pago (contract). */
 export const PENDIENTE_MEDIO_PAGO = 'Falta medio de pago de nómina'
 
-export type MedioPagoTipo = 'NEQUI' | 'TRANSFERENCIA_BANCARIA'
+// qa-session-jul-24 R1: EFECTIVO is a valid MedioPagoNomina value (no extra fields required).
+export type MedioPagoTipo = 'NEQUI' | 'TRANSFERENCIA_BANCARIA' | 'EFECTIVO'
 export type TipoCuentaBanco = 'AHORRO' | 'CORRIENTE'
 
 export interface MedioPagoFields {
@@ -35,6 +36,8 @@ export interface EmployeeSummary {
   fechaRegistro: Date
   cargo: string | null
   ubicacion: string | null
+  // qa-session-jul-31 followup (aug-04): admin lock indicator for the list.
+  bloqueado: boolean
 }
 
 export interface EmployeeListResult {
@@ -63,6 +66,14 @@ export interface EmployeeDetail {
   email: string | null
   estado: string
   fechaRegistro: Date
+  // qa-session-jul-31 R3: optional EPS / Fondo de pensiones / ARL.
+  eps: string | null
+  fondoPensiones: string | null
+  arl: string | null
+  // qa-session-jul-31 followup (aug-04): admin lock ("bloqueador").
+  bloqueado: boolean
+  bloqueadoPor: number | null
+  bloqueadoEn: Date | null
   nucleoFamiliar: Array<{
     id: number
     nombre: string
@@ -202,6 +213,10 @@ export interface CreateEmployeeInput {
   bancoNombre?: string | null
   bancoTipoCuenta?: TipoCuentaBanco | null
   bancoNumeroCuenta?: string | null
+  // qa-session-jul-31 R3: optional EPS / Fondo de pensiones / ARL (free text).
+  eps?: string | null
+  fondoPensiones?: string | null
+  arl?: string | null
 }
 
 // Update input - top-level fields only
@@ -244,6 +259,16 @@ export function normalizeMedioPagoFields(input: MedioPagoFields): MedioPagoField
     return {
       medioPagoTipo: 'NEQUI',
       medioPagoNequi: input.medioPagoNequi ?? null,
+      bancoNombre: null,
+      bancoTipoCuenta: null,
+      bancoNumeroCuenta: null,
+    }
+  }
+  // qa-session-jul-24 R1: EFECTIVO requires no extra fields; clear all channel fields.
+  if (tipo === 'EFECTIVO') {
+    return {
+      medioPagoTipo: 'EFECTIVO',
+      medioPagoNequi: null,
       bancoNombre: null,
       bancoTipoCuenta: null,
       bancoNumeroCuenta: null,
@@ -386,6 +411,7 @@ export async function listEmployees(params: EmployeeListParams): Promise<Employe
     fechaRegistro: emp.fechaRegistro,
     cargo: emp.cargos[0]?.nombreCargo ?? null,
     ubicacion: emp.cargos[0]?.ubicacion ?? null,
+    bloqueado: emp.bloqueado,
   }))
 
   return {
@@ -404,6 +430,34 @@ export async function getEmployee(id: number): Promise<EmployeeDetail | null> {
     include: ALL_RELATIONS,
   })
   return emp as EmployeeDetail | null
+}
+
+/**
+ * qa-session-jul-31 followup (aug-04): admin "bloqueador".
+ * Sets or clears the empleado lock + audit metadata. ADMIN-only — enforced at the
+ * route layer (requireRole('ADMIN')). This is the ONLY writer of the bloqueado*
+ * columns; the normal create/update paths never touch them.
+ */
+export async function setEmployeeLock(
+  id: number,
+  locked: boolean,
+  adminUserId?: number,
+): Promise<EmployeeDetail> {
+  const prisma = getPrisma()
+  const existing = await prisma.empleado.findUnique({ where: { id }, select: { id: true } })
+  if (!existing) {
+    throw new Error('Employee not found')
+  }
+  await prisma.empleado.update({
+    where: { id },
+    data: {
+      bloqueado: locked,
+      bloqueadoPor: locked ? adminUserId ?? null : null,
+      bloqueadoEn: locked ? new Date() : null,
+    },
+  })
+  const emp = await prisma.empleado.findUnique({ where: { id }, include: ALL_RELATIONS })
+  return emp as EmployeeDetail
 }
 
 export async function createEmployee(
@@ -597,6 +651,23 @@ export async function updateEmployee(
     bancoNumeroCuenta !== undefined
 
   if (medioTouched) {
+    // qa-session-jul-24 §7: when user submits payment fields WITHOUT medioPagoTipo,
+    // the existing medioPagoTipo is preserved and its required-field matrix is re-checked
+    // against the merged state. If existing is null AND user is sending payment fields,
+    // medioPagoTipo is required (otherwise we'd silently drop the values).
+    const onlyPaymentFields =
+      medioPagoTipo === undefined &&
+      (medioPagoNequi !== undefined ||
+        bancoNombre !== undefined ||
+        bancoTipoCuenta !== undefined ||
+        bancoNumeroCuenta !== undefined)
+    if (onlyPaymentFields && !existing.medioPagoTipo) {
+      throw Object.assign(
+        new Error('medioPagoTipo es requerido cuando se envían campos de pago'),
+        { status: 400, field: 'medioPagoTipo' },
+      )
+    }
+
     const merged = normalizeMedioPagoFields({
       medioPagoTipo:
         medioPagoTipo !== undefined

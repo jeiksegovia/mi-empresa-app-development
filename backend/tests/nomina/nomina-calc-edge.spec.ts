@@ -77,8 +77,11 @@ test.describe('Nómina calc edges (jul-18)', () => {
       {
         headers: { Cookie: adminCookie },
         data: {
-          tipoContrato: 'TERMINO_INDEFINIDO',
+          // qa-session-jul-24 R7: switch to OPS so the medias × valorJornada
+          // calc path still applies (TERMINO_INDEFINIDO requires valorMensual).
+          tipoContrato: 'OPS',
           fechaInicio: '2026-01-01',
+          fechaFin: '2027-01-01',
           cargoId,
           valorJornada: VALOR_JORNADA,
           activo: true,
@@ -143,6 +146,10 @@ test.describe('Nómina calc edges (jul-18)', () => {
         empleadoId,
         periodo: PERIODO,
         // omit mediasJornadas, valorJornada, subtotalCalculado, totalPagado, aportes
+        // OOPS requires cuenta cobro (D4)
+        archivos: [
+          { tipoArchivo: 'CUENTA_COBRO', nombre: 'cobro.pdf', url: 'fichas/cobro-edge.pdf' },
+        ],
       },
     });
     expect(resp.status()).toBe(201);
@@ -187,9 +194,12 @@ test.describe('Nómina calc edges (jul-18)', () => {
         periodo: overridePeriodo,
         mediasJornadas: 5,
         valorJornada: 10000,
-        aportesSociales: 1000,
-        // subtotal would be 50000; total with aportes 51000 — override to 77777
+        // subtotal would be 50000; override totalPagado to 77777
         totalPagado: 77777,
+        // OPS requires cuenta de cobro (D4)
+        archivos: [
+          { tipoArchivo: 'CUENTA_COBRO', nombre: 'cobro.pdf', url: 'fichas/cobro-edge-2.pdf' },
+        ],
       },
     });
     expect(resp.status()).toBe(201);
@@ -199,7 +209,7 @@ test.describe('Nómina calc edges (jul-18)', () => {
     expect(Number(body.data.mediasJornadas)).toBe(5);
     expect(Number(body.data.valorJornada)).toBe(10000);
     expect(Number(body.data.subtotalCalculado)).toBe(50000);
-    expect(Number(body.data.aportesSociales)).toBe(1000);
+    expect(Number(body.data.aportesSociales ?? 0)).toBe(0);
     // Override accepted without reject
     expect(Number(body.data.totalPagado)).toBe(77777);
     expect(Number(body.data.salario)).toBe(77777);
@@ -252,7 +262,8 @@ test.describe('Nómina calc edges (jul-18)', () => {
         fechaInicio: '2026-01-01',
         fechaFin: '2026-12-31',
         cargoId,
-        valorJornada: 30000,
+        // qa-session-jul-24 R7: OBRA_O_LABOR requires valorMensual.
+        valorMensual: 1500000,
         activo: true,
       },
     });

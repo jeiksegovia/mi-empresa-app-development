@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, requireRole } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
-import { requireDomain } from '../middleware/domainAccess.js'
+import { requireDomain, requireEmployeeUnlocked } from '../middleware/domainAccess.js'
 import { z } from 'zod'
 import * as employeeService from '../services/employeeService.js'
 import * as educacionService from '../services/educacionEmpleadoService.js'
@@ -114,13 +114,23 @@ const employeeBaseSchema = z.object({
     visaExpedicion: z.string().optional(),
     visaVencimiento: z.string().optional(),
   }).optional(),
-  // nomina-asistencia-jul-18: medio de pago (optional; conditional fields below)
-  medioPagoTipo: z.enum(['NEQUI', 'TRANSFERENCIA_BANCARIA']).nullable().optional(),
+  // nomina-asistencia-jul-18 + qa-session-jul-24 R1: medio de pago (optional; conditional fields below).
+  // EFECTIVO is a new valid value (no extra fields required).
+  medioPagoTipo: z.enum(['NEQUI', 'TRANSFERENCIA_BANCARIA', 'EFECTIVO']).nullable().optional(),
   medioPagoNequi: z.string().max(50).nullable().optional(),
   bancoNombre: z.string().max(100).nullable().optional(),
   bancoTipoCuenta: z.enum(['AHORRO', 'CORRIENTE']).nullable().optional(),
   bancoNumeroCuenta: z.string().max(50).nullable().optional(),
+  // qa-session-jul-31 R3: optional EPS / Fondo de pensiones / ARL (free text, no catalog).
+  eps: z.string().max(100).nullable().optional(),
+  fondoPensiones: z.string().max(100).nullable().optional(),
+  arl: z.string().max(100).nullable().optional(),
 })
+
+// qa-session-jul-24 §3: Nequi "llave" — email OR alphanumeric(6-25 with at least one letter + one digit).
+// Reject pure-numeric strings (10-15 digits).
+const NEQUI_LLAVE_REGEX =
+  /^(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{6,25})$/
 
 function refineMedioPago(data: {
   medioPagoTipo?: string | null
@@ -134,6 +144,13 @@ function refineMedioPago(data: {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Número Nequi es requerido',
+        path: ['medioPagoNequi'],
+      })
+    } else if (!NEQUI_LLAVE_REGEX.test(String(data.medioPagoNequi).trim())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'Nequi llave no válida: debe ser email o alfanumérica (6-25) con al menos una letra y un dígito',
         path: ['medioPagoNequi'],
       })
     }
@@ -227,7 +244,7 @@ router.post('/', validate(createEmployeeSchema), async (req: Request, res: Respo
 })
 
 // PUT /employees/:id
-router.put('/:id', validate(updateEmployeeSchema), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id', requireEmployeeUnlocked('id'), validate(updateEmployeeSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) {
@@ -243,6 +260,13 @@ router.put('/:id', validate(updateEmployeeSchema), async (req: Request, res: Res
       res.status(404).json({ success: false, message: 'Employee not found' })
       return
     }
+    // qa-session-jul-24: surface service-level validation errors (status + field)
+    if (error.status && typeof error.status === 'number') {
+      const body: Record<string, unknown> = { success: false, message: error.message }
+      if (error.field) body.field = error.field
+      res.status(error.status).json(body)
+      return
+    }
     if (error.code === 'P2002') {
       const target = Array.isArray(error?.meta?.target) ? (error.meta.target as string[]) : []
       const message = target.includes('numero_documento')
@@ -256,7 +280,7 @@ router.put('/:id', validate(updateEmployeeSchema), async (req: Request, res: Res
 })
 
 // DELETE /employees/:id (soft delete)
-router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+router.delete('/:id', requireEmployeeUnlocked('id'), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) {
@@ -274,6 +298,31 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ success: false, message: 'Error deleting employee' })
   }
 })
+
+// qa-session-jul-31 followup (aug-04): admin "bloqueador" lock/unlock.
+// ADMIN-only. Sets/clears empleado.bloqueado + audit (bloqueadoPor/bloqueadoEn).
+// The lock state is intentionally NOT part of the create/update payload, so a
+// non-admin has no request path to change it — only these two endpoints do.
+async function handleSetLock(req: Request, res: Response, locked: boolean): Promise<void> {
+  try {
+    const id = parseInt(req.params.id as string)
+    if (isNaN(id)) {
+      res.status(400).json({ success: false, message: 'Invalid employee ID' })
+      return
+    }
+    const employee = await employeeService.setEmployeeLock(id, locked, req.user!.id)
+    res.json({ success: true, data: employee })
+  } catch (error: any) {
+    logger.error('Set employee lock error:', error)
+    if (error.message === 'Employee not found') {
+      res.status(404).json({ success: false, message: 'Employee not found' })
+      return
+    }
+    res.status(500).json({ success: false, message: 'Error updating employee lock' })
+  }
+}
+router.put('/:id/lock', requireRole('ADMIN'), (req: Request, res: Response) => handleSetLock(req, res, true))
+router.put('/:id/unlock', requireRole('ADMIN'), (req: Request, res: Response) => handleSetLock(req, res, false))
 
 // PUT /employees/:id/cargos — replace all cargos
 router.put('/:id/cargos', requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {

@@ -109,6 +109,8 @@ test.describe('Contrato — archivoFirmadoUrl + cargoId (jul-9 D6/D7)', () => {
           fechaFin: '2026-12-31',
           archivoFirmadoUrl: 'https://files.example.com/contratos/firmado-qa.pdf',
           cargoId: activeCargoId,
+          // qa-session-jul-24 R7: TERMINO_FIJO requires valorMensual.
+          valorMensual: 1500000,
         },
       },
     );

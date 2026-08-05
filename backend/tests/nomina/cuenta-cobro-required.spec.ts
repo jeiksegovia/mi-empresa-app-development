@@ -38,10 +38,50 @@ async function pickEmpleadoWithContrato(request: any, tipoContrato: string): Pro
     `${API_BASE}/api/v1/nomina?periodo=2099-01&tipoContrato=${tipoContrato}`,
     { headers: { Cookie: adminCookie } }
   );
-  if (res.status() !== 200) return null;
-  const body = await res.json();
-  if (body.data?.length) return body.data[0].empleado.id;
-  return null;
+  if (res.status() === 200) {
+    const body = await res.json();
+    if (body.data?.length) return body.data[0].empleado.id;
+  }
+  // Fallback: self-seed a fresh empleado + contrato so tests are not dependent on stale seed data.
+  const createdIds: number[] = [];
+  const emp = await request.post(`${API_BASE}/api/v1/employees`, {
+    headers: { Cookie: adminCookie },
+    data: {
+      nombre: 'TEST',
+      apellido: `D4${tipoContrato.slice(0, 3)}${Date.now().toString().slice(-6)}`,
+      tipoDocumento: 'CC',
+      numeroDocumento: `9${Date.now().toString().slice(-8)}${tipoContrato[0]}`,
+      genero: 'M',
+      fechaNacimiento: '1990-01-15',
+    },
+  });
+  if (emp.status() !== 201) return null;
+  const empId = (await emp.json()).data.id as number;
+  createdIds.push(empId);
+
+  const cargos = await request.get(`${API_BASE}/api/v1/empresa/cargos`, { headers: { Cookie: adminCookie } });
+  const cargoId = cargos.status() === 200 ? (await cargos.json()).data?.[0]?.id : null;
+  if (!cargoId) return null;
+
+  const contratoBody: any = {
+    tipoContrato,
+    fechaInicio: '2026-01-01',
+    cargoId,
+    activo: true,
+  };
+  if (tipoContrato === 'OPS') {
+    contratoBody.valorJornada = 50000;
+    contratoBody.fechaFin = '2026-12-31';
+  } else {
+    contratoBody.valorMensual = 1500000;
+    if (tipoContrato !== 'TERMINO_INDEFINIDO') contratoBody.fechaFin = '2027-01-01';
+  }
+  const c = await request.post(`${API_BASE}/api/v1/nomina/employees/${empId}/contratos`, {
+    headers: { Cookie: adminCookie },
+    data: contratoBody,
+  });
+  if (c.status() !== 201) return null;
+  return empId;
 }
 
 test.describe.configure({ mode: 'serial' });

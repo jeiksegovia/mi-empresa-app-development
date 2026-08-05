@@ -13,10 +13,24 @@ import { toYMD } from '~/utils/date'
 
 const { apiFetch } = useApi()
 const toast = useToast()
+const authStore = useAuthStore()
 
+// qa-session-jul-24 §5.1: "today" computed via Intl.DateTimeFormat
+// with timeZone America/Bogota — byte-identical to the backend's
+// canonical helper. en-CA is the only stable locale that emits ISO
+// YYYY-MM-DD. Compared as strings to avoid TZ drift.
 function todayYMD(): string {
-  return toYMD(new Date())
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date())
 }
+
+// R6 (qa-session-jul-24 §5): a CONTRATOS sub-role of EMPLEADO can only
+// edit asistencia for `fecha === today`. ADMIN bypasses. Other roles
+// have no PUT access (backend enforces).
+const isContratosUser = computed(() =>
+  authStore.user?.rol === 'EMPLEADO' && authStore.user?.tipoEmpleado === 'CONTRATOS',
+)
+const dateLocked = computed(() => isContratosUser.value)
+const todayDate = computed(() => todayYMD())
 
 const fecha = ref(todayYMD())
 const search = ref('')
@@ -69,6 +83,19 @@ function setHoy() {
   fetchDay()
 }
 
+// qa-session-jul-24 R6: a CONTRATOS user who attempts to pick a
+// different date silently snaps back to today (display-only — the
+// authoritative check is the backend's 403 on fecha !== today).
+function onFechaChange() {
+  if (dateLocked.value && fecha.value !== todayDate.value) {
+    fecha.value = todayDate.value
+  }
+  if (fecha.value && fecha.value.length > 10) {
+    fecha.value = toYMD(fecha.value)
+  }
+  fetchDay()
+}
+
 function toggleAm(row: AsistenciaDiaRow) {
   row.jornadaAm = !row.jornadaAm
 }
@@ -114,13 +141,6 @@ async function saveDay() {
   }
 }
 
-function onFechaChange() {
-  if (fecha.value && fecha.value.length > 10) {
-    fecha.value = toYMD(fecha.value)
-  }
-  fetchDay()
-}
-
 onMounted(fetchDay)
 </script>
 
@@ -152,11 +172,15 @@ onMounted(fetchDay)
                 id="asistencia-fecha"
                 v-model="fecha"
                 type="date"
+                :min="dateLocked ? todayDate : undefined"
+                :max="dateLocked ? todayDate : undefined"
+                :readonly="dateLocked"
                 class="px-3 py-2 border border-[var(--surface-border)] rounded-lg bg-[var(--surface-ground)] text-[var(--text-color)] text-sm min-w-[11rem]"
                 data-testid="asistencia-fecha"
                 @change="onFechaChange"
               />
               <Button
+                v-if="!dateLocked"
                 label="Hoy"
                 icon="pi pi-calendar"
                 severity="secondary"
@@ -164,6 +188,17 @@ onMounted(fetchDay)
                 data-testid="asistencia-hoy"
                 @click="setHoy"
               />
+              <!-- qa-session-jul-24 R6: visible-only date lock indicator
+                   for the CONTRATOS sub-role. Backend enforces; this is
+                   a courtesy affordance. -->
+              <span
+                v-if="dateLocked"
+                class="text-xs text-[var(--text-color-secondary)] flex items-center gap-1"
+                data-testid="asistencia-fecha-locked"
+              >
+                <i class="pi pi-lock text-xs" />
+                Solo hoy
+              </span>
             </div>
           </div>
 

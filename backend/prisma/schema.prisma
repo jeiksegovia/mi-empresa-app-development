@@ -102,6 +102,21 @@ model Empleado {
   bancoTipoCuenta     TipoCuentaBanco? @map("banco_tipo_cuenta")
   bancoNumeroCuenta   String?          @map("banco_numero_cuenta") @db.VarChar(50)
 
+  // qa-session-jul-31 R3: optional EPS / Fondo de pensiones / ARL (free-text, no catalog).
+  eps                  String? @map("eps")                  @db.VarChar(100)
+  fondoPensiones       String? @map("fondo_pensiones")      @db.VarChar(100)
+  arl                  String? @map("arl")                  @db.VarChar(100)
+
+  // qa-session-jul-31 followup (aug-04): admin "bloqueador" lock. When bloqueado
+  // is true, non-ADMIN roles cannot edit this empleado / its contratos / medio de
+  // pago. Only ADMIN can set or clear it (via the dedicated lock/unlock endpoints);
+  // these columns are NEVER accepted on the normal create/update payload.
+  // bloqueadoPor is an audit-only scalar (admin usuario id) — no FK relation, to
+  // avoid a second Empleado↔Usuario relation.
+  bloqueado            Boolean   @default(false) @map("bloqueado")
+  bloqueadoPor         Int?      @map("bloqueado_por")
+  bloqueadoEn          DateTime? @map("bloqueado_en")
+
   // Relations
   usuarios                     Usuario[]
   nucleoFamiliar               NucleoFamiliar[]
@@ -373,6 +388,8 @@ model Contrato {
   cargo         CargoEmpresa @relation(fields: [cargoId], references: [id], onDelete: Restrict)
   // nomina-asistencia-jul-18: rate per media jornada (4h); required on CREATE at API layer
   valorJornada  Decimal?   @map("valor_jornada") @db.Decimal(12, 2)
+  // qa-session-jul-24 R7: monthly salary; required for non-OPS contract types at API layer
+  valorMensual  Decimal?   @map("valor_mensual") @db.Decimal(12, 2)
   activo       Boolean      @default(true)
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
@@ -1078,6 +1095,8 @@ enum TipoArchivoNomina {
 enum MedioPagoNomina {
   NEQUI
   TRANSFERENCIA_BANCARIA
+  // qa-session-jul-24 R1: cash payment option (no extra fields required)
+  EFECTIVO
 }
 
 enum TipoCuentaBanco {

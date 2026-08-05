@@ -1,7 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * LOCAL QA — nomina-asistencia-jul-18: medio de pago + pendiente sync.
+ * LOCAL QA — qa-session-jul-24 R1: medio de pago + pendiente sync.
+ *
+ * Updated for the new Nequi "llave" regex (email or alphanumeric 6-25 with
+ * at least one letter + one digit). Pure-numeric strings are rejected.
  */
 
 const API_BASE = process.env.TEST_API_URL || 'http://localhost:3101';
@@ -81,7 +84,7 @@ test.describe('Empleado medio de pago + pendiente (jul-18)', () => {
     ).toBe(true);
   });
 
-  test('POST NEQUI without number → 400', async ({ request }) => {
+  test('POST NEQUI without nequi → 400', async ({ request }) => {
     const resp = await request.post(`${API_BASE}/api/v1/employees`, {
       headers: { Cookie: adminCookie },
       data: {
@@ -97,6 +100,21 @@ test.describe('Empleado medio de pago + pendiente (jul-18)', () => {
         body.field === 'medioPagoNequi' ||
         body.message === 'Validation error',
     ).toBeTruthy();
+  });
+
+  test('POST NEQUI with pure-numeric llave → 400 (R1 regex)', async ({ request }) => {
+    const resp = await request.post(`${API_BASE}/api/v1/employees`, {
+      headers: { Cookie: adminCookie },
+      data: {
+        ...baseEmployee('B2N'),
+        medioPagoTipo: 'NEQUI',
+        medioPagoNequi: '3001234567',
+      },
+    });
+    expect(resp.status()).toBe(400);
+    const body = await resp.json();
+    expect(body.success).toBe(false);
+    expect(body.errors?.medioPagoNequi || body.message).toBeTruthy();
   });
 
   test('POST TRANSFERENCIA missing bank fields → 400', async ({ request }) => {
@@ -126,13 +144,14 @@ test.describe('Empleado medio de pago + pendiente (jul-18)', () => {
       headers: { Cookie: adminCookie },
       data: {
         medioPagoTipo: 'NEQUI',
-        medioPagoNequi: '3001234567',
+        // qa-session-jul-24 R1: use a valid alphanumeric llave.
+        medioPagoNequi: 'LlaveABC123',
       },
     });
     expect(update.status()).toBe(200);
     const uBody = await update.json();
     expect(uBody.data.medioPagoTipo).toBe('NEQUI');
-    expect(uBody.data.medioPagoNequi).toBe('3001234567');
+    expect(uBody.data.medioPagoNequi).toBe('LlaveABC123');
 
     const pend = await request.get(`${API_BASE}/api/v1/employees/${id}/pendientes`, {
       headers: { Cookie: adminCookie },

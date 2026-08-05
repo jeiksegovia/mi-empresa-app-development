@@ -14,6 +14,10 @@ interface Contrato {
   archivoUrl: string | null
   activo: boolean
   valorJornada?: number | string | null
+  // qa-session-jul-31 R2: surface the monthly value so the Registrar
+  // dialog can prefill the base for OBRA_O_LABOR / TERMINO_FIJO /
+  // TERMINO_INDEFINIDO contracts. Nullable per backend contract §2.
+  valorMensual?: number | string | null
 }
 
 interface NominaArchivo {
@@ -50,9 +54,11 @@ interface EmpleadoNomina {
 }
 
 interface NominaSugeridoLocal {
-  mediasJornadas: number
+  mediasJornadas: number | null
   valorJornada: number | null
-  subtotalCalculado: number
+  // qa-session-jul-31 R2: nullable for OPS, populated for OBRA/FIJO/INDEF.
+  valorMensual: number | null
+  subtotalCalculado: number | null
   aportesSociales: number
   totalPagado: number
 }
@@ -107,6 +113,9 @@ const dialogForm = reactive({
   salario: null as number | null,
   mediasJornadas: null as number | null,
   valorJornada: null as number | null,
+  // qa-session-jul-31 R2: base for OBRA/FIJO/INDEF contracts. Hidden
+  // input on OPS — recomputeSubtotal writes there indirectly.
+  valorMensual: null as number | null,
   subtotalCalculado: null as number | null,
   aportesSociales: null as number | null,
   totalPagado: null as number | null,
@@ -120,10 +129,24 @@ const aportesAllowed = computed(() => {
   return t === 'TERMINO_FIJO' || t === 'TERMINO_INDEFINIDO'
 })
 
+/** qa-session-jul-31 R2: True for non-OPS contracts where the dialog
+ *  branches to the Valor Mensual layout (hide jornada inputs, show a
+ *  base input that drives the subtotal). OPS path is unchanged. */
+const usaValorMensual = computed(() => {
+  const t = editingTipo.value
+  return (
+    t === 'OBRA_O_LABOR' ||
+    t === 'TERMINO_FIJO' ||
+    t === 'TERMINO_INDEFINIDO'
+  )
+})
+
 /** Complete medio display, or null when missing/incomplete → warning. */
 function medioPagoDisplay(emp: EmpleadoNomina): string | null {
   if (emp.medioPagoTipo === 'NEQUI' && emp.medioPagoNequi) {
-    return `Nequi · ${emp.medioPagoNequi}`
+    // qa-session-jul-31 R1: display label includes Bre-B alias. Stored
+    // enum value stays `NEQUI`; this is display-only.
+    return `Nequi/Bre-B · ${emp.medioPagoNequi}`
   }
   if (emp.medioPagoTipo === 'TRANSFERENCIA_BANCARIA') {
     const tipo =
@@ -147,6 +170,14 @@ const tipoContratoLabel = (tipo: string) =>
   }[tipo] || tipo)
 
 function recomputeSubtotal() {
+  // qa-session-jul-31 R2: branch the subtotal source by contrato type.
+  // OPS keeps the medias × valorJornada formula (existing jul-18 logic).
+  // Non-OPS uses valorMensual directly — no medias/valor inputs visible.
+  if (usaValorMensual.value) {
+    dialogForm.subtotalCalculado = dialogForm.valorMensual ?? 0
+    recomputeTotal()
+    return
+  }
   const m = dialogForm.mediasJornadas
   const v = dialogForm.valorJornada
   if (m == null || v == null) {
@@ -215,10 +246,18 @@ function openDialog(row: NominaRow) {
   // Prefer existing entrada values; fall back to sugerido / asistenciaMes / contrato.
   const n = (v: unknown) => (v != null && v !== '' ? Number(v) : null)
 
-  dialogForm.mediasJornadas =
-    n(ent?.mediasJornadas) ?? n(sug?.mediasJornadas) ?? n(row.asistenciaMes?.mediasJornadas) ?? 0
-  dialogForm.valorJornada =
-    n(ent?.valorJornada) ?? n(sug?.valorJornada) ?? n(row.contratoActivo?.valorJornada) ?? null
+  // qa-session-jul-31 R2: prefill source depends on the contrato tipo.
+  // OPS still reads medias × valorJornada. Non-OPS reads valorMensual
+  // (entrada first, then sugerido, then contrato, per contract §3).
+  if (usaValorMensual.value) {
+    dialogForm.valorMensual =
+      n(ent?.valorMensual) ?? n(sug?.valorMensual) ?? n(row.contratoActivo?.valorMensual) ?? null
+  } else {
+    dialogForm.mediasJornadas =
+      n(ent?.mediasJornadas) ?? n(sug?.mediasJornadas) ?? n(row.asistenciaMes?.mediasJornadas) ?? 0
+    dialogForm.valorJornada =
+      n(ent?.valorJornada) ?? n(sug?.valorJornada) ?? n(row.contratoActivo?.valorJornada) ?? null
+  }
   dialogForm.subtotalCalculado =
     n(ent?.subtotalCalculado) ?? n(sug?.subtotalCalculado) ?? null
   dialogForm.aportesSociales =
@@ -232,7 +271,7 @@ function openDialog(row: NominaRow) {
       : row.cargoSalario != null
         ? Number(row.cargoSalario)
         : null
-  // If subtotal still null, derive from medias × valor.
+  // If subtotal still null, derive from medias × valor (OPS) or valorMensual (non-OPS).
   if (dialogForm.subtotalCalculado == null) {
     recomputeSubtotal()
   } else if (dialogForm.totalPagado == null) {
@@ -256,6 +295,7 @@ function closeDialog() {
   dialogForm.salario = null
   dialogForm.mediasJornadas = null
   dialogForm.valorJornada = null
+  dialogForm.valorMensual = null
   dialogForm.subtotalCalculado = null
   dialogForm.aportesSociales = null
   dialogForm.totalPagado = null
@@ -317,6 +357,11 @@ async function saveEntrada() {
     const calcBody: Record<string, unknown> = {
       mediasJornadas: dialogForm.mediasJornadas,
       valorJornada: dialogForm.valorJornada,
+      // qa-session-jul-31 R2: send the Valor Mensual base for
+      // OBRA/FIJO/INDEF contracts. The backend already accepts this on
+      // jul-24 R7; including it here just keeps the dialog round-trip
+      // honest. For OPS we explicitly null it out (no stale column).
+      valorMensual: usaValorMensual.value ? (dialogForm.valorMensual ?? 0) : null,
       subtotalCalculado: dialogForm.subtotalCalculado,
       aportesSociales: aportesAllowed.value ? (dialogForm.aportesSociales ?? 0) : 0,
       totalPagado: dialogForm.totalPagado,
@@ -546,7 +591,10 @@ watch(selectedTipoFilter, () => { fetchRows() })
                 {{ tipoContratoLabel(editingTipo) }}
               </p>
             </div>
-            <div>
+            <!-- qa-session-jul-31 R2: the "Valor media jornada (contrato)"
+                 info/warning chip is OPS-only. For OBRA/FIJO/INDEF the
+                 Valor Mensual summary block below replaces it. -->
+            <div v-if="editingTipo === 'OPS'">
               <p class="text-xs text-[var(--text-color-secondary)]">Valor media jornada (contrato)</p>
               <p
                 v-if="editingRow.contratoActivo?.valorJornada != null && editingRow.contratoActivo.valorJornada !== ''"
@@ -563,6 +611,25 @@ watch(selectedTipoFilter, () => { fetchRows() })
                 data-testid="nomina-valor-jornada-warning"
               >
                 Sin valor de jornada en el contrato
+              </Message>
+            </div>
+            <div v-else>
+              <p class="text-xs text-[var(--text-color-secondary)]">Valor mensual (contrato)</p>
+              <p
+                v-if="editingRow.contratoActivo?.valorMensual != null && editingRow.contratoActivo.valorMensual !== ''"
+                class="font-medium"
+                data-testid="nomina-info-valor-mensual-contrato"
+              >
+                {{ Number(editingRow.contratoActivo.valorMensual).toLocaleString('es-CO') }}
+              </p>
+              <Message
+                v-else
+                severity="warn"
+                :closable="false"
+                class="mt-1"
+                data-testid="nomina-valor-mensual-warning"
+              >
+                Sin valor mensual en el contrato
               </Message>
             </div>
           </div>
@@ -588,37 +655,61 @@ watch(selectedTipoFilter, () => { fetchRows() })
           </div>
         </div>
 
-        <!-- Editable: medias, valor; read-only subtotal; aportes (FIJO/INDEFINIDO); total override -->
+        <!-- qa-session-jul-31 R2: branch the editable calc fields on tipoContrato.
+     OPS keeps medias × valorJornada (jul-18 behavior).
+     OBRA/FIJO/INDEF use a Valor Mensual base (no medias/valor inputs). -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="nomina-calc-fields">
-          <div>
-            <label class="block text-sm font-medium mb-1" for="nomina-medias">Medias jornadas</label>
+          <!-- OPS: medias + valor jornada inputs (jul-18 layout, unchanged) -->
+          <template v-if="!usaValorMensual">
+            <div>
+              <label class="block text-sm font-medium mb-1" for="nomina-medias">Medias jornadas</label>
+              <InputNumber
+                id="nomina-medias"
+                v-model="dialogForm.mediasJornadas"
+                mode="decimal"
+                :min="0"
+                :min-fraction-digits="0"
+                :max-fraction-digits="2"
+                input-class="w-full"
+                class="w-full"
+                data-testid="nomina-medias"
+                @update:model-value="recomputeSubtotal"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1" for="nomina-valor-jornada">Valor media jornada</label>
+              <InputNumber
+                id="nomina-valor-jornada"
+                v-model="dialogForm.valorJornada"
+                mode="decimal"
+                :min="0"
+                :min-fraction-digits="0"
+                :max-fraction-digits="2"
+                input-class="w-full"
+                class="w-full"
+                data-testid="nomina-valor-jornada"
+                @update:model-value="recomputeSubtotal"
+              />
+            </div>
+          </template>
+          <!-- Non-OPS: Valor Mensual base (R2). Subtotal derives from it. -->
+          <div v-else class="sm:col-span-2">
+            <label class="block text-sm font-medium mb-1" for="nomina-valor-mensual">Valor mensual</label>
             <InputNumber
-              id="nomina-medias"
-              v-model="dialogForm.mediasJornadas"
+              id="nomina-valor-mensual"
+              v-model="dialogForm.valorMensual"
               mode="decimal"
               :min="0"
               :min-fraction-digits="0"
               :max-fraction-digits="2"
               input-class="w-full"
               class="w-full"
-              data-testid="nomina-medias"
+              data-testid="nomina-valor-mensual"
               @update:model-value="recomputeSubtotal"
             />
-          </div>
-          <div>
-            <label class="block text-sm font-medium mb-1" for="nomina-valor-jornada">Valor media jornada</label>
-            <InputNumber
-              id="nomina-valor-jornada"
-              v-model="dialogForm.valorJornada"
-              mode="decimal"
-              :min="0"
-              :min-fraction-digits="0"
-              :max-fraction-digits="2"
-              input-class="w-full"
-              class="w-full"
-              data-testid="nomina-valor-jornada"
-              @update:model-value="recomputeSubtotal"
-            />
+            <p class="text-xs text-[var(--text-color-secondary)] mt-1">
+              Base del período para {{ tipoContratoLabel(editingTipo) }}.
+            </p>
           </div>
           <div>
             <label class="block text-sm font-medium mb-1" for="nomina-subtotal">Subtotal</label>
@@ -635,7 +726,12 @@ watch(selectedTipoFilter, () => { fetchRows() })
               data-testid="nomina-subtotal"
             />
             <p class="text-xs text-[var(--text-color-secondary)] mt-1">
-              Calculado: medias × valor media jornada
+              <template v-if="usaValorMensual">
+                Calculado: valor mensual
+              </template>
+              <template v-else>
+                Calculado: medias × valor media jornada
+              </template>
             </p>
           </div>
           <div v-if="aportesAllowed">
@@ -668,7 +764,15 @@ watch(selectedTipoFilter, () => { fetchRows() })
               @update:model-value="(v: number | null) => { dialogForm.salario = v }"
             />
             <p class="text-xs text-[var(--text-color-secondary)] mt-1">
-              Por defecto subtotal + aportes; se puede ajustar manualmente
+              <template v-if="usaValorMensual && aportesAllowed">
+                Por defecto valor mensual + aportes; se puede ajustar manualmente
+              </template>
+              <template v-else-if="usaValorMensual">
+                Por defecto valor mensual; se puede ajustar manualmente
+              </template>
+              <template v-else>
+                Por defecto subtotal + aportes; se puede ajustar manualmente
+              </template>
             </p>
           </div>
         </div>
