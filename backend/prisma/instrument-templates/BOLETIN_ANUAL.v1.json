@@ -1,0 +1,139 @@
+{
+  "codigo": "BOLETIN_ANUAL",
+  "nombre": "Boletín Anual de Usuarios",
+  "version": 1,
+  "tipo": "VALORACION",
+  "descripcion": "Boletín anual multidisciplinario que sintetiza la evolución del abuelo/a por componente (psicología, deporte, terapia ocupacional, fisioterapia, componente social, enfermería). Instrumento puramente informacional, sin scoring (decisión D4).",
+  "instructions": "Complete un boletín por abuelo/a por año. Cada componente lo registra el profesional responsable. Use los campos de texto largo para detallar la evolución, logros y recomendaciones del periodo.",
+  "periodicidad": "ANUAL",
+  "rolesPermitidos": "ADMIN,GERONTOLOGA,PROFESORES,AUXILIARES",
+  "sections": [
+    {
+      "id": "paciente",
+      "titulo": "Datos del paciente",
+      "items": [
+        {
+          "id": "boletin_tipo_documento",
+          "label": "Tipo de documento",
+          "type": "single-select-info",
+          "required": true,
+          "options": [
+            { "value": "cc", "label": "C.C.", "score": null },
+            { "value": "otro", "label": "Otro", "score": null }
+          ]
+        },
+        {
+          "id": "boletin_documento_otro",
+          "label": "Otro tipo de documento — ¿cuál?",
+          "type": "text-info",
+          "required": false,
+          "placeholder": "Especificar (TI, CE, Pasaporte, etc.)"
+        },
+        {
+          "id": "boletin_numero_documento",
+          "label": "Número de documento",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Número de documento del paciente"
+        },
+        {
+          "id": "boletin_nombre_apellido",
+          "label": "Nombre y apellido",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Nombre completo del paciente"
+        },
+        {
+          "id": "boletin_periodo_anio",
+          "label": "Periodo (año)",
+          "type": "number-info",
+          "required": true,
+          "constraints": { "min": 2020, "max": 2099 }
+        },
+        {
+          "id": "boletin_edad",
+          "label": "Edad",
+          "type": "number-info",
+          "required": true,
+          "constraints": { "min": 0, "max": 130 }
+        },
+        {
+          "id": "boletin_sexo",
+          "label": "Sexo",
+          "type": "single-select-info",
+          "required": true,
+          "options": [
+            { "value": "masculino", "label": "Masculino", "score": null },
+            { "value": "femenino", "label": "Femenino", "score": null }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "componentes",
+      "titulo": "Componentes del boletín",
+      "instructions": "Detalle la evolución del paciente en cada componente durante el año. Sea específico y mencione logros, dificultades y recomendaciones.",
+      "items": [
+        {
+          "id": "boletin_psicologia",
+          "label": "Psicología",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Evolución emocional, cognitiva y conductual del paciente en el periodo"
+        },
+        {
+          "id": "boletin_deporte",
+          "label": "Deporte",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Actividad física, adherencia al programa y progresos motrices"
+        },
+        {
+          "id": "boletin_terapia_ocupacional",
+          "label": "Terapia Ocupacional",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Actividades de la vida diaria, desempeño ocupacional y adaptaciones"
+        },
+        {
+          "id": "boletin_fisioterapia",
+          "label": "Fisioterapia",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Evolución motriz, equilibrio, marcha y manejo del dolor"
+        },
+        {
+          "id": "boletin_componente_social",
+          "label": "Componente Social",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Integración social, vínculos y participación en actividades grupales"
+        },
+        {
+          "id": "boletin_concepto_enfermeria",
+          "label": "Concepto de Enfermería",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Estado de salud general, medicamentos, signos clínicos relevantes y recomendaciones"
+        }
+      ]
+    },
+    {
+      "id": "autor",
+      "titulo": "Profesional que registra",
+      "items": [
+        {
+          "id": "boletin_autor",
+          "label": "Nombre del profesional",
+          "type": "text-info",
+          "required": false,
+          "placeholder": "Profesional responsable del registro"
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "total": "none",
+    "resultEvaluation": []
+  }
+}

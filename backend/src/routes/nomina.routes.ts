@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { authMiddleware, requireRole } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
-import { requireDomain } from '../middleware/domainAccess.js'
+import { requireDomain, requireEmployeeUnlocked } from '../middleware/domainAccess.js'
 import { forbidLegacy } from '../middleware/forbidLegacy.js'
 import * as nominaService from '../services/nominaService.js'
 import { logger } from '../config/logger.js'
@@ -75,7 +75,10 @@ router.get('/employees/:id/contratos', async (req: Request, res: Response): Prom
   }
 })
 
-router.post('/employees/:id/contratos', requireRole('ADMIN'), forbidLegacy(['cargo']), validate(contratoCreateSchema), async (req: Request, res: Response): Promise<void> => {
+// qa-session-aug-6: CONTRATOS must create/edit/delete contratos when the empleado is
+// unlocked. requireDomain('nomina') already allows CONTRATOS; requireRole('ADMIN') was
+// incorrectly blocking them. Lock still enforced via requireEmployeeUnlocked.
+router.post('/employees/:id/contratos', requireEmployeeUnlocked('id'), forbidLegacy(['cargo']), validate(contratoCreateSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid employee ID' }); return }
@@ -119,7 +122,7 @@ router.post('/employees/:id/contratos', requireRole('ADMIN'), forbidLegacy(['car
   }
 })
 
-router.put('/employees/:id/contratos/:cid', requireRole('ADMIN'), forbidLegacy(['cargo']), validate(contratoUpdateSchema), async (req: Request, res: Response): Promise<void> => {
+router.put('/employees/:id/contratos/:cid', requireEmployeeUnlocked('id'), forbidLegacy(['cargo']), validate(contratoUpdateSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     const cid = parseInt(req.params.cid as string)
@@ -146,7 +149,7 @@ router.put('/employees/:id/contratos/:cid', requireRole('ADMIN'), forbidLegacy([
   }
 })
 
-router.delete('/employees/:id/contratos/:cid', requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.delete('/employees/:id/contratos/:cid', requireEmployeeUnlocked('id'), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     const cid = parseInt(req.params.cid as string)

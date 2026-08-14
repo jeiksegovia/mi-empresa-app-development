@@ -39,7 +39,7 @@ async function baseStubs(page: Page) {
 }
 
 test.describe('§3.2 crear-from-template + sin-definición — MOCKED', () => {
-  test('selector renders the 6 templates + "Sin plantilla" (7 options)', async ({ page }) => {
+  test('selector renders the 8 templates + "Sin plantilla" (9 options)', async ({ page }) => {
     await baseStubs(page)
     // Each template definition → summary. Return the BARTHEL fixture for all
     // (summary text is not asserted; option count is).
@@ -50,10 +50,14 @@ test.describe('§3.2 crear-from-template + sin-definición — MOCKED', () => {
     await page.getByTestId('template-selector').waitFor({ state: 'visible', timeout: 10000 })
     await page.getByTestId('template-selector').click()
     // Options render in the PrimeVue overlay with [data-template-option].
+    // fixes-features-aug-6 §5 added SIGNOS_VITALES + BOLETIN_ANUAL →
+    // 8 templates total + "Sin plantilla" = 9 options.
     const options = page.locator('[data-template-option]')
-    await expect(options).toHaveCount(7)
+    await expect(options).toHaveCount(9)
     await expect(page.locator('[data-template-option="__none__"]')).toContainText('Sin plantilla')
     await expect(page.locator('[data-template-option="BARTHEL"]')).toContainText('BARTHEL')
+    await expect(page.locator('[data-template-option="SIGNOS_VITALES"]')).toHaveCount(1)
+    await expect(page.locator('[data-template-option="BOLETIN_ANUAL"]')).toHaveCount(1)
   })
 
   test('creating with BARTHEL template sends templateCodigo and yields a fillable instrument', async ({ page }) => {
@@ -100,6 +104,10 @@ test.describe('§3.2 crear-from-template + sin-definición — MOCKED', () => {
     // Template = BARTHEL
     await page.getByTestId('template-selector').click()
     await page.locator('[data-template-option="BARTHEL"]').click()
+    // fixes-features-aug-6 T15: when a template is selected, codigo is
+    // REQUIRED (otherwise the detail page's loadDefinition short-circuits
+    // on `if (!codigo)` and renders "Sin definición — no llenable").
+    await page.getByTestId('instrument-codigo-input').fill('NUEVO_BARTHEL')
 
     await page.getByRole('button', { name: 'Crear Instrumento' }).click()
 
@@ -143,6 +151,62 @@ test.describe('§3.2 crear-from-template + sin-definición — MOCKED', () => {
     await expect(page.getByTestId('picker-sin-definicion')).toHaveCount(1)
     const legacyOpt = page.locator('li[aria-label="Legacy Sin Def"], li:has-text("Legacy Sin Def")').first()
     await expect(legacyOpt).toHaveAttribute('aria-disabled', 'true')
+  })
+
+  /**
+   * fixes-features-aug-6 convergence (T15): when a template is selected and
+   * `codigo` is blank, the FE must block submission. Without codigo, the
+   * instrument is created with `codigo=null` and the detail page's
+   * `loadDefinition()` short-circuits at `if (!codigo)`, surfacing
+   * "Sin definición — no llenable" even though the BE deep-copied a real
+   * definition into v1. Close that hole on the FE.
+   */
+  test('create from template WITHOUT codigo is blocked by FE validation (no POST)', async ({ page }) => {
+    await baseStubs(page)
+    await page.route('**/api/v1/instruments/*/definition', (r) =>
+      r.fulfill(json({ success: true, data: { version: { definition: barthel } } })),
+    )
+
+    let postCount = 0
+    await page.route('**/api/v1/instruments', (r) => {
+      if (r.request().method() === 'POST') {
+        postCount++
+        return r.fulfill(json({
+          success: true,
+          data: { id: 901, codigo: 'SHOULD_NOT_HAPPEN', activeVersion: { id: 1, version: 1, activo: true } },
+        }))
+      }
+      return r.fulfill(json({ success: true, data: [], total: 0 }))
+    })
+
+    await page.goto(`${FRONTEND}/instrumentos/crear`)
+    await page.getByTestId('template-selector').waitFor({ state: 'visible', timeout: 10000 })
+
+    // Fill everything EXCEPT codigo, then choose a template.
+    await page.locator('input').first().fill('Barthel Sin Codigo')
+    await selectOption(page, 'Tipo', 'Valoración')
+    await selectOption(page, 'Periodicidad', 'Semestral')
+
+    await page.getByTestId('template-selector').click()
+    await page.locator('[data-template-option="BARTHEL"]').click()
+
+    // codigo field is intentionally left blank.
+    await expect(page.getByTestId('instrument-codigo-input')).toHaveValue('')
+
+    // Submit — FE validation must block the POST and surface the error.
+    await page.getByRole('button', { name: 'Crear Instrumento' }).click()
+
+    // No POST was sent.
+    await page.waitForTimeout(500)
+    expect(postCount).toBe(0)
+
+    // The codigo error message is visible.
+    await expect(
+      page.getByText('El código es requerido al usar una plantilla'),
+    ).toBeVisible()
+
+    // We are still on /instrumentos/crear (no navigation to detail).
+    expect(new URL(page.url()).pathname).toBe('/instrumentos/crear')
   })
 })
 

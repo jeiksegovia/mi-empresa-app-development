@@ -91,6 +91,25 @@ export interface CreateInstrumentInput {
   templateCodigo?: InstrumentTemplateCodigo
 }
 
+/**
+ * fixes-features-aug-6 §3.3: default `rolesPermitidos` for a newly created
+ * instrument when the client omits it. The creator's rol + tipoEmpleado
+ * tokens are always included so they can immediately fill what they just
+ * created.
+ */
+export function defaultRolesPermitidos(creator: {
+  rol: string
+  tipoEmpleado: string | null
+}): string {
+  if (creator.rol === 'ADMIN') {
+    // Back-compat: preserve prior ADMIN-seeded behavior of an open allow-list.
+    return 'ADMIN,EMPLEADO,GERONTOLOGA,CONTRATOS,PROFESORES,AUXILIARES'
+  }
+  const tokens = ['ADMIN', creator.rol]
+  if (creator.tipoEmpleado) tokens.push(creator.tipoEmpleado)
+  return [...new Set(tokens)].join(',')
+}
+
 export type UpdateInstrumentInput = Partial<Omit<CreateInstrumentInput, 'templateCodigo'>>
 
 /**
@@ -317,8 +336,25 @@ function deepCloneDefinition<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
-export async function createInstrument(input: CreateInstrumentInput, userId: number): Promise<InstrumentDetail> {
+export async function createInstrument(
+  input: CreateInstrumentInput,
+  userId: number,
+  creator?: { rol: string; tipoEmpleado: string | null },
+): Promise<InstrumentDetail> {
   const prisma = getPrisma()
+
+  // fixes-features-aug-6 §3.3: ensure the resulting rolesPermitidos is non-empty
+  // and contains the creator's tokens so they can immediately fill what they
+  // just created. The validator on `rolesPermitidos` already enforces non-empty,
+  // so we only stamp the default when the client omitted it OR sent empty.
+  let rolesPermitidos = input.rolesPermitidos
+  if ((!rolesPermitidos || rolesPermitidos.trim() === '') && creator) {
+    rolesPermitidos = defaultRolesPermitidos(creator)
+  }
+  const safeRolesPermitidos: string =
+    rolesPermitidos && rolesPermitidos.trim() !== ''
+      ? rolesPermitidos
+      : 'ADMIN,EMPLEADO' // fallback (no creator context — defensive default)
 
   // fixes-jul17-2 §3.1: when templateCodigo is present, resolve template + active
   // version + deep-copy the definition in a single transaction. The source template
@@ -362,7 +398,7 @@ export async function createInstrument(input: CreateInstrumentInput, userId: num
           descripcion: input.descripcion,
           tipo: input.tipo as any,
           periodicidad: input.periodicidad as any,
-          rolesPermitidos: input.rolesPermitidos,
+          rolesPermitidos: safeRolesPermitidos,
           estado: (input.estado ?? 'ACTIVO') as any,
           creadoPor: userId,
         },
@@ -409,7 +445,7 @@ export async function createInstrument(input: CreateInstrumentInput, userId: num
       descripcion: input.descripcion,
       tipo: input.tipo as any,
       periodicidad: input.periodicidad as any,
-      rolesPermitidos: input.rolesPermitidos,
+      rolesPermitidos: safeRolesPermitidos,
       estado: (input.estado ?? 'ACTIVO') as any,
       creadoPor: userId,
     },
@@ -552,6 +588,9 @@ export interface InstrumentDefinitionResult {
 export async function getInstrumentDefinition(
   codigo: string,
   callerRolesCsv: string | null,
+  // fixes-features-aug-6 §3.2: explicit ADMIN bypass — defense-in-depth so ADMIN
+  // never gets ROLE_NOT_ALLOWED even on an instrument with an unusual rolesPermitidos.
+  callerRol?: string | null,
 ): Promise<InstrumentDefinitionResult> {
   const prisma = getPrisma()
   const inst = await prisma.instrumento.findUnique({ where: { codigo } })
@@ -562,11 +601,14 @@ export async function getInstrumentDefinition(
     )
   }
 
-  // §4.2: 403 ROLE_NOT_ALLOWED via rolesPermitidos CSV check.
-  // Caller's role must appear in the CSV (case-insensitive trimmed match).
-  // ADMIN bypass is implicit because ADMIN is typically in rolesPermitidos;
-  // callers can pre-add ADMIN to the list if needed.
-  if (callerRolesCsv !== null && inst.rolesPermitidos) {
+  // fixes-features-aug-6 §3.2 step 1: explicit ADMIN bypass.
+  if (callerRol && callerRol.toUpperCase() === 'ADMIN') {
+    // skip rolesPermitidos check; ADMIN always allowed.
+  } else if (callerRolesCsv !== null && inst.rolesPermitidos) {
+    // fixes-features-aug-6 §3.2 steps 2-3: token comparison — split both CSVs on
+    // commas, trim, UPPER, drop empty; caller tokens ∩ allowed tokens must be
+    // non-empty. New-role tokens (PROFESORES, AUXILIARES) are honored here
+    // because we just split + uppercase — the enum strings already match.
     const allowed = inst.rolesPermitidos
       .split(',')
       .map((r) => r.trim().toUpperCase())

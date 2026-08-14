@@ -1,0 +1,94 @@
+{
+  "codigo": "BOLETIN_ANUAL",
+  "nombre": "Boletín Anual de Usuarios",
+  "version": 2,
+  "tipo": "VALORACION",
+  "descripcion": "Boletín anual multidisciplinario (psicología, deporte, T.O., fisioterapia, social, enfermería). Datos personales del paciente se leen de la ficha del paciente (no se reingresan). Instrumento informacional, sin scoring.",
+  "instructions": "Los datos del paciente ya están en su ficha. Complete el periodo (año) y cada componente. Un boletín por paciente por año.",
+  "periodicidad": "ANUAL",
+  "rolesPermitidos": "ADMIN,GERONTOLOGA,PROFESORES,AUXILIARES",
+  "sections": [
+    {
+      "id": "periodo",
+      "titulo": "Periodo del boletín",
+      "items": [
+        {
+          "id": "boletin_periodo_anio",
+          "label": "Periodo (año)",
+          "type": "number-info",
+          "required": true,
+          "constraints": {
+            "min": 2020,
+            "max": 2099
+          }
+        }
+      ]
+    },
+    {
+      "id": "componentes",
+      "titulo": "Componentes del boletín",
+      "instructions": "Detalle la evolución del paciente en cada componente durante el año. Sea específico y mencione logros, dificultades y recomendaciones.",
+      "items": [
+        {
+          "id": "boletin_psicologia",
+          "label": "Psicología",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Evolución emocional, cognitiva y conductual del paciente en el periodo"
+        },
+        {
+          "id": "boletin_deporte",
+          "label": "Deporte",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Actividad física, adherencia al programa y progresos motrices"
+        },
+        {
+          "id": "boletin_terapia_ocupacional",
+          "label": "Terapia Ocupacional",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Actividades de la vida diaria, desempeño ocupacional y adaptaciones"
+        },
+        {
+          "id": "boletin_fisioterapia",
+          "label": "Fisioterapia",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Evolución motriz, equilibrio, marcha y manejo del dolor"
+        },
+        {
+          "id": "boletin_componente_social",
+          "label": "Componente Social",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Integración social, vínculos y participación en actividades grupales"
+        },
+        {
+          "id": "boletin_concepto_enfermeria",
+          "label": "Concepto de Enfermería",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Estado de salud general, medicamentos, signos clínicos relevantes y recomendaciones"
+        }
+      ]
+    },
+    {
+      "id": "autor",
+      "titulo": "Profesional que registra",
+      "items": [
+        {
+          "id": "boletin_autor",
+          "label": "Nombre del profesional",
+          "type": "text-info",
+          "required": false,
+          "placeholder": "Profesional responsable del registro"
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "total": "none",
+    "resultEvaluation": []
+  }
+}

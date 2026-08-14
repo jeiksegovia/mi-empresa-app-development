@@ -1,0 +1,426 @@
+{
+  "codigo": "TINETTI",
+  "nombre": "Escala de Tinetti (Marcha y Equilibrio)",
+  "version": 5,
+  "tipo": "VALORACION",
+  "descripcion": "Evalúa el equilibrio y la marcha del abuelo/a para determinar riesgo de caídas. Versión 2: los ítems 8 y 11 se presentan como selecciones únicas.",
+  "instructions": "El cuestionario evalúa el equilibrio y la marcha de manera demostrativa y debe ser aplicado por dos personas; una dará las instrucciones y la otra cuidará de que la persona no sufra algún accidente.",
+  "sections": [
+    {
+      "id": "equilibrio",
+      "titulo": "Equilibrio",
+      "instructions": "Puntuación máxima 15. El paciente está sentado en una silla dura sin apoyar brazos. Se realizan las siguientes maniobras.",
+      "subtotal": {
+        "max": 15
+      },
+      "items": [
+        {
+          "id": "eq_sentado",
+          "label": "1. Equilibrio sentado",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "se_inclina",
+              "label": "Se inclina o se desliza en la silla",
+              "score": 0
+            },
+            {
+              "value": "seguro",
+              "label": "Se mantiene seguro",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "eq_levantarse",
+          "label": "2. Levantarse",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "imposible",
+              "label": "Imposible sin ayuda",
+              "score": 0
+            },
+            {
+              "value": "usa_brazos",
+              "label": "Capaz, pero usa los brazos para ayudarse",
+              "score": 1
+            },
+            {
+              "value": "sin_brazos",
+              "label": "Capaz sin usar los brazos",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "eq_intentos",
+          "label": "3. Intentos para levantarse",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "incapaz",
+              "label": "Incapaz sin ayuda",
+              "score": 0
+            },
+            {
+              "value": "varios",
+              "label": "Capaz, pero necesita más de un intento",
+              "score": 1
+            },
+            {
+              "value": "un_intento",
+              "label": "Capaz de levantarse con sólo un intento",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "eq_bip_inmediata",
+          "label": "4. Equilibrio en bipedestación inmediata (los primeros 5 segundos)",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "inestable",
+              "label": "Inestable (se tambalea, mueve los pies), marcado balanceo del tronco",
+              "score": 0
+            },
+            {
+              "value": "apoyo",
+              "label": "Estable, pero usa el andador, bastón o se agarra a otro objeto para mantenerse",
+              "score": 1
+            },
+            {
+              "value": "estable",
+              "label": "Estable sin andador, bastón u otros soportes",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "eq_bipedestacion",
+          "label": "5. Equilibrio en bipedestación",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "inestable",
+              "label": "Inestable",
+              "score": 0
+            },
+            {
+              "value": "apoyado",
+              "label": "Estable, pero con apoyo amplio (talones separados más de 10 cm) o un bastón u otro soporte",
+              "score": 1
+            },
+            {
+              "value": "estable",
+              "label": "Estable, sin usar bastón u otros soportes por 10 segundos, no requiere ayuda",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "eq_empujar",
+          "label": "6. Empujar (en bipedestación con tronco erecto y pies juntos; examinador empuja suavemente el esternón 3 veces)",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "cae",
+              "label": "Empieza a caerse",
+              "score": 0
+            },
+            {
+              "value": "tambalea",
+              "label": "Se tambalea, se agarra, pero se mantiene",
+              "score": 1
+            },
+            {
+              "value": "estable",
+              "label": "Estable",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "eq_ojos_cerrados",
+          "label": "7. Ojos cerrados (en posición del punto 6)",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "inestable",
+              "label": "Inestable",
+              "score": 0
+            },
+            {
+              "value": "estable",
+              "label": "Estable",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "eq_vuelta_360",
+          "label": "8. Vuelta a 360°",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "pasos_discontinuos",
+              "label": "Pasos discontinuos",
+              "score": 0
+            },
+            {
+              "value": "pasos_continuos",
+              "label": "Continuos",
+              "score": 1
+            },
+            {
+              "value": "inestable",
+              "label": "Inestable",
+              "score": 0
+            },
+            {
+              "value": "estable",
+              "label": "Estable",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "eq_sentarse",
+          "label": "9. Sentarse",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "inseguro",
+              "label": "Inseguro, calcula mal la distancia, cae en la silla",
+              "score": 0
+            },
+            {
+              "value": "brazos",
+              "label": "Usa los brazos o el movimiento es brusco",
+              "score": 1
+            },
+            {
+              "value": "seguro",
+              "label": "Seguro, movimiento suave",
+              "score": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "marcha",
+      "titulo": "Marcha",
+      "instructions": "Puntuación máxima 12. El paciente permanece de pie con el examinador, camina por el pasillo (unos 8 metros) a paso normal luego regresa a paso rápido pero seguro.",
+      "subtotal": {
+        "max": 12
+      },
+      "items": [
+        {
+          "id": "ma_iniciacion",
+          "label": "10. Iniciación de la marcha (inmediatamente después de decir que ande)",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "vacila",
+              "label": "Algunas vacilaciones o múltiples intentos para empezar",
+              "score": 0
+            },
+            {
+              "value": "no_vacila",
+              "label": "No vacila",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "ma_pie_derecho",
+          "label": "11a. Longitud y altura del paso — Movimiento del pie derecho",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "a_no_sobrepasa",
+              "label": "A. No sobrepasa al pie izquierdo con el paso",
+              "score": 0
+            },
+            {
+              "value": "b_sobrepasa",
+              "label": "B. Sobrepasa al pie izquierdo",
+              "score": 1
+            },
+            {
+              "value": "c_no_separa",
+              "label": "C. El pie derecho no se separa completamente del suelo con el paso",
+              "score": 0
+            },
+            {
+              "value": "d_separa",
+              "label": "D. El pie derecho se separa completamente del suelo",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "ma_pie_izquierdo",
+          "label": "11b. Movimiento del pie izquierdo",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "a_no_sobrepasa",
+              "label": "A. No sobrepasa al pie derecho con el paso",
+              "score": 0
+            },
+            {
+              "value": "b_sobrepasa",
+              "label": "B. Sobrepasa al pie derecho",
+              "score": 1
+            },
+            {
+              "value": "c_no_separa",
+              "label": "C. El pie izquierdo no se separa completamente del suelo con el paso",
+              "score": 0
+            },
+            {
+              "value": "d_separa",
+              "label": "D. El pie izquierdo se separa completamente del suelo",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "ma_simetria",
+          "label": "12. Simetría del paso",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "desigual",
+              "label": "La longitud de los pasos con los pies izquierdo y derecho no es igual",
+              "score": 0
+            },
+            {
+              "value": "igual",
+              "label": "La longitud parece igual",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "ma_fluidez",
+          "label": "13. Fluidez del paso",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "paradas",
+              "label": "Paradas entre los pasos",
+              "score": 0
+            },
+            {
+              "value": "continuos",
+              "label": "Los pasos parecen continuos",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "ma_trayectoria",
+          "label": "14. Trayectoria (trazado de un pie durante unos 3 metros)",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "grave",
+              "label": "Desviación grave de la trayectoria",
+              "score": 0
+            },
+            {
+              "value": "leve",
+              "label": "Leve/moderada desviación o usa ayuda para mantener la trayectoria",
+              "score": 1
+            },
+            {
+              "value": "sin_desv",
+              "label": "Sin desviación o ayudas",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "ma_tronco",
+          "label": "15. Tronco",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "balancea",
+              "label": "Balanceo marcado o usa ayuda",
+              "score": 0
+            },
+            {
+              "value": "flexiona",
+              "label": "No se balancea, pero flexiona las rodillas o la espalda o separa los brazos al caminar",
+              "score": 1
+            },
+            {
+              "value": "sin_balanceo",
+              "label": "No se balancea, no se flexiona, ni utiliza otras ayudas",
+              "score": 2
+            }
+          ]
+        },
+        {
+          "id": "ma_postura",
+          "label": "16. Postura al caminar",
+          "type": "single-select-scored",
+          "required": true,
+          "options": [
+            {
+              "value": "separados",
+              "label": "Talones separados",
+              "score": 0
+            },
+            {
+              "value": "casi_juntos",
+              "label": "Talones casi juntos al caminar",
+              "score": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "total": "sum",
+    "resultEvaluation": [
+      {
+        "min": 23,
+        "max": 25,
+        "label": "Riesgo bajo"
+      },
+      {
+        "min": 17,
+        "max": 22,
+        "label": "Riesgo moderado"
+      },
+      {
+        "min": 0,
+        "max": 16,
+        "label": "Alto riesgo de caídas"
+      }
+    ]
+  }
+}

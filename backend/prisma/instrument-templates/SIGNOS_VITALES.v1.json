@@ -1,0 +1,89 @@
+{
+  "codigo": "SIGNOS_VITALES",
+  "nombre": "Signos Vitales",
+  "version": 1,
+  "tipo": "VALORACION",
+  "descripcion": "Registro periódico de signos vitales del abuelo/a: O2, presión arterial, frecuencia cardiaca, frecuencia respiratoria, temperatura y observaciones por cada toma. Instrumento puramente informacional, sin scoring (decisión D4).",
+  "instructions": "Registre una fila por cada medición de signos vitales. Use el botón \"Agregar medición\" en la interfaz para añadir nuevas filas al grupo. Una fila vacía equivale a no registrar mediciones en ese periodo.",
+  "periodicidad": "MENSUAL",
+  "rolesPermitidos": "ADMIN,GERONTOLOGA,PROFESORES,AUXILIARES",
+  "sections": [
+    {
+      "id": "paciente",
+      "titulo": "Datos del paciente",
+      "items": [
+        {
+          "id": "paciente_tipo_documento",
+          "label": "Tipo de documento",
+          "type": "single-select-info",
+          "required": true,
+          "options": [
+            { "value": "cc", "label": "C.C.", "score": null },
+            { "value": "otro", "label": "Otro", "score": null }
+          ]
+        },
+        {
+          "id": "paciente_documento_otro",
+          "label": "Otro tipo de documento — ¿cuál?",
+          "type": "text-info",
+          "required": false,
+          "placeholder": "Especificar (TI, CE, Pasaporte, etc.)"
+        },
+        {
+          "id": "paciente_nombre_completo",
+          "label": "Nombre y apellido",
+          "type": "text-info",
+          "required": true,
+          "placeholder": "Nombre completo del paciente"
+        },
+        {
+          "id": "paciente_edad",
+          "label": "Edad",
+          "type": "number-info",
+          "required": true,
+          "constraints": { "min": 0, "max": 130 }
+        },
+        {
+          "id": "paciente_sexo",
+          "label": "Sexo",
+          "type": "single-select-info",
+          "required": true,
+          "options": [
+            { "value": "masculino", "label": "Masculino", "score": null },
+            { "value": "femenino", "label": "Femenino", "score": null }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mediciones",
+      "titulo": "Mediciones de signos vitales",
+      "instructions": "Cada celda del grupo es texto libre. La primera fila fija es la medición 1; el frontend replica la fila al pulsar \"Agregar medición\".",
+      "items": [
+        {
+          "id": "mediciones",
+          "label": "Mediciones",
+          "type": "group-info",
+          "required": false,
+          "cellInput": "text",
+          "columns": [
+            { "id": "fecha_hora",       "label": "Fecha y hora",          "score": null },
+            { "id": "o2",               "label": "O₂ (%)",                "score": null },
+            { "id": "presion_arterial", "label": "Presión arterial (mmHg)","score": null },
+            { "id": "fc",               "label": "FC (lpm)",              "score": null },
+            { "id": "fr",               "label": "FR (rpm)",              "score": null },
+            { "id": "temperatura",      "label": "Temperatura (°C)",      "score": null },
+            { "id": "observaciones",    "label": "Observaciones",         "score": null }
+          ],
+          "rows": [
+            { "id": "medicion_1", "label": "Medición 1" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "total": "none",
+    "resultEvaluation": []
+  }
+}

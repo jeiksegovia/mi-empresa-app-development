@@ -57,6 +57,10 @@ type Definition = {
   descripcion?: string;
   instructions?: string;
   mergeOf?: string[];
+  // fixes-features-aug-6 §3.4: optional top-level rolesPermitidos — when
+  // present, the upgrade uses this CSV on the Instrumento row instead of the
+  // hardcoded 'ADMIN,EMPLEADO'. Back-compat: missing → legacy default.
+  rolesPermitidos?: string;
   sections: Section[];
   scoring: { total: string; resultEvaluation: ScoringRange[] };
 };
@@ -237,7 +241,18 @@ const PERIODICIDAD_BY_CODIGO: Record<
   MNA_CUADRO: 'SEMESTRAL',
   FICHA_NUTRICIONAL: 'SEMESTRAL',
   VALORACION_INTEGRAL: 'UNICA',
+  // fixes-features-aug-6: 2 new templates get explicit periodicidad.
+  SIGNOS_VITALES: 'MENSUAL',
+  BOLETIN_ANUAL: 'ANUAL',
 };
+
+// fixes-features-aug-6 §3.4: read `rolesPermitidos` from the template
+// top-level if present; otherwise fall back to the legacy 'ADMIN,EMPLEADO'.
+function resolveRolesPermitidos(def: Definition): string {
+  const fromTemplate = def.rolesPermitidos?.trim()
+  if (fromTemplate && fromTemplate.length > 0) return fromTemplate
+  return 'ADMIN,EMPLEADO'
+}
 
 function loadTemplates(): Definition[] {
   const files = readdirSync(TEMPLATE_DIR).filter((f) => /\.v\d+\.json$/.test(f));
@@ -298,9 +313,27 @@ async function ensureInstrumentRows(defs: Definition[], createdBy: number): Prom
   console.log('📋 Ensuring template Instrumento rows …');
   for (const def of latestDefinitionsByCodigo(defs)) {
     const existing = await prisma.instrumento.findUnique({ where: { codigo: def.codigo } });
+    const targetRoles = resolveRolesPermitidos(def);
+
     if (existing) {
-      console.log(`  ⏭  ${def.codigo} Instrumento row exists`);
-      continue;
+      // fixes-features-aug-6 §3.4: reconcile an existing row whose
+      // rolesPermitidos / periodicidad predates this contract. Only sync
+      // when the template declares an explicit value that differs.
+      const targetPeriodicidad = (PERIODICIDAD_BY_CODIGO[def.codigo] ?? 'UNICA') as any
+      const updates: Record<string, unknown> = {}
+      if (def.rolesPermitidos && def.rolesPermitidos.trim() && existing.rolesPermitidos !== targetRoles) {
+        updates.rolesPermitidos = targetRoles
+      }
+      if (existing.periodicidad !== targetPeriodicidad && PERIODICIDAD_BY_CODIGO[def.codigo]) {
+        updates.periodicidad = targetPeriodicidad
+      }
+      if (Object.keys(updates).length > 0) {
+        await prisma.instrumento.update({ where: { id: existing.id }, data: updates })
+        console.log(`  🔁 ${def.codigo} reconciled: ${JSON.stringify(updates)}`)
+      } else {
+        console.log(`  ⏭  ${def.codigo} Instrumento row exists`)
+      }
+      continue
     }
 
     await prisma.instrumento.create({
@@ -310,12 +343,15 @@ async function ensureInstrumentRows(defs: Definition[], createdBy: number): Prom
         descripcion: def.descripcion,
         tipo: def.tipo as any,
         periodicidad: (PERIODICIDAD_BY_CODIGO[def.codigo] ?? 'UNICA') as any,
-        rolesPermitidos: 'ADMIN,EMPLEADO',
+        // fixes-features-aug-6 §3.4: honor the template's top-level
+        // rolesPermitidos when present (e.g. SIGNOS_VITALES, BOLETIN_ANUAL);
+        // otherwise fall back to the legacy 'ADMIN,EMPLEADO'.
+        rolesPermitidos: targetRoles,
         estado: 'ACTIVO',
         creadoPor: createdBy,
       },
     });
-    console.log(`  ➕ ${def.codigo} Instrumento row created`);
+    console.log(`  ➕ ${def.codigo} Instrumento row created (rolesPermitidos='${targetRoles}')`);
   }
 }
 

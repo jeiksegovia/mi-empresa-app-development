@@ -18,6 +18,7 @@ definePageMeta({
 const { apiFetch } = useApi()
 const toast = useToast()
 const route = useRoute()
+const authStore = useAuthStore()
 
 const INST_CREAR_DRAFT_KEY = 'instrumento-crear:draft'
 
@@ -38,6 +39,11 @@ const TEMPLATE_CODIGOS = [
   'YESAVAGE',
   'MNA_CUADRO',
   'FICHA_NUTRICIONAL',
+  // fixes-features-aug-6 §5: two new informational (non-scored) templates.
+  // Both seeded by W2's instruments-upgrade with
+  // rolesPermitidos='ADMIN,GERONTOLOGA,PROFESORES,AUXILIARES'.
+  'SIGNOS_VITALES',
+  'BOLETIN_ANUAL',
 ] as const
 
 const NO_TEMPLATE = '__none__'
@@ -140,6 +146,17 @@ function validate(): boolean {
     errors.periodicidad = 'La periodicidad es requerida'
   if (rolesArray.value.length === 0)
     errors.rolesPermitidos = 'Selecciona al menos un rol permitido'
+  // fixes-features-aug-6 (W3 fix-up, T15): when a template is chosen, the
+  // backend deep-copies its active definition into v1 — but the Instrumento
+  // row's `codigo` is required by the BE to address the new instrument by
+  // codigo (e.g. GET /instruments/:codigo/definition). Leaving `codigo` blank
+  // creates a row with `codigo=null` + an active version; the detail page's
+  // loadDefinition short-circuits at `if (!codigo)` and renders "Sin
+  // definición — no llenable" even though a definition exists. Close that
+  // hole by requiring codigo on the FE whenever a template is selected.
+  if (selectedTemplate.value !== NO_TEMPLATE && !form.codigo.trim()) {
+    errors.codigo = 'El código es requerido al usar una plantilla'
+  }
 
   return Object.keys(errors).length === 0
 }
@@ -279,7 +296,18 @@ watch(() => selectedTemplate.value, () => {
 onMounted(async () => {
   await restoreInstCrearDraft()
   await Promise.all([fetchCargoRoles(), loadTemplateSummaries()])
-  if (rolesArray.value.length === 0) rolesArray.value = ['ADMIN']
+  // fixes-features-aug-6 §3.3 mirror: default rolesPermitidos must include the
+  // creator's tokens so they can immediately fill the instrument they just
+  // created. ADMIN gets the legacy 'ADMIN,EMPLEADO' shape (back-compat); EMPLEADO
+  // gets ADMIN + their rol + their tipoEmpleado when present.
+  if (rolesArray.value.length === 0) {
+    const tok = new Set<string>(['ADMIN'])
+    const rol = authStore.role
+    if (rol) tok.add(rol)
+    const tipo = authStore.user?.tipoEmpleado
+    if (tipo) tok.add(tipo)
+    rolesArray.value = Array.from(tok)
+  }
 })
 </script>
 
@@ -357,13 +385,26 @@ onMounted(async () => {
             <!-- Código -->
             <div>
               <label class="block text-sm font-medium text-[var(--text-color)] mb-1">
-                Código <span class="text-xs text-[var(--text-color-secondary)]">(opcional)</span>
+                Código
+                <span
+                  v-if="selectedTemplate === NO_TEMPLATE"
+                  class="text-xs text-[var(--text-color-secondary)]"
+                >(opcional)</span>
+                <span
+                  v-else
+                  class="text-xs text-red-500"
+                >*</span>
               </label>
               <InputText
                 v-model="form.codigo"
                 placeholder="Ej: FICHA-VAL-001"
                 class="w-full font-mono"
+                :invalid="!!errors.codigo"
+                data-testid="instrument-codigo-input"
               />
+              <p v-if="errors.codigo" class="mt-1 text-xs text-red-500">
+                {{ errors.codigo }}
+              </p>
             </div>
 
             <!-- Tipo y Periodicidad (side by side) -->

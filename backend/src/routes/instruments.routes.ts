@@ -51,7 +51,23 @@ const TEMPLATE_CODIGOS = [
 ] as const
 
 const createInstrumentSchema = z.object({
-  ...baseInstrumentFields,
+  // fixes-features-aug-6 §3.3: rolesPermitidos is OPTIONAL — when the client
+  // omits it (or sends empty), the service defaults to a CSV that includes the
+  // creator's rol + tipoEmpleado so the creator can immediately fill what they
+  // just created. See defaultRolesPermitidos() in instrumentService.
+  nombreInstrumento: z.string().min(1).max(200).transform((v) => v.trim().toUpperCase()),
+  codigo: z.string().max(50).optional(),
+  descripcion: z.string().optional(),
+  tipo: z.enum(['VALORACION', 'NUTRICION', 'MATRICULA', 'ADMISION']),
+  periodicidad: z.enum(['UNICA', 'ANUAL', 'MENSUAL', 'TRIMESTRAL', 'SEMESTRAL']),
+  rolesPermitidos: z
+    .string()
+    .refine(refineRolesPermitidos, {
+      message: 'rolesPermitidos must be a non-empty comma-separated list of role/cargo names (each ≤100 chars, total ≤255)',
+    })
+    .optional()
+    .or(z.literal('')),
+  estado: z.enum(['ACTIVO', 'INACTIVO']).optional(),
   // Optional: when present, the service deep-copies the named template's
   // active definition into the new instrumento (and creates an active
   // InstrumentoVersion v1 copy). Without it, legacy metadata-only creation is
@@ -181,7 +197,9 @@ router.get('/:codigo/definition', requireDomain('fichas'), async (req: Request, 
     const callerRolesCsv = usuario
       ? [usuario.rol, usuario.tipoEmpleado].filter(Boolean).join(',')
       : null
-    const result = await instrumentService.getInstrumentDefinition(codigo, callerRolesCsv)
+    // fixes-features-aug-6 §3.2: explicit ADMIN bypass — pass rol separately.
+    const callerRol = usuario?.rol ?? null
+    const result = await instrumentService.getInstrumentDefinition(codigo, callerRolesCsv, callerRol)
     res.json({ success: true, data: result })
   } catch (error: any) {
     if (error instanceof instrumentService.InstrumentDefinitionError) {
@@ -204,7 +222,18 @@ router.get('/:codigo/definition', requireDomain('fichas'), async (req: Request, 
 router.post('/', requireDomain('instrumentos'), requireInstrumentWriter(), validate(createInstrumentSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id
-    const instrument = await instrumentService.createInstrument(req.body, userId)
+    // fixes-features-aug-6 §3.3: fetch creator's rol + tipoEmpleado so the
+    // default rolesPermitidos (when client omits it) includes the creator's
+    // tokens — they can immediately fill what they just created.
+    const prisma = getPrisma()
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: userId },
+      select: { rol: true, tipoEmpleado: true },
+    })
+    const creator = usuario
+      ? { rol: usuario.rol, tipoEmpleado: usuario.tipoEmpleado }
+      : undefined
+    const instrument = await instrumentService.createInstrument(req.body, userId, creator)
     res.status(201).json({ success: true, data: instrument })
   } catch (error: any) {
     logger.error('Create instrument error:', error)
