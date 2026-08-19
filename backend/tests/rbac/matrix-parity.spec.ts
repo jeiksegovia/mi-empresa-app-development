@@ -74,9 +74,10 @@ function extractMatrix(src: string): Record<string, Record<string, string>> {
   if (depth !== 0) throw new Error('DOMAIN_ACCESS closing } not found')
   const block = src.slice(open + 1, i - 1)
   // Now parse profile → { domain → value } lines.
-  // Profile entry starts at column 2 (after `  `). Each profile contains
-  // exactly 8 domain lines. Comment lines start with `//`.
-  const profileRe = /^\s{2}(GERONTOLOGA|CONTRATOS):\s*{([\s\S]*?)\}/gm
+  // Profile entry starts at column 2 (after `  `). Keys may be bare
+  // identifiers OR single-quoted strings (e.g. `'centro-costos'`). Comment
+  // lines start with `//` and inline comments are stripped before parsing.
+  const profileRe = /^\s{2}(GERONTOLOGA|CONTRATOS|PROFESORES|AUXILIARES):\s*{([\s\S]*?)\n\s{2}\}/gm
   const out: Record<string, Record<string, string>> = {}
   let m: RegExpExecArray | null
   while ((m = profileRe.exec(block)) !== null) {
@@ -87,10 +88,16 @@ function extractMatrix(src: string): Record<string, Record<string, string>> {
     for (const line of lines) {
       const trimmed = line.trim()
       if (!trimmed || trimmed.startsWith('//')) continue
-      const sep = trimmed.indexOf(':')
+      // strip trailing inline comments: `true, // S3 — was false → true` → `true,`
+      const noComment = trimmed.replace(/\s*\/\/.*$/, '').trim()
+      // Find the separator colon that follows the key (which may be quoted).
+      const sep = noComment.indexOf(':')
       if (sep < 0) continue
-      const key = trimmed.slice(0, sep).trim()
-      let val = trimmed.slice(sep + 1).trim()
+      let key = noComment.slice(0, sep).trim()
+      // strip surrounding single quotes from key
+      if (key.startsWith("'") && key.endsWith("'")) key = key.slice(1, -1)
+      else if (key.startsWith('"') && key.endsWith('"')) key = key.slice(1, -1)
+      let val = noComment.slice(sep + 1).trim()
       // strip trailing comma
       if (val.endsWith(',')) val = val.slice(0, -1).trim()
       domains[key] = val
@@ -100,7 +107,23 @@ function extractMatrix(src: string): Record<string, Record<string, string>> {
   return out
 }
 
-test.describe('Matrix parity (fixes-jul17-2 §1.2, §1.5)', () => {
+test.describe('Matrix parity (fixes-jul17-2 §1.2, §1.5 — extended by fixes-features-aug-6 §2.2)', () => {
+  // fixes-features-aug-6 §2.2 + qa-session-aug-17 R6: 4 profiles × 12 domains.
+  const PROFILES = ['GERONTOLOGA', 'CONTRATOS', 'PROFESORES', 'AUXILIARES'] as const
+  const DOMAINS = [
+    'pacientes',
+    'fichas',
+    'instrumentos',
+    'empleados',
+    'nomina',
+    'certificados',
+    'empresa',
+    'notas',
+    'asistencia',
+    'centro-costos',
+    'actividades',
+  ] as const
+
   test('DOMAIN_ACCESS cells match between backend and frontend, cell-by-cell', () => {
     const backendSrc = readFileSync(BACKEND_MATRIX_PATH, 'utf-8')
     const frontendSrc = readFileSync(FRONTEND_MATRIX_PATH, 'utf-8')
@@ -108,26 +131,14 @@ test.describe('Matrix parity (fixes-jul17-2 §1.2, §1.5)', () => {
     const backendMatrix = extractMatrix(backendSrc)
     const frontendMatrix = extractMatrix(frontendSrc)
 
-    // Sanity: both exports must contain the same profile keys.
-    expect(Object.keys(backendMatrix).sort()).toEqual(['CONTRATOS', 'GERONTOLOGA'])
-    expect(Object.keys(frontendMatrix).sort()).toEqual(['CONTRATOS', 'GERONTOLOGA'])
-
-    // The full set of domains per §1.2.
-    const expectedDomains = [
-      'pacientes',
-      'fichas',
-      'instrumentos',
-      'empleados',
-      'nomina',
-      'certificados',
-      'empresa',
-      'notas',
-    ]
+    // Sanity: both exports must contain the same 4 profile keys per §2.2.
+    expect(Object.keys(backendMatrix).sort()).toEqual([...PROFILES].sort())
+    expect(Object.keys(frontendMatrix).sort()).toEqual([...PROFILES].sort())
 
     const mismatches: string[] = []
 
-    for (const profile of ['GERONTOLOGA', 'CONTRATOS'] as const) {
-      for (const domain of expectedDomains) {
+    for (const profile of PROFILES) {
+      for (const domain of DOMAINS) {
         const backendVal = backendMatrix[profile][domain]
         const frontendVal = frontendMatrix[profile][domain]
         if (!backendVal) {
@@ -155,62 +166,45 @@ test.describe('Matrix parity (fixes-jul17-2 §1.2, §1.5)', () => {
     expect(mismatches).toEqual([])
   })
 
-  test('Backend matrix has all 8 contract §1.2 domains for every profile', () => {
+  test('Backend matrix has all 12 domains (aug-6 + actividades) for every profile', () => {
     const backendSrc = readFileSync(BACKEND_MATRIX_PATH, 'utf-8')
     const backendMatrix = extractMatrix(backendSrc)
-    const expectedDomains = [
-      'pacientes',
-      'fichas',
-      'instrumentos',
-      'empleados',
-      'nomina',
-      'certificados',
-      'empresa',
-      'notas',
-    ]
-    for (const profile of ['GERONTOLOGA', 'CONTRATOS'] as const) {
+    for (const profile of PROFILES) {
       const domains = Object.keys(backendMatrix[profile]).sort()
-      expect(domains, `${profile} backend domain set`).toEqual([...expectedDomains].sort())
+      expect(domains, `${profile} backend domain set`).toEqual([...DOMAINS].sort())
     }
   })
 
-  test('Frontend matrix has all 8 contract §1.2 domains for every profile', () => {
+  test('Frontend matrix has all 12 domains (aug-6 + actividades) for every profile', () => {
     const frontendSrc = readFileSync(FRONTEND_MATRIX_PATH, 'utf-8')
     const frontendMatrix = extractMatrix(frontendSrc)
-    const expectedDomains = [
-      'pacientes',
-      'fichas',
-      'instrumentos',
-      'empleados',
-      'nomina',
-      'certificados',
-      'empresa',
-      'notas',
-    ]
-    for (const profile of ['GERONTOLOGA', 'CONTRATOS'] as const) {
+    for (const profile of PROFILES) {
       const domains = Object.keys(frontendMatrix[profile]).sort()
-      expect(domains, `${profile} frontend domain set`).toEqual([...expectedDomains].sort())
+      expect(domains, `${profile} frontend domain set`).toEqual([...DOMAINS].sort())
     }
   })
 
-  test('Verbatim matrix contents match contract §1.2', () => {
-    // Authoritative cell-by-cell lock against the contract table. If this
+  test('Verbatim matrix contents match contract §2.2 (fixes-features-aug-6)', () => {
+    // Authoritative cell-by-cell lock against the §2.2 contract table. If this
     // test fails the contract has been violated; report as BUG.
     const backendSrc = readFileSync(BACKEND_MATRIX_PATH, 'utf-8')
     const frontendSrc = readFileSync(FRONTEND_MATRIX_PATH, 'utf-8')
     const backendMatrix = extractMatrix(backendSrc)
     const frontendMatrix = extractMatrix(frontendSrc)
 
-    const expected: Record<string, Record<string, 'true' | 'false' | "'create-only'">> = {
+    const expected: Record<string, Record<string, string>> = {
       GERONTOLOGA: {
         pacientes: 'true',
         fichas: 'true',
         instrumentos: 'true',
         empleados: 'false',
         nomina: 'false',
-        certificados: 'false',
+        certificados: 'true',        // §2.5 — was false → true
         empresa: 'false',
         notas: 'true',
+        asistencia: 'false',
+        'centro-costos': 'false',
+        actividades: "'read-only'", // qa-aug-17 R6
       },
       CONTRATOS: {
         pacientes: "'create-only'",
@@ -219,12 +213,43 @@ test.describe('Matrix parity (fixes-jul17-2 §1.2, §1.5)', () => {
         empleados: 'true',
         nomina: 'true',
         certificados: 'true',
+        // D1: stays false — GET /empresa/cargos is route-level exception only
         empresa: 'false',
         notas: 'false',
+        asistencia: 'true',
+        'centro-costos': 'true',
+        actividades: "'read-only'", // qa-aug-17 R6
+      },
+      // §2.2 S1: new sub-role rows (identical).
+      PROFESORES: {
+        pacientes: "'read-only'",
+        fichas: "'create-only'",
+        instrumentos: 'false',
+        empleados: 'false',
+        nomina: 'false',
+        certificados: 'false',
+        empresa: 'false',
+        notas: "'create-only'",
+        asistencia: 'false',
+        'centro-costos': 'false',
+        actividades: "'create-only'", // qa-aug-17 R6
+      },
+      AUXILIARES: {
+        pacientes: "'read-only'",
+        fichas: "'create-only'",
+        instrumentos: 'false',
+        empleados: 'false',
+        nomina: 'false',
+        certificados: 'false',
+        empresa: 'false',
+        notas: "'create-only'",
+        asistencia: 'false',
+        'centro-costos': 'false',
+        actividades: "'create-only'", // qa-aug-17 R6
       },
     }
 
-    for (const profile of ['GERONTOLOGA', 'CONTRATOS'] as const) {
+    for (const profile of PROFILES) {
       for (const [domain, expectedVal] of Object.entries(expected[profile])) {
         expect(backendMatrix[profile][domain], `backend ${profile}.${domain}`).toBe(expectedVal)
         expect(frontendMatrix[profile][domain], `frontend ${profile}.${domain}`).toBe(expectedVal)

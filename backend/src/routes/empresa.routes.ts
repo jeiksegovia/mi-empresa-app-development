@@ -1,7 +1,8 @@
-import { Router, Request, Response } from 'express'
+import { Router, Request, Response, NextFunction } from 'express'
 import { authMiddleware, requireRole } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
 import { requireDomain } from '../middleware/domainAccess.js'
+import { getPrisma } from '../config/database.js'
 import { z } from 'zod'
 import * as empresaService from '../services/empresaService.js'
 import * as cargoService from '../services/cargoEmpresaService.js'
@@ -12,10 +13,9 @@ const router = Router()
 router.use(authMiddleware())
 
 // fixes-jul17-2 §1.2: empresa domain — matrix is false for BOTH GERONTOLOGA and
-// CONTRATOS, so for EMPLEADO + sub-role this returns 403. null-EMPLEADO legacy
-// allow still works. ADMIN/AUDITOR/OPERADOR fall through (requireRole on each
-// route continues to gate the actual access).
-router.use(requireDomain('empresa'))
+// CONTRATOS. Applied per-route below (not as router.use) so GET /cargos can
+// carry the qa-session-aug-17 R2 route-level exception without flipping
+// DOMAIN_ACCESS.CONTRATOS.empresa (contract D1 — stays false).
 
 const updateEmpresaSchema = z.object({
   // jul-10 E1: normalize to upper-case + trim
@@ -46,7 +46,58 @@ const updateCargoSchema = z.object({
   activo: z.boolean().optional(),
 })
 
-router.get('/cargos', async (req: Request, res: Response): Promise<void> => {
+/**
+ * qa-session-aug-17 R2 / contract §2:
+ * Allow EMPLEADO + CONTRATOS on GET /empresa/cargos only.
+ * Matrix cell CONTRATOS.empresa stays false — this is NOT a matrix change.
+ * All other roles/methods fall through to requireDomain('empresa').
+ */
+function requireEmpresaOrContratosGetCargos() {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const user = (req as any).user
+      const userId = (req as any).userId as number | undefined
+      const rol = user?.rol
+
+      if (rol === 'ADMIN' || (rol && rol !== 'EMPLEADO')) {
+        // ADMIN bypass / AUDITOR|OPERADOR fall-through — same as requireDomain.
+        next()
+        return
+      }
+
+      if (rol === 'EMPLEADO') {
+        let tipoEmpleado: string | null = user?.tipoEmpleado ?? null
+        if (user?.tipoEmpleado === undefined && userId) {
+          const prisma = getPrisma()
+          const usuario = await prisma.usuario.findUnique({
+            where: { id: userId },
+            select: { rol: true, tipoEmpleado: true, activo: true },
+          })
+          if (!usuario || !usuario.activo) {
+            res.status(401).json({ success: false, message: 'User not found or inactive' })
+            return
+          }
+          tipoEmpleado = usuario.tipoEmpleado ?? null
+          ;(req as any).user = { ...(user || {}), rol: usuario.rol, tipoEmpleado }
+        }
+
+        if (tipoEmpleado === 'CONTRATOS' && req.method.toUpperCase() === 'GET') {
+          next()
+          return
+        }
+      }
+
+      // Everyone else (incl. GERONTOLOGA, PROFESORES, AUXILIARES, null-tipo legacy
+      // handled inside requireDomain) goes through the normal empresa matrix.
+      return requireDomain('empresa')(req, res, next)
+    } catch (error) {
+      logger.error('requireEmpresaOrContratosGetCargos error:', error)
+      res.status(500).json({ success: false, message: 'Authorization check failed' })
+    }
+  }
+}
+
+router.get('/cargos', requireEmpresaOrContratosGetCargos(), async (req: Request, res: Response): Promise<void> => {
   try {
     const raw = req.query.activo as string | undefined
     let activo: boolean | 'all'
@@ -65,7 +116,7 @@ router.get('/cargos', async (req: Request, res: Response): Promise<void> => {
   }
 })
 
-router.post('/cargos', requireRole('ADMIN'), validate(createCargoSchema), async (req: Request, res: Response): Promise<void> => {
+router.post('/cargos', requireDomain('empresa'), requireRole('ADMIN'), validate(createCargoSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const data = await cargoService.createCargo(req.body)
     res.status(201).json({ success: true, data })
@@ -81,7 +132,7 @@ router.post('/cargos', requireRole('ADMIN'), validate(createCargoSchema), async 
   }
 })
 
-router.patch('/cargos/:id', requireRole('ADMIN'), validate(updateCargoSchema), async (req: Request, res: Response): Promise<void> => {
+router.patch('/cargos/:id', requireDomain('empresa'), requireRole('ADMIN'), validate(updateCargoSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid cargo ID' }); return }
@@ -99,7 +150,7 @@ router.patch('/cargos/:id', requireRole('ADMIN'), validate(updateCargoSchema), a
   }
 })
 
-router.delete('/cargos/:id', requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.delete('/cargos/:id', requireDomain('empresa'), requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid cargo ID' }); return }
@@ -120,7 +171,7 @@ router.delete('/cargos/:id', requireRole('ADMIN'), async (req: Request, res: Res
 // W6: normalize the empty-state response to 200 { data: null } so the frontend
 // can render a "create mode" form without treating 404 as an error. The dev
 // QA report shows the previous 404 was surfacing as a load-time error.
-router.get('/', requireRole('ADMIN'), async (_req: Request, res: Response): Promise<void> => {
+router.get('/', requireDomain('empresa'), requireRole('ADMIN'), async (_req: Request, res: Response): Promise<void> => {
   try {
     const empresa = await empresaService.getEmpresa()
     if (!empresa) {
@@ -136,7 +187,7 @@ router.get('/', requireRole('ADMIN'), async (_req: Request, res: Response): Prom
 
 // POST /empresa - create empresa (admin only). W6: bootstrap from empty DB.
 // Single-empresa system: returns 409 if a row already exists.
-router.post('/', requireRole('ADMIN'), validate(createEmpresaSchema), async (req: Request, res: Response): Promise<void> => {
+router.post('/', requireDomain('empresa'), requireRole('ADMIN'), validate(createEmpresaSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const empresa = await empresaService.createEmpresa(req.body)
     res.status(201).json({ success: true, data: empresa })
@@ -157,7 +208,7 @@ router.post('/', requireRole('ADMIN'), validate(createEmpresaSchema), async (req
 })
 
 // PUT /empresa/:id - update empresa (admin only)
-router.put('/:id', requireRole('ADMIN'), validate(updateEmpresaSchema), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id', requireDomain('empresa'), requireRole('ADMIN'), validate(updateEmpresaSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) {

@@ -5,6 +5,7 @@ import { validate } from '../middleware/validate.js'
 import { requireDomain } from '../middleware/domainAccess.js'
 import * as asistenciaService from '../services/asistenciaService.js'
 import { logger } from '../config/logger.js'
+import { serverTodayBogota } from '../utils/dateBogota.js'
 
 const router = Router()
 router.use(authMiddleware())
@@ -28,15 +29,9 @@ const putDiaSchema = z.object({
     .min(1),
 })
 
-/**
- * qa-session-jul-24 §5.1: server-side "today" in America/Bogota.
- * Uses Intl.DateTimeFormat with locale en-CA (only stable locale that emits
- * ISO date as YYYY-MM-DD). The result is a string — compare as strings only;
- * do not parse to Date and back, to avoid TZ drift across runtimes.
- */
-export function serverTodayBogota(): string {
-  return Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date())
-}
+// Re-export shared helper so existing imports of
+// `serverTodayBogota` from this module keep working.
+export { serverTodayBogota } from '../utils/dateBogota.js'
 
 // GET /asistencia?fecha=YYYY-MM-DD
 router.get('/', async (req: Request, res: Response): Promise<void> => {

@@ -47,6 +47,8 @@ model Usuario {
   novedadesCreadas          NovedadEmpleado[]      @relation("NovedadCreador")
   // nomina-asistencia-jul-18
   asistenciasRegistradas    AsistenciaEmpleado[]   @relation("AsistenciaRegistrador")
+  // qa-session-aug-17 R6
+  actividadesRegistradas    RegistroActividad[]    @relation("ActividadRegistrador")
 
   @@map("usuarios")
 }
@@ -139,6 +141,8 @@ model Empleado {
   educacionEmpleado            EducacionEmpleado[]
   // nomina-asistencia-jul-18
   asistencias                  AsistenciaEmpleado[]
+  // qa-session-aug-17 R6
+  registrosActividad           RegistroActividad[]
 
   @@index([numeroDocumento])
   @@index([estado])
@@ -432,6 +436,8 @@ model NominaPeriodo {
   valorJornada      Decimal? @map("valor_jornada") @db.Decimal(12, 2)
   subtotalCalculado Decimal? @map("subtotal_calculado") @db.Decimal(12, 2)
   aportesSociales   Decimal? @map("aportes_sociales") @db.Decimal(12, 2)
+  // qa-session-aug-17 R3: bonos only for TERMINO_FIJO | TERMINO_INDEFINIDO
+  bonos             Decimal? @map("bonos") @db.Decimal(12, 2)
   totalPagado       Decimal? @map("total_pagado") @db.Decimal(12, 2)
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
@@ -464,6 +470,25 @@ model AsistenciaEmpleado {
   @@index([fecha])
   @@index([empleadoId])
   @@map("asistencia_empleados")
+}
+
+// qa-session-aug-17 R6: one activity log row per employee per day
+model RegistroActividad {
+  id            Int      @id @default(autoincrement()) @map("registro_actividad_id")
+  empleadoId    Int      @map("empleado_id")
+  fecha         DateTime @db.Date
+  texto         String   @db.Text
+  registradoPor Int      @map("registrado_por")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  empleado    Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  registrador Usuario  @relation("ActividadRegistrador", fields: [registradoPor], references: [id])
+
+  @@unique([empleadoId, fecha])
+  @@index([fecha])
+  @@index([empleadoId])
+  @@map("registro_actividades")
 }
 
 model ArchivoNominaPeriodo {
@@ -590,7 +615,6 @@ model Cliente {
   contactosEmergencia     ContactoEmergenciaCliente[]
   registrosFichas         RegistroFichaCompletada[]
   notasCliente            NotaCliente[]
-  prefacturas             Prefactura[]
 
   @@index([numeroDocumento])
   @@index([estado])
@@ -718,89 +742,53 @@ model NotaCliente {
 }
 
 // ========================================
-// FINANCE MODULE
+// CENTRO DE COSTOS MODULE (ago-5)
+//
+// Replaces the legacy FINANCE MODULE (ProductoServicio / Prefactura / Egreso
+// were scaffolded for a different product-catalog + invoicing concept and had
+// zero code references). The current shape is INGRESOS | EGRESOS centros
+// holding uniform monthly ítems (CentroCostosItem).
 // ========================================
 
 model CentroCostos {
-  id          Int                @id @default(autoincrement()) @map("centro_id")
-  nombre      String             @db.VarChar(200)
+  id          Int              @id @default(autoincrement()) @map("centro_id")
+  nombre      String           @db.VarChar(200)
   tipo        TipoCentroCostos
-  descripcion String?            @db.Text
+  descripcion String?          @db.Text
+  activo      Boolean          @default(true)
+  orden       Int              @default(0)
+  createdAt   DateTime         @default(now())  @map("created_at")
+  updatedAt   DateTime         @updatedAt       @map("updated_at")
 
   // Relations
-  productos   ProductoServicio[]
-  egresos     Egreso[]
+  items       CentroCostosItem[]
 
+  @@unique([tipo, nombre])
+  @@index([tipo, activo])
   @@map("centros_costos")
 }
 
-model ProductoServicio {
-  id                  Int          @id @default(autoincrement()) @map("producto_id")
-  centroCostosId      Int          @map("centro_costos_id")
-  codigoInterno       String       @map("codigo_interno") @db.VarChar(50)
-  nombre              String       @db.VarChar(200)
-  precioTotal         Decimal      @map("precio_total") @db.Decimal(15, 2)
-  nombreImpuesto      String?      @map("nombre_impuesto") @db.VarChar(100)
-  porcentajeImpuesto  Decimal?     @map("porcentaje_impuesto") @db.Decimal(5, 2)
-  precioBase          Decimal      @map("precio_base") @db.Decimal(15, 2)
-  costoUnitario       Decimal      @map("costo_unitario") @db.Decimal(15, 2)
-  cantidadInicial     Int          @map("cantidad_inicial")
-  unidadMedida        String       @map("unidad_medida") @db.VarChar(50)
-  descripcion         String?      @db.Text
-  referencia          String?      @db.VarChar(100)
-  cuentaIngresos      String?      @map("cuenta_ingresos") @db.VarChar(50)
-  cuentaInventario    String?      @map("cuenta_inventario") @db.VarChar(50)
-  cuentaCostoVenta    String?      @map("cuenta_costo_venta") @db.VarChar(50)
-  ventaNegativo       Boolean      @map("venta_negativo") @default(false)
+model CentroCostosItem {
+  id             Int       @id @default(autoincrement()) @map("item_id")
+  centroCostosId Int       @map("centro_costos_id")
+  nombre         String    @db.VarChar(200)
+  notas          String?   @db.Text
+  cantidad       Int       @default(1) // D5: integer (developer call, 2026-08-05)
+  valorUnitario  Decimal   @map("valor_unitario") @db.Decimal(15, 2)
+  valorTotal     Decimal   @map("valor_total")    @db.Decimal(15, 2) // persisted, server-computed
+  periodo        DateTime  @db.Date                                   // normalized to day 1
+  numeroFactura  String?   @map("numero_factura") @db.VarChar(100)    // egreso-only, optional
+  proveedor      String?   @db.VarChar(200)                           // egreso-only, optional
+  fechaFactura   DateTime? @map("fecha_factura")  @db.Date            // egreso-only, optional
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt      @map("updated_at")
 
   // Relations
-  centroCostos CentroCostos @relation(fields: [centroCostosId], references: [id], onDelete: Cascade)
-  prefacturas  Prefactura[]
+  centroCostos CentroCostos @relation(fields: [centroCostosId], references: [id], onDelete: Restrict)
 
-  @@index([centroCostosId])
-  @@index([codigoInterno])
-  @@map("productos_servicios")
-}
-
-model Egreso {
-  id                 Int          @id @default(autoincrement()) @map("egreso_id")
-  centroCostosId     Int          @map("centro_costos_id")
-  codigoInterno      String       @map("codigo_interno") @db.VarChar(50)
-  item               String       @db.VarChar(200)
-  notas              String?      @db.Text
-  proveedorNombre    String       @map("proveedor_nombre") @db.VarChar(200)
-  proveedorTipoDoc   String       @map("proveedor_tipo_doc") @db.VarChar(20)
-  proveedorNumero    String       @map("proveedor_numero") @db.VarChar(50)
-  valor              Decimal      @db.Decimal(15, 2)
-  numeroFactura      String       @map("numero_factura") @db.VarChar(100)
-  fecha              DateTime     @db.Date
-
-  // Relations
-  centroCostos CentroCostos @relation(fields: [centroCostosId], references: [id], onDelete: Cascade)
-
-  @@index([centroCostosId])
-  @@index([fecha])
-  @@map("egresos")
-}
-
-model Prefactura {
-  id                  Int              @id @default(autoincrement()) @map("prefactura_id")
-  clienteId           Int              @map("cliente_id")
-  productoServicioId  Int              @map("producto_servicio_id")
-  fechaGeneracion     DateTime         @default(now()) @map("fecha_generacion")
-  subtotal            Decimal          @db.Decimal(15, 2)
-  impuestos           Decimal          @db.Decimal(15, 2)
-  total               Decimal          @db.Decimal(15, 2)
-  estado              EstadoPrefactura @default(BORRADOR)
-
-  // Relations
-  cliente         Cliente          @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  productoServicio ProductoServicio @relation(fields: [productoServicioId], references: [id], onDelete: Restrict)
-
-  @@index([clienteId])
-  @@index([estado])
-  @@index([fechaGeneracion])
-  @@map("prefacturas")
+  @@index([periodo])
+  @@index([centroCostosId, periodo])
+  @@map("centro_costos_items")
 }
 
 // ========================================
@@ -894,9 +882,13 @@ enum RolUsuario {
 // jul-10 C6/L2: sub-role specialization for EMPLEADO accounts.
 // jul-17 (fixes-jul17-2 §1.1): added CONTRATOS — additive migration, no row
 // rewrites (new enum value appended). Existing EMPLEADO users remain null.
+// fixes-features-aug-6 §1: added PROFESORES + AUXILIARES (identical DOMAIN_ACCESS).
+// Still additive — no existing rows rewritten, new values start at zero users.
 enum TipoEmpleado {
   GERONTOLOGA
   CONTRATOS
+  PROFESORES
+  AUXILIARES
 }
 
 enum TipoDocumentoEmpleado {
@@ -1034,12 +1026,6 @@ enum VisibilidadNota {
 enum TipoCentroCostos {
   INGRESOS
   EGRESOS
-}
-
-enum EstadoPrefactura {
-  BORRADOR
-  ENVIADO
-  PAGADO
 }
 
 enum TipoCertificadoEmpresa {

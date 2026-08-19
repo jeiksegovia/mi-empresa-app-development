@@ -39,18 +39,21 @@ const totalPages = ref(0)
 
 // Filters and pagination
 const search = ref('')
-const estadoFilter = ref<'ACTIVO' | 'INACTIVO' | ''>('')
+// qa-session-aug-17 R1: default Activos tab → first fetch uses estado=ACTIVO.
+// No "Todos" option — filter is always ACTIVO | INACTIVO.
+const estadoFilter = ref<'ACTIVO' | 'INACTIVO'>('ACTIVO')
 const page = ref(1)
 const limit = ref(20)
 
 // Stats derived from API totals
 const stats = ref({ total: 0, activos: 0, inactivos: 0, nuevosMes: 0 })
 
-const estadoOptions = [
-  { label: 'Todos', value: '' },
-  { label: 'Activo', value: 'ACTIVO' },
-  { label: 'Inactivo', value: 'INACTIVO' },
-]
+function setEstadoTab(estado: 'ACTIVO' | 'INACTIVO') {
+  if (estadoFilter.value === estado) return
+  estadoFilter.value = estado
+  page.value = 1
+  fetchEmployees()
+}
 
 async function fetchEmployees() {
   loading.value = true
@@ -60,7 +63,7 @@ async function fetchEmployees() {
       limit: String(limit.value),
     })
     if (search.value) params.set('search', search.value)
-    if (estadoFilter.value) params.set('estado', estadoFilter.value)
+    params.set('estado', estadoFilter.value)
 
     const res = await apiFetch<EmployeeListResponse>(`/employees?${params}`)
     employees.value = res.data
@@ -105,11 +108,6 @@ function onSearchInput() {
     page.value = 1
     fetchEmployees()
   }, 400)
-}
-
-function onFilterChange() {
-  page.value = 1
-  fetchEmployees()
 }
 
 function onPageChange(newPage: number) {
@@ -180,7 +178,39 @@ onMounted(async () => {
     <!-- Table Card -->
     <Card>
       <template #content>
-        <!-- Toolbar: search + filter -->
+        <!-- qa-session-aug-17 R1: Activos | Inactivos tabs (no Todos). -->
+        <div class="mb-4 flex gap-1 border-b border-[var(--surface-border)]">
+          <button
+            type="button"
+            data-testid="empleados-tab-activos"
+            :class="[
+              'flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px',
+              estadoFilter === 'ACTIVO'
+                ? 'border-violet-500 text-violet-600 dark:text-violet-400'
+                : 'border-transparent text-[var(--text-color-secondary)] hover:text-[var(--text-color)]',
+            ]"
+            @click="setEstadoTab('ACTIVO')"
+          >
+            <i class="pi pi-check-circle" />
+            Activos
+          </button>
+          <button
+            type="button"
+            data-testid="empleados-tab-inactivos"
+            :class="[
+              'flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px',
+              estadoFilter === 'INACTIVO'
+                ? 'border-violet-500 text-violet-600 dark:text-violet-400'
+                : 'border-transparent text-[var(--text-color-secondary)] hover:text-[var(--text-color)]',
+            ]"
+            @click="setEstadoTab('INACTIVO')"
+          >
+            <i class="pi pi-times-circle" />
+            Inactivos
+          </button>
+        </div>
+
+        <!-- Toolbar: search -->
         <div class="flex flex-col sm:flex-row gap-3 mb-4">
           <div class="flex-1 relative">
             <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-color-secondary)] z-10 pointer-events-none" />
@@ -191,15 +221,6 @@ onMounted(async () => {
               @input="onSearchInput"
             />
           </div>
-          <Select
-            v-model="estadoFilter"
-            :options="estadoOptions"
-            option-label="label"
-            option-value="value"
-            placeholder="Estado"
-            class="w-full sm:w-44"
-            @change="onFilterChange"
-          />
         </div>
 
         <!-- DataTable -->

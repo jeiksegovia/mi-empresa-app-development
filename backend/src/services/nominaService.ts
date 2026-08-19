@@ -41,9 +41,16 @@ export interface NominaPeriodoInput {
   // `valorMensual` is NOT persisted on nomina_periodos (snapshot per D2);
   // the contract's `valorMensual` lives on the Contrato row.
   valorMensual?: number | null
+  // qa-session-aug-17 R3: bonos only for TERMINO_FIJO | TERMINO_INDEFINIDO
+  bonos?: number | null
 }
 
 const APORTES_ALLOWED: ReadonlySet<string> = new Set(['TERMINO_FIJO', 'TERMINO_INDEFINIDO'])
+/** qa-session-aug-17 R3 / contract §3.2 — bonos only FIJO/INDEF. */
+export const BONOS_ALLOWED: ReadonlySet<string> = new Set([
+  'TERMINO_FIJO',
+  'TERMINO_INDEFINIDO',
+])
 
 export async function listContratos(empleadoId: number) {
   const prisma = getPrisma()
@@ -267,10 +274,24 @@ export async function getNominaMonth(
     const isNonOps = tipoContrato && tipoContrato !== 'OPS'
     const valorJornada = contrato ? toNum(contrato.valorJornada) : null
     const valorMensual = contrato ? toNum(contrato.valorMensual) : null
-    // qa-session-jul-24 R7: branch sugerido on tipoContrato.
-    const subtotal =
-      isNonOps ? null : (valorJornada !== null ? mediasJornadas * valorJornada : 0)
-    const totalPagado = isNonOps ? valorMensual ?? 0 : subtotal
+    // qa-session-aug-17 R3: FIJO/INDEF sugerido = V+B (bonos default 0);
+    // OBRA stays total=V / subtotal null; OPS unchanged (medias*valor).
+    const isFijoIndef =
+      tipoContrato === 'TERMINO_FIJO' || tipoContrato === 'TERMINO_INDEFINIDO'
+    const isObra = tipoContrato === 'OBRA_O_LABOR'
+    let subtotal: number | null
+    let totalPagado: number | null
+    if (isFijoIndef) {
+      const v = valorMensual ?? 0
+      subtotal = v
+      totalPagado = v
+    } else if (isObra) {
+      subtotal = null
+      totalPagado = valorMensual ?? 0
+    } else {
+      subtotal = valorJornada !== null ? mediasJornadas * valorJornada : 0
+      totalPagado = subtotal
+    }
     return {
       empleado: {
         id: e.id,
@@ -294,6 +315,7 @@ export async function getNominaMonth(
         mediasJornadas: isNonOps ? null : mediasJornadas,
         valorJornada: isNonOps ? null : valorJornada,
         valorMensual: isNonOps ? valorMensual : null,
+        bonos: isFijoIndef ? 0 : null,
         subtotalCalculado: subtotal,
         aportesSociales: 0,
         totalPagado,
@@ -312,14 +334,14 @@ export async function getNominaPeriodo(id: number) {
 
 /**
  * Resolve calc fields for create/update.
- * qa-session-jul-24 R7: branch on tipoContrato:
- *   - OPS: existing rule (mediasJornadas * valorJornada - aportes).
- *   - non-OPS (OBRA_O_LABOR / TERMINO_FIJO / TERMINO_INDEFINIDO):
- *       totalPagado = valorMensual - aportesSociales.
- *       mediasJornadas/subtotal snapshot may be null (acceptable per D2).
+ * qa-session-aug-17 R3 / contract §3.3 (authoritative):
+ *   - TERMINO_FIJO / TERMINO_INDEFINIDO:
+ *       subtotalCalculado = V + B; totalPagado = V + B.
+ *       Aportes stored, NOT added.
+ *   - OBRA_O_LABOR: subtotal null; totalPagado = V. No bonos.
+ *   - OPS: UNCHANGED this cycle (medias * valorJornada; aportes still rejected >0).
  *
- * Backward compat: existing non-OPS contracts with null valorMensual → treat
- * as 0 so we don't crash; the snapshot remains computable.
+ * Backward compat: null valorMensual / bonos → treat as 0.
  */
 async function resolveCalcFields(
   input: Partial<NominaPeriodoInput> & { empleadoId: number; periodo: string },
@@ -331,6 +353,7 @@ async function resolveCalcFields(
   valorJornada: number | null
   subtotalCalculado: number | null
   aportesSociales: number
+  bonos: number | null
   totalPagado: number | null
   salario: number | null
   valorMensual: number | null
@@ -343,13 +366,33 @@ async function resolveCalcFields(
     )
   }
 
+  const rawBonos = input.bonos
+  const bonosNum =
+    rawBonos === undefined || rawBonos === null ? 0 : Number(rawBonos)
+  if (bonosNum > 0 && !BONOS_ALLOWED.has(tipoContrato)) {
+    throw Object.assign(
+      new Error('Bonos no aplican para este tipo de contrato'),
+      { status: 400, field: 'bonos' },
+    )
+  }
+  // Persist null when omitted/zero-ish for non-allowed; store value (incl. 0) for FIJO/INDEF when sent.
+  const bonosPersisted: number | null = BONOS_ALLOWED.has(tipoContrato)
+    ? rawBonos === undefined || rawBonos === null
+      ? null
+      : bonosNum
+    : rawBonos === undefined || rawBonos === null || bonosNum === 0
+      ? null
+      : bonosNum // unreachable when >0 due to throw above; keeps type narrow
+
   const isNonOps = tipoContrato !== 'OPS'
+  const isFijoIndef = BONOS_ALLOWED.has(tipoContrato)
+  const isObra = tipoContrato === 'OBRA_O_LABOR'
 
   let medias: number | null
   if (input.mediasJornadas !== undefined && input.mediasJornadas !== null) {
     medias = input.mediasJornadas
   } else if (isNonOps) {
-    // non-OPS: snapshot is null (asistencia is per-jornada, not monthly).
+    // non-OPS: medias snapshot is null (asistencia is per-jornada, not monthly).
     medias = null
   } else {
     medias = await sumMediasForEmpleadoPeriodo(input.empleadoId, input.periodo)
@@ -369,11 +412,15 @@ async function resolveCalcFields(
       ? input.valorMensual
       : toNum(contratoValorMensual)
 
+  const B = bonosNum
+  const V = valorMensual ?? 0
+
   let subtotal: number | null
   if (input.subtotalCalculado !== undefined && input.subtotalCalculado !== null) {
     subtotal = input.subtotalCalculado
-  } else if (isNonOps) {
-    // Per contract §4: mediasJornadas/subtotalCalculado snapshot is null for non-OPS.
+  } else if (isFijoIndef) {
+    subtotal = V + B
+  } else if (isObra) {
     subtotal = null
   } else if (medias !== null && valor !== null) {
     subtotal = medias * valor
@@ -384,10 +431,13 @@ async function resolveCalcFields(
   let total: number | null
   if (input.totalPagado !== undefined && input.totalPagado !== null) {
     total = input.totalPagado
-  } else if (isNonOps) {
-    // non-OPS: base = valorMensual (treat null as 0 to avoid crash on legacy rows).
-    total = (valorMensual ?? 0) + aportes
+  } else if (isFijoIndef) {
+    // Contract D3: aportes stored, NOT added.
+    total = V + B
+  } else if (isObra) {
+    total = V
   } else {
+    // OPS — unchanged this cycle (D4), including whether aportes are added.
     total = (subtotal ?? 0) + aportes
   }
 
@@ -404,6 +454,7 @@ async function resolveCalcFields(
     valorJornada: valor,
     subtotalCalculado: subtotal,
     aportesSociales: aportes,
+    bonos: bonosPersisted,
     totalPagado: total,
     salario,
     valorMensual,
@@ -454,6 +505,7 @@ export async function createNominaPeriodo(input: NominaPeriodoInput, userId: num
           valorJornada: calc.valorJornada,
           subtotalCalculado: calc.subtotalCalculado,
           aportesSociales: calc.aportesSociales,
+          bonos: calc.bonos,
           totalPagado: calc.totalPagado,
         },
       })
@@ -526,8 +578,10 @@ export async function updateNominaPeriodo(id: number, input: Partial<NominaPerio
       input.valorJornada !== undefined ||
       input.subtotalCalculado !== undefined ||
       input.aportesSociales !== undefined ||
+      input.bonos !== undefined ||
       input.totalPagado !== undefined ||
-      input.salario !== undefined
+      input.salario !== undefined ||
+      input.valorMensual !== undefined
 
     const data: Record<string, unknown> = {}
     if (input.notas !== undefined) data.notas = input.notas
@@ -552,10 +606,15 @@ export async function updateNominaPeriodo(id: number, input: Partial<NominaPerio
           input.aportesSociales !== undefined
             ? input.aportesSociales
             : toNum(existing.aportesSociales) ?? 0,
+        bonos:
+          input.bonos !== undefined
+            ? input.bonos
+            : toNum((existing as any).bonos),
         totalPagado:
           input.totalPagado !== undefined
             ? input.totalPagado
             : toNum(existing.totalPagado) ?? undefined,
+        valorMensual: input.valorMensual,
         salario: input.salario,
       }
       const calc = await resolveCalcFields(
@@ -568,6 +627,7 @@ export async function updateNominaPeriodo(id: number, input: Partial<NominaPerio
       data.valorJornada = calc.valorJornada
       data.subtotalCalculado = calc.subtotalCalculado
       data.aportesSociales = calc.aportesSociales
+      data.bonos = calc.bonos
       data.totalPagado = calc.totalPagado
       data.salario = calc.salario
     } else if (input.salario !== undefined) {

@@ -1,0 +1,1 @@
+COMPLETE: W1-data-schema done. Deliverables: contract, migration 20260818113726_add_nomina_bonos_and_registro_actividades, seed profesor+auxiliar. See tasks/W1-data-schema/completion-report.md

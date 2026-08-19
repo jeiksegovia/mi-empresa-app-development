@@ -60,6 +60,8 @@ const nominaPeriodoSchema = z.object({
   totalPagado: z.number().nonnegative().optional(),
   // qa-session-jul-24 R7: optional override for non-OPS base calc.
   valorMensual: z.number().nonnegative().optional(),
+  // qa-session-aug-17 R3: bonos only meaningful for FIJO/INDEF (service enforces).
+  bonos: z.number().nonnegative().optional().nullable(),
 })
 
 // ─── Contratos (nested under employees) ─────────────────────────────────────
@@ -194,7 +196,15 @@ router.get('/periodos/:id', async (req: Request, res: Response): Promise<void> =
   }
 })
 
-router.post('/periodos', requireRole('ADMIN'), validate(nominaPeriodoSchema), async (req: Request, res: Response): Promise<void> => {
+// qa-session-aug-17 R4 / contract §3.4:
+// Drop requireRole('ADMIN') on POST/PUT. CONTRATOS already pass requireDomain('nomina').
+// Lock gate via requireEmployeeUnlocked('empleadoId') — body.empleadoId preferred;
+// PUT falls back to the existing row's empleadoId when body omits it.
+router.post(
+  '/periodos',
+  requireEmployeeUnlocked('empleadoId'),
+  validate(nominaPeriodoSchema),
+  async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id
     const created = await nominaService.createNominaPeriodo(req.body, userId)
@@ -211,7 +221,19 @@ router.post('/periodos', requireRole('ADMIN'), validate(nominaPeriodoSchema), as
   }
 })
 
-router.put('/periodos/:id', requireRole('ADMIN'), validate(nominaPeriodoSchema.partial()), async (req: Request, res: Response): Promise<void> => {
+router.put(
+  '/periodos/:id',
+  requireEmployeeUnlocked('empleadoId', async (req) => {
+    const id = Number.parseInt(String(req.params.id), 10)
+    if (Number.isNaN(id)) return null
+    const row = await getPrisma().nominaPeriodo.findUnique({
+      where: { id },
+      select: { empleadoId: true },
+    })
+    return row?.empleadoId ?? null
+  }),
+  validate(nominaPeriodoSchema.partial()),
+  async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid id' }); return }

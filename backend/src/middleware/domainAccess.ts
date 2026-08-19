@@ -5,19 +5,19 @@
  * perform a write on this domain?" The matrix below is FROZEN once #31
  * completes; W10's frontend mirror must stay in parity (QA validates).
  *
- * Semantics (contract §1.3):
+ * Semantics (contract §1.3, augmented by fixes-features-aug-6 §2.1):
  *   1. No auth → 401 (existing authMiddleware already handles this).
  *   2. rol === 'ADMIN' → allow.
  *   3. rol !== 'EMPLEADO' (AUDITOR / OPERADOR) → fall through to EXISTING
  *      behavior (requireRole / etc.); this middleware does NOT add
  *      restrictions on their paths.
  *   4. EMPLEADO + tipoEmpleado null → allow (legacy, zero regression).
- *   5. EMPLEADO + GERONTOLOGA / CONTRATOS → matrix lookup:
- *      - matrix[domain] === true   → allow
- *      - matrix[domain] === false  → 403 DOMAIN_FORBIDDEN
- *      - matrix[domain] === 'create-only'
- *           → GET list/detail + POST create allowed
- *           → PUT / PATCH / DELETE → 403 DOMAIN_FORBIDDEN
+ *   5. EMPLEADO + GERONTOLOGA / CONTRATOS / PROFESORES / AUXILIARES →
+ *      matrix lookup:
+ *      - matrix[domain] === true           → allow
+ *      - matrix[domain] === false          → 403 DOMAIN_FORBIDDEN
+ *      - matrix[domain] === 'create-only'  → GET + POST allowed; PUT/PATCH/DELETE → 403
+ *      - matrix[domain] === 'read-only'    → GET allowed; POST/PUT/PATCH/DELETE → 403
  *
  * `requireInstrumentWriter` (jul-10 C6) is UNCHANGED and still runs in
  * addition where already applied — it gates GERONTOLOGA vs plain EMPLEADO
@@ -39,24 +39,45 @@ export type Domain =
   | 'notas'
   // nomina-asistencia-jul-18: same matrix as empleados
   | 'asistencia'
+  // centro-costos-ago-5: D4 ADMIN bypass, CONTRATOS true, GERONTOLOGA false
+  | 'centro-costos'
+  // qa-session-aug-17 R6: Registro de actividades
+  | 'actividades'
 
 /**
- * Authoritative matrix (contract §1.2 table).
+ * Domain access value vocabulary (contract §2.1 — fixes-features-aug-6).
  *   true        → full access (all HTTP methods).
  *   false       → 403 for ALL methods.
  *   'create-only' → GET + POST allowed; PUT/PATCH/DELETE → 403.
+ *   'read-only'   → GET allowed; POST/PUT/PATCH/DELETE → 403.
  */
-export const DOMAIN_ACCESS: Record<'GERONTOLOGA' | 'CONTRATOS', Record<Domain, boolean | 'create-only'>> = {
+export type DomainAccessValue = boolean | 'create-only' | 'read-only'
+
+/**
+ * fixes-features-aug-6 §2.3: tipoEmpleado allow-list (extended to 4 values).
+ * Unknown future specialization → allow (legacy zero-regression).
+ */
+const MATRIX_TIPOS = ['GERONTOLOGA', 'CONTRATOS', 'PROFESORES', 'AUXILIARES'] as const
+type MatrixTipo = typeof MATRIX_TIPOS[number]
+
+/**
+ * Authoritative matrix (contract §2.2 — fixes-features-aug-6).
+ * 4 tipos × 11 domains. S1 added PROFESORES + AUXILIARES rows; S3 flipped
+ * GERONTOLOGA.certificados from false to true.
+ */
+export const DOMAIN_ACCESS: Record<MatrixTipo, Record<Domain, DomainAccessValue>> = {
   GERONTOLOGA: {
     pacientes: true,
     fichas: true,
     instrumentos: true,
     empleados: false,
     nomina: false,
-    certificados: false,
+    certificados: true, // S3 — was false → true
     empresa: false,
     notas: true,
     asistencia: false,
+    'centro-costos': false,
+    actividades: 'read-only', // qa-session-aug-17 R6
   },
   CONTRATOS: {
     pacientes: 'create-only',
@@ -65,9 +86,40 @@ export const DOMAIN_ACCESS: Record<'GERONTOLOGA' | 'CONTRATOS', Record<Domain, b
     empleados: true,
     nomina: true,
     certificados: true,
+    // CONTRACT D1: stays false — GET /empresa/cargos is a route-level exception only
+    // (qa-session-aug-17 R2). Do NOT flip this cell for the cargos exception.
     empresa: false,
     notas: false,
     asistencia: true,
+    'centro-costos': true,
+    actividades: 'read-only', // qa-session-aug-17 R6
+  },
+  // S1: Identical rows for the two new sub-roles.
+  PROFESORES: {
+    pacientes: 'read-only',     // S1: view basic info, no create/edit
+    fichas: 'create-only',      // S1: fill ficha, no edit/delete
+    instrumentos: false,        // S1: cannot manage catalog
+    empleados: false,
+    nomina: false,
+    certificados: false,
+    empresa: false,
+    notas: 'create-only',       // S1 + S3: create-only (see §4 for autor filter)
+    asistencia: false,
+    'centro-costos': false,
+    actividades: 'create-only', // qa-session-aug-17 R6
+  },
+  AUXILIARES: {
+    pacientes: 'read-only',     // S1: identical to PROFESORES
+    fichas: 'create-only',
+    instrumentos: false,
+    empleados: false,
+    nomina: false,
+    certificados: false,
+    empresa: false,
+    notas: 'create-only',       // S1: identical to PROFESORES
+    asistencia: false,
+    'centro-costos': false,
+    actividades: 'create-only', // qa-session-aug-17 R6
   },
 }
 
@@ -134,8 +186,8 @@ export function requireDomain(domain: Domain) {
         return
       }
 
-      // Step 5: matrix lookup.
-      if (tipoEmpleado !== 'GERONTOLOGA' && tipoEmpleado !== 'CONTRATOS') {
+      // Step 5: matrix lookup (allow-list extended to 4 tipos per §2.3).
+      if (!(MATRIX_TIPOS as readonly string[]).includes(tipoEmpleado)) {
         // Unknown future specialization — be safe, allow (existing behavior)
         // rather than 403 a brand new sub-role that isn't in the matrix yet.
         logger.warn(`requireDomain(${domain}): unknown tipoEmpleado=${tipoEmpleado} — allowing`)
@@ -143,7 +195,7 @@ export function requireDomain(domain: Domain) {
         return
       }
 
-      const access = DOMAIN_ACCESS[tipoEmpleado as 'GERONTOLOGA' | 'CONTRATOS'][domain]
+      const access = DOMAIN_ACCESS[tipoEmpleado as MatrixTipo][domain]
       if (access === true) {
         next()
         return
@@ -156,9 +208,13 @@ export function requireDomain(domain: Domain) {
         })
         return
       }
-      // 'create-only'
+      // 'create-only' or 'read-only' (contract §2.1)
       const method = req.method.toUpperCase()
-      if (method === 'GET' || method === 'POST') {
+      if (access === 'create-only' && (method === 'GET' || method === 'POST')) {
+        next()
+        return
+      }
+      if (access === 'read-only' && method === 'GET') {
         next()
         return
       }
@@ -188,9 +244,17 @@ export function requireDomain(domain: Domain) {
  * client), and the `bloqueado*` columns are absent from the create/update Zod
  * schemas, so there is no request path for a non-admin to flip the lock.
  *
- * @param param name of the route param carrying the empleado id (default 'id').
+ * @param param name of the route param OR body field carrying the empleado id
+ *   (default 'id'). qa-session-aug-17 R4: periodos POST/PUT pass 'empleadoId'
+ *   so the lock check reads `req.body.empleadoId` (body preferred) with an
+ *   optional async resolver for PUT when body omits it.
+ * @param resolveEmpleadoId optional async fallback when param/body is absent
+ *   (e.g. load existing NominaPeriodo.empleadoId on PUT /periodos/:id).
  */
-export function requireEmployeeUnlocked(param: string = 'id') {
+export function requireEmployeeUnlocked(
+  param: string = 'id',
+  resolveEmpleadoId?: (req: AuthedRequest) => Promise<number | null | undefined>,
+) {
   return async (req: AuthedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       // ADMIN always allowed to edit, even when locked (they own lock/unlock).
@@ -198,9 +262,27 @@ export function requireEmployeeUnlocked(param: string = 'id') {
         next()
         return
       }
-      const empleadoId = Number.parseInt(String(req.params[param]), 10)
-      if (Number.isNaN(empleadoId)) {
-        // Malformed id — let the route handler return its own 400.
+
+      let empleadoId: number | null = null
+      const fromParams = req.params?.[param]
+      const fromBody = (req.body as any)?.[param]
+      const raw = fromBody !== undefined && fromBody !== null && fromBody !== ''
+        ? fromBody
+        : fromParams
+      if (raw !== undefined && raw !== null && raw !== '') {
+        const parsed = Number.parseInt(String(raw), 10)
+        if (!Number.isNaN(parsed)) empleadoId = parsed
+      }
+
+      if (empleadoId === null && resolveEmpleadoId) {
+        const resolved = await resolveEmpleadoId(req)
+        if (resolved !== null && resolved !== undefined && !Number.isNaN(Number(resolved))) {
+          empleadoId = Number(resolved)
+        }
+      }
+
+      if (empleadoId === null) {
+        // Malformed / missing id — let the route handler return its own 400/404.
         next()
         return
       }

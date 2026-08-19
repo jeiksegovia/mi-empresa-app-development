@@ -19,8 +19,8 @@ const createUserSchema = z.object({
   nombre: z.string().min(1).max(100).transform((v) => v.trim().toUpperCase()),
   apellido: z.string().min(1).max(100).transform((v) => v.trim().toUpperCase()),
   empleadoId: z.number().int().positive().optional().nullable(),
-  // jul-10 C6/L2: nullable — only meaningful when rol='EMPLEADO'
-  tipoEmpleado: z.enum(['GERONTOLOGA']).optional().nullable(),
+  // qa-session-aug-17: all MATRIX_TIPOS (was GERONTOLOGA-only — blocked R6 writers)
+  tipoEmpleado: z.enum(['GERONTOLOGA', 'CONTRATOS', 'PROFESORES', 'AUXILIARES']).optional().nullable(),
 })
 
 const updateUserSchema = z.object({
@@ -30,8 +30,7 @@ const updateUserSchema = z.object({
   nombre: z.string().min(1).max(100).transform((v) => v.trim().toUpperCase()).optional(),
   apellido: z.string().min(1).max(100).transform((v) => v.trim().toUpperCase()).optional(),
   empleadoId: z.number().int().positive().optional().nullable(),
-  // tipoEmpleado can be set OR cleared (null). Lock to ADMIN/GERONTOLOGA-present pairing rule.
-  tipoEmpleado: z.enum(['GERONTOLOGA']).nullable().optional(),
+  tipoEmpleado: z.enum(['GERONTOLOGA', 'CONTRATOS', 'PROFESORES', 'AUXILIARES']).nullable().optional(),
   activo: z.boolean().optional(),
 })
 
@@ -138,15 +137,7 @@ router.patch('/:id', requireRole('ADMIN'), validate(updateUserSchema), async (re
     if (nextRol !== 'EMPLEADO') {
       nextTipo = null
     }
-    // If nextRol is EMPLEADO but payload tried to set non-GERONTOLOGA, reject
-    if (nextRol === 'EMPLEADO' && req.body.tipoEmpleado && req.body.tipoEmpleado !== 'GERONTOLOGA') {
-      res.status(400).json({
-        success: false,
-        message: 'tipoEmpleado must be "GERONTOLOGA" (only enum value)',
-        field: 'tipoEmpleado',
-      })
-      return
-    }
+    // qa-session-aug-17: all MATRIX_TIPOS allowed (Zod already validates the enum).
 
     const updateData: Record<string, unknown> = {
       ...req.body,

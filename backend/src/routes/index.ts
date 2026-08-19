@@ -10,6 +10,8 @@ import { uploadRoutes } from './uploads.routes.js'
 import { certificateRoutes } from './certificates.routes.js'
 import { userRoutes } from './users.routes.js'
 import { asistenciaRoutes } from './asistencia.routes.js'
+import { centroCostosRoutes } from './centroCostos.routes.js'
+import { actividadesRoutes } from './actividades.routes.js'
 
 const router = Router()
 
@@ -24,6 +26,8 @@ router.use('/empresa', empresaRoutes)
 router.use('/uploads', uploadRoutes)
 router.use('/certificates', certificateRoutes)
 router.use('/users', userRoutes)
+router.use('/centro-costos', centroCostosRoutes)
+router.use('/actividades', actividadesRoutes)
 
 // Health check
 router.get('/health', (_req, res) => {

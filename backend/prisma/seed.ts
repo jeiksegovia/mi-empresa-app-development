@@ -73,6 +73,12 @@ async function main() {
     await clean('vehiculo', () => prisma.vehiculo.deleteMany());
     await clean('educacionIdiomas', () => prisma.educacionIdiomas.deleteMany());
     await clean('experienciaLaboralExterna', () => prisma.experienciaLaboralExterna.deleteMany());
+    // qa-session-aug-17 / nomina-asistencia: children before cargo/empleado/usuario
+    await clean('registroActividad', () => prisma.registroActividad.deleteMany());
+    await clean('asistenciaEmpleado', () => prisma.asistenciaEmpleado.deleteMany());
+    await clean('archivoNominaPeriodo', () => prisma.archivoNominaPeriodo.deleteMany());
+    await clean('nominaPeriodo', () => prisma.nominaPeriodo.deleteMany());
+    await clean('contrato', () => prisma.contrato.deleteMany());
     await clean('cargo', () => prisma.cargo.deleteMany());
     await clean('contactoEmergenciaEmpleado', () => prisma.contactoEmergenciaEmpleado.deleteMany());
     await clean('nucleoFamiliar', () => prisma.nucleoFamiliar.deleteMany());
@@ -96,7 +102,56 @@ async function main() {
   const operador = await prisma.usuario.create({
     data: { email: 'operador@miempresa.com', password: passwordHash, rol: 'OPERADOR', nombre: 'Ana', apellido: 'Martínez', activo: true },
   });
-  console.log('  ✓ created 4 users');
+
+  // qa-session-aug-17 R6: local PROFESORES / AUXILIARES with linked Empleado (own-item tests)
+  console.log('👤 Creating profesor + auxiliar empleados + users...');
+  const empleadoProfesor = await prisma.empleado.create({
+    data: {
+      nombre: 'Pedro',
+      apellido: 'Profesor',
+      tipoDocumento: 'CC',
+      numeroDocumento: '900000001',
+      genero: 'Masculino',
+      fechaNacimiento: new Date('1990-01-15'),
+      estado: 'ACTIVO',
+    },
+  });
+  const empleadoAuxiliar = await prisma.empleado.create({
+    data: {
+      nombre: 'Ana',
+      apellido: 'Auxiliar',
+      tipoDocumento: 'CC',
+      numeroDocumento: '900000002',
+      genero: 'Femenino',
+      fechaNacimiento: new Date('1992-03-20'),
+      estado: 'ACTIVO',
+    },
+  });
+  const profesorUser = await prisma.usuario.create({
+    data: {
+      email: 'profesor@miempresa.com',
+      password: passwordHash,
+      rol: 'EMPLEADO',
+      nombre: 'Pedro',
+      apellido: 'Profesor',
+      activo: true,
+      tipoEmpleado: 'PROFESORES',
+      empleadoId: empleadoProfesor.id,
+    },
+  });
+  const auxiliarUser = await prisma.usuario.create({
+    data: {
+      email: 'auxiliar@miempresa.com',
+      password: passwordHash,
+      rol: 'EMPLEADO',
+      nombre: 'Ana',
+      apellido: 'Auxiliar',
+      activo: true,
+      tipoEmpleado: 'AUXILIARES',
+      empleadoId: empleadoAuxiliar.id,
+    },
+  });
+  console.log('  ✓ created 6 users (incl. profesor + auxiliar with empleadoId)');
 
   // 2. Default empresa
   console.log('🏢 Creating default empresa...');
@@ -266,10 +321,12 @@ async function main() {
 
   // Suppress unused-variable warnings for users we create but don't reference again.
   void empleado1User; void auditor; void operador;
+  void profesorUser; void auxiliarUser; void admin;
 
   console.log('\n✨ Database seed completed successfully!');
   console.log('\n📊 Summary:');
-  console.log(`   Users: 4 (admin, empleado, auditor, operador)`);
+  console.log(`   Users: 6 (admin, empleado, auditor, operador, profesor, auxiliar)`);
+  console.log(`   Empleados: 2 (linked to profesor + auxiliar)`);
   console.log(`   Empresa: 1 (default)`);
   console.log(`   Instruments: 10 (3 legacy + 7 dynamic)`);
   console.log(`   Active versions: 7 (one per dynamic instrumento)`);
@@ -278,6 +335,8 @@ async function main() {
   console.log('   Empleado: empleado@miempresa.com / password123');
   console.log('   Auditor: auditor@miempresa.com / password123');
   console.log('   Operador: operador@miempresa.com / password123');
+  console.log('   Profesor: profesor@miempresa.com / password123 (tipoEmpleado=PROFESORES)');
+  console.log('   Auxiliar: auxiliar@miempresa.com / password123 (tipoEmpleado=AUXILIARES)');
 }
 
 main()

@@ -36,6 +36,9 @@ interface NominaEntrada {
   // nomina-asistencia-jul-18 calc fields
   mediasJornadas?: number | string | null
   valorJornada?: number | string | null
+  valorMensual?: number | string | null
+  // qa-session-aug-17 R3: additive bonos (FIJO/INDEF only).
+  bonos?: number | string | null
   subtotalCalculado?: number | string | null
   aportesSociales?: number | string | null
   totalPagado?: number | string | null
@@ -58,6 +61,8 @@ interface NominaSugeridoLocal {
   valorJornada: number | null
   // qa-session-jul-31 R2: nullable for OPS, populated for OBRA/FIJO/INDEF.
   valorMensual: number | null
+  // qa-session-aug-17 R3: optional suggestion for FIJO/INDEF.
+  bonos?: number | null
   subtotalCalculado: number | null
   aportesSociales: number
   totalPagado: number
@@ -116,6 +121,8 @@ const dialogForm = reactive({
   // qa-session-jul-31 R2: base for OBRA/FIJO/INDEF contracts. Hidden
   // input on OPS — recomputeSubtotal writes there indirectly.
   valorMensual: null as number | null,
+  // qa-session-aug-17 R3: bonos only for TERMINO_FIJO | TERMINO_INDEFINIDO.
+  bonos: null as number | null,
   subtotalCalculado: null as number | null,
   aportesSociales: null as number | null,
   totalPagado: null as number | null,
@@ -125,6 +132,12 @@ const dialogForm = reactive({
 
 /** True when aportes sociales apply (TERMINO_FIJO | TERMINO_INDEFINIDO). */
 const aportesAllowed = computed(() => {
+  const t = editingTipo.value
+  return t === 'TERMINO_FIJO' || t === 'TERMINO_INDEFINIDO'
+})
+
+/** qa-session-aug-17 R3 / contract §3.2: bonos only for FIJO/INDEF. */
+const bonosAllowed = computed(() => {
   const t = editingTipo.value
   return t === 'TERMINO_FIJO' || t === 'TERMINO_INDEFINIDO'
 })
@@ -170,9 +183,22 @@ const tipoContratoLabel = (tipo: string) =>
   }[tipo] || tipo)
 
 function recomputeSubtotal() {
-  // qa-session-jul-31 R2: branch the subtotal source by contrato type.
-  // OPS keeps the medias × valorJornada formula (existing jul-18 logic).
-  // Non-OPS uses valorMensual directly — no medias/valor inputs visible.
+  // qa-session-jul-31 R2 + qa-session-aug-17 R3:
+  // OPS keeps medias × valorJornada (unchanged this cycle — contract D4).
+  // FIJO/INDEF: subtotal = valorMensual + bonos (aportes NOT added).
+  // OBRA: subtotal stays null; total = valorMensual (contract D5).
+  if (editingTipo.value === 'OBRA_O_LABOR') {
+    dialogForm.subtotalCalculado = null
+    recomputeTotal()
+    return
+  }
+  if (bonosAllowed.value) {
+    const v = Number(dialogForm.valorMensual ?? 0)
+    const b = Number(dialogForm.bonos ?? 0)
+    dialogForm.subtotalCalculado = v + b
+    recomputeTotal()
+    return
+  }
   if (usaValorMensual.value) {
     dialogForm.subtotalCalculado = dialogForm.valorMensual ?? 0
     recomputeTotal()
@@ -189,9 +215,21 @@ function recomputeSubtotal() {
 }
 
 function recomputeTotal() {
-  const sub = dialogForm.subtotalCalculado ?? 0
-  const ap = aportesAllowed.value ? (dialogForm.aportesSociales ?? 0) : 0
-  dialogForm.totalPagado = Number(sub) + Number(ap)
+  // qa-session-aug-17 R3 / contract §3.3:
+  // FIJO/INDEF: totalPagado = valorMensual + bonos (aportes stored, NOT added).
+  // OBRA: totalPagado = valorMensual.
+  // OPS: keep prior behavior (subtotal + aportes when applicable).
+  if (bonosAllowed.value) {
+    const v = Number(dialogForm.valorMensual ?? 0)
+    const b = Number(dialogForm.bonos ?? 0)
+    dialogForm.totalPagado = v + b
+  } else if (editingTipo.value === 'OBRA_O_LABOR') {
+    dialogForm.totalPagado = Number(dialogForm.valorMensual ?? 0)
+  } else {
+    const sub = dialogForm.subtotalCalculado ?? 0
+    const ap = aportesAllowed.value ? (dialogForm.aportesSociales ?? 0) : 0
+    dialogForm.totalPagado = Number(sub) + Number(ap)
+  }
   // Dual-write mirror for legacy salario field display
   dialogForm.salario = dialogForm.totalPagado
 }
@@ -258,6 +296,12 @@ function openDialog(row: NominaRow) {
     dialogForm.valorJornada =
       n(ent?.valorJornada) ?? n(sug?.valorJornada) ?? n(row.contratoActivo?.valorJornada) ?? null
   }
+  // qa-session-aug-17 R3: prefill bonos for FIJO/INDEF; force null otherwise.
+  if (bonosAllowed.value) {
+    dialogForm.bonos = n(ent?.bonos) ?? n(sug?.bonos) ?? 0
+  } else {
+    dialogForm.bonos = null
+  }
   dialogForm.subtotalCalculado =
     n(ent?.subtotalCalculado) ?? n(sug?.subtotalCalculado) ?? null
   dialogForm.aportesSociales =
@@ -271,8 +315,11 @@ function openDialog(row: NominaRow) {
       : row.cargoSalario != null
         ? Number(row.cargoSalario)
         : null
-  // If subtotal still null, derive from medias × valor (OPS) or valorMensual (non-OPS).
-  if (dialogForm.subtotalCalculado == null) {
+  // Always recompute FIJO/INDEF/OBRA so the new formula (mensual+bonos,
+  // aportes not added) wins over stale entrada totals from prior cycles.
+  if (bonosAllowed.value || editingTipo.value === 'OBRA_O_LABOR') {
+    recomputeSubtotal()
+  } else if (dialogForm.subtotalCalculado == null) {
     recomputeSubtotal()
   } else if (dialogForm.totalPagado == null) {
     recomputeTotal()
@@ -296,6 +343,7 @@ function closeDialog() {
   dialogForm.mediasJornadas = null
   dialogForm.valorJornada = null
   dialogForm.valorMensual = null
+  dialogForm.bonos = null
   dialogForm.subtotalCalculado = null
   dialogForm.aportesSociales = null
   dialogForm.totalPagado = null
@@ -362,6 +410,8 @@ async function saveEntrada() {
       // jul-24 R7; including it here just keeps the dialog round-trip
       // honest. For OPS we explicitly null it out (no stale column).
       valorMensual: usaValorMensual.value ? (dialogForm.valorMensual ?? 0) : null,
+      // qa-session-aug-17 R3: include bonos for FIJO/INDEF; omit/null for OPS/OBRA.
+      bonos: bonosAllowed.value ? (dialogForm.bonos ?? 0) : null,
       subtotalCalculado: dialogForm.subtotalCalculado,
       aportesSociales: aportesAllowed.value ? (dialogForm.aportesSociales ?? 0) : 0,
       totalPagado: dialogForm.totalPagado,
@@ -692,7 +742,7 @@ watch(selectedTipoFilter, () => { fetchRows() })
               />
             </div>
           </template>
-          <!-- Non-OPS: Valor Mensual base (R2). Subtotal derives from it. -->
+          <!-- Non-OPS: Valor Mensual base (R2). Subtotal derives from it (+ bonos for FIJO/INDEF). -->
           <div v-else class="sm:col-span-2">
             <label class="block text-sm font-medium mb-1" for="nomina-valor-mensual">Valor mensual</label>
             <InputNumber
@@ -711,6 +761,25 @@ watch(selectedTipoFilter, () => { fetchRows() })
               Base del período para {{ tipoContratoLabel(editingTipo) }}.
             </p>
           </div>
+          <!-- qa-session-aug-17 R3 / contract §6.2: Bonos only for FIJO/INDEF. Hidden for OPS/OBRA. -->
+          <div v-if="bonosAllowed" class="sm:col-span-2">
+            <label class="block text-sm font-medium mb-1" for="nomina-bonos">Bonos</label>
+            <InputNumber
+              id="nomina-bonos"
+              v-model="dialogForm.bonos"
+              mode="decimal"
+              :min="0"
+              :min-fraction-digits="0"
+              :max-fraction-digits="2"
+              input-class="w-full"
+              class="w-full"
+              data-testid="nomina-bonos"
+              @update:model-value="recomputeSubtotal"
+            />
+            <p class="text-xs text-[var(--text-color-secondary)] mt-1">
+              Se suma al valor mensual.
+            </p>
+          </div>
           <div>
             <label class="block text-sm font-medium mb-1" for="nomina-subtotal">Subtotal</label>
             <InputNumber
@@ -726,7 +795,10 @@ watch(selectedTipoFilter, () => { fetchRows() })
               data-testid="nomina-subtotal"
             />
             <p class="text-xs text-[var(--text-color-secondary)] mt-1">
-              <template v-if="usaValorMensual">
+              <template v-if="bonosAllowed">
+                Calculado: valor mensual + bonos
+              </template>
+              <template v-else-if="usaValorMensual">
                 Calculado: valor mensual
               </template>
               <template v-else>
@@ -748,6 +820,9 @@ watch(selectedTipoFilter, () => { fetchRows() })
               data-testid="nomina-aportes"
               @update:model-value="recomputeTotal"
             />
+            <p class="text-xs text-[var(--text-color-secondary)] mt-1">
+              Referente / no se suma al total.
+            </p>
           </div>
           <div class="sm:col-span-2">
             <label class="block text-sm font-medium mb-1" for="nomina-total">Total a pagar</label>
@@ -764,8 +839,8 @@ watch(selectedTipoFilter, () => { fetchRows() })
               @update:model-value="(v: number | null) => { dialogForm.salario = v }"
             />
             <p class="text-xs text-[var(--text-color-secondary)] mt-1">
-              <template v-if="usaValorMensual && aportesAllowed">
-                Por defecto valor mensual + aportes; se puede ajustar manualmente
+              <template v-if="bonosAllowed">
+                Mensual + bonos (los aportes no se suman); se puede ajustar manualmente
               </template>
               <template v-else-if="usaValorMensual">
                 Por defecto valor mensual; se puede ajustar manualmente

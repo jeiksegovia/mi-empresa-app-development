@@ -18,7 +18,11 @@ export interface PaginatedResponse<T> {
 // fixes-jul17-2 §1.4: EMPLEADO sub-profile. Additive; may be absent (legacy
 // sessions) or null (EMPLEADO without a sub-profile → treated as legacy = full
 // access). ADMIN/AUDITOR/OPERADOR ignore this field.
-export type TipoEmpleado = 'GERONTOLOGA' | 'CONTRATOS'
+//
+// fixes-features-aug-6 §1: extends the union to 4 values. PROFESORES + AUXILIARES
+// are new sub-roles introduced in this migration (S1). Additive — no existing
+// rows are rewritten; existing null `tipoEmpleado` rows remain null.
+export type TipoEmpleado = 'GERONTOLOGA' | 'CONTRATOS' | 'PROFESORES' | 'AUXILIARES'
 
 // ─── nomina-asistencia-jul-18 ─────────────────────────────────────────────────
 /** Medio de pago de nómina (nullable on empleado = "Sin definir"). */
@@ -95,6 +99,9 @@ export interface NominaSugerido {
 export interface NominaCalcFields {
   mediasJornadas?: number | null
   valorJornada?: number | null
+  valorMensual?: number | null
+  /** qa-session-aug-17 R3: FIJO/INDEF only. */
+  bonos?: number | null
   subtotalCalculado?: number | null
   aportesSociales?: number | null
   totalPagado?: number | null
@@ -108,6 +115,33 @@ export interface User {
   rol: string
   tipoEmpleado?: TipoEmpleado | null
   activo?: boolean
+  /** Linked Empleado id when the user is self-service (PROFESORES/AUXILIARES). */
+  empleadoId?: number | null
+}
+
+// ─── qa-session-aug-17 R6 — Registro de actividades ──────────────────────────
+/** Row from GET /actividades (contract §4.4). */
+export interface RegistroActividadDto {
+  id: number
+  empleadoId: number
+  fecha: string // YYYY-MM-DD
+  texto: string
+  registradoPor: number
+  createdAt: string // ISO
+  updatedAt: string // ISO
+}
+
+/** POST /actividades body. */
+export interface RegistroActividadCreateBody {
+  fecha: string
+  texto: string
+  empleadoId?: number
+}
+
+/** PUT /actividades/:id body (ADMIN). */
+export interface RegistroActividadUpdateBody {
+  texto?: string
+  fecha?: string
 }
 
 export interface LoginRequest {

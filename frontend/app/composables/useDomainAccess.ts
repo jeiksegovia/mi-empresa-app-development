@@ -2,7 +2,7 @@ import type { TipoEmpleado } from '~/shared/types/api'
 
 /**
  * useDomainAccess — frontend mirror of the backend RBAC matrix
- * (contract-fixes-jul17-2 §1.2 / §1.5).
+ * (contract-fixes-jul17-2 §1.2 / §1.5; contract-fixes-features-aug-6 §2).
  *
  * The DOMAIN_ACCESS constant is duplicated on purpose (the contract explicitly
  * allows this); QA validates cell-by-cell parity against
@@ -12,6 +12,7 @@ import type { TipoEmpleado } from '~/shared/types/api'
  * Access value semantics:
  *   true          → full access
  *   'create-only' → GET list/detail + POST create allowed; PUT/PATCH/DELETE denied
+ *   'read-only'   → GET allowed; POST/PUT/PATCH/DELETE denied
  *   false         → no access (section hidden, route redirected)
  */
 export type Domain =
@@ -24,10 +25,15 @@ export type Domain =
   | 'empresa'
   | 'notas'
   | 'asistencia'
+  | 'centro-costos'
+  | 'actividades' // qa-session-aug-17 R6
 
-export type DomainAccessValue = boolean | 'create-only'
+export type DomainAccessValue = boolean | 'create-only' | 'read-only'
 
-// ─── §1.2 matrix (single source of truth, mirrored cell-by-cell) ────────────
+// ─── §2.2 matrix (single source of truth, mirrored cell-by-cell) ────────────
+// fixes-features-aug-6 §2.2: 4 tipos × 11 domains. EXTENDS the prior
+// fixes-jul17-2 2-tipo matrix with PROFESORES + AUXILIARES rows and the new
+// 'read-only' value. GERONTOLOGA.certificados flipped from false → true (S3).
 export const DOMAIN_ACCESS: Record<TipoEmpleado, Record<Domain, DomainAccessValue>> = {
   GERONTOLOGA: {
     pacientes: true,
@@ -35,10 +41,15 @@ export const DOMAIN_ACCESS: Record<TipoEmpleado, Record<Domain, DomainAccessValu
     instrumentos: true,
     empleados: false,
     nomina: false,
-    certificados: false,
+    // fixes-features-aug-6 §2.5 (S3): GERONTOLOGA now has certificados access.
+    certificados: true,
     empresa: false,
     notas: true,
     asistencia: false,
+    // feature-centro-costos-ago-5 D4: GERONTOLOGA does not see centro-costos.
+    'centro-costos': false,
+    // qa-session-aug-17 §1.2: GET only.
+    actividades: 'read-only',
   },
   CONTRATOS: {
     pacientes: 'create-only',
@@ -50,6 +61,42 @@ export const DOMAIN_ACCESS: Record<TipoEmpleado, Record<Domain, DomainAccessValu
     empresa: false,
     notas: false,
     asistencia: true,
+    // feature-centro-costos-ago-5 D4: CONTRATOS has full access to centro-costos.
+    'centro-costos': true,
+    // qa-session-aug-17 §1.2: GET only.
+    actividades: 'read-only',
+  },
+  // fixes-features-aug-6 §2.2 (S1): PROFESORES — view paciente info, fill ficha
+  // but cannot edit/delete; create-only on notas (autor filter enforced on the
+  // BE; FE just renders what it gets and hides edit/delete affordances).
+  PROFESORES: {
+    pacientes: 'read-only',
+    fichas: 'create-only',
+    instrumentos: false,
+    empleados: false,
+    nomina: false,
+    certificados: false,
+    empresa: false,
+    notas: 'create-only',
+    asistencia: false,
+    'centro-costos': false,
+    // qa-session-aug-17 §1.2: GET + POST; own-item + today-only are service rules.
+    actividades: 'create-only',
+  },
+  // fixes-features-aug-6 §2.2 (S1): AUXILIARES — identical matrix to PROFESORES.
+  AUXILIARES: {
+    pacientes: 'read-only',
+    fichas: 'create-only',
+    instrumentos: false,
+    empleados: false,
+    nomina: false,
+    certificados: false,
+    empresa: false,
+    notas: 'create-only',
+    asistencia: false,
+    'centro-costos': false,
+    // qa-session-aug-17 §1.2: GET + POST; own-item + today-only are service rules.
+    actividades: 'create-only',
   },
 }
 
@@ -60,9 +107,13 @@ export const DOMAIN_PREFIX_MAP: ReadonlyArray<{ prefix: string; domain: Domain }
   { prefix: '/instrumentos', domain: 'instrumentos' },
   { prefix: '/empleados', domain: 'empleados' },
   { prefix: '/asistencia', domain: 'asistencia' },
+  // qa-session-aug-17 §1.4: Registro de actividades.
+  { prefix: '/actividades', domain: 'actividades' },
   { prefix: '/nomina', domain: 'nomina' },
   { prefix: '/certificados', domain: 'certificados' },
   { prefix: '/empresa', domain: 'empresa' },
+  // feature-centro-costos-ago-5: route prefix → domain wiring.
+  { prefix: '/centro-costos', domain: 'centro-costos' },
 ]
 
 /** Resolve the domain guarding a given route path, or null if unguarded. */
@@ -79,25 +130,31 @@ export function useDomainAccess() {
   /**
    * The active EMPLEADO sub-profile, or null when the matrix does not apply
    * (ADMIN, AUDITOR/OPERADOR, or legacy EMPLEADO with tipoEmpleado null).
-   * §1.3: only EMPLEADO + GERONTOLOGA/CONTRATOS is constrained; everything
-   * else falls through to legacy full access (zero regression).
+   * §1.3 (fixes-jul17-2) + §2.4 (fixes-features-aug-6): only EMPLEADO +
+   * {GERONTOLOGA, CONTRATOS, PROFESORES, AUXILIARES} is constrained;
+   * everything else falls through to legacy full access (zero regression).
    */
   const profile = computed<TipoEmpleado | null>(() => {
     const rol = authStore.role
     if (rol === 'ADMIN') return null
     if (rol !== 'EMPLEADO') return null
     const tipo = authStore.user?.tipoEmpleado
-    return tipo === 'GERONTOLOGA' || tipo === 'CONTRATOS' ? tipo : null
+    return tipo === 'GERONTOLOGA'
+      || tipo === 'CONTRATOS'
+      || tipo === 'PROFESORES'
+      || tipo === 'AUXILIARES'
+      ? tipo
+      : null
   })
 
-  /** Raw matrix value for a domain (true | 'create-only' | false). */
+  /** Raw matrix value for a domain (true | 'create-only' | 'read-only' | false). */
   function access(domain: Domain): DomainAccessValue {
     const p = profile.value
     if (!p) return true // ADMIN / non-EMPLEADO / legacy null → full access
     return DOMAIN_ACCESS[p][domain]
   }
 
-  /** Any access at all (full OR create-only). Use for sidebar/route visibility. */
+  /** Any access at all (full OR create-only OR read-only). Use for sidebar/route visibility. */
   function can(domain: Domain): boolean {
     return access(domain) !== false
   }
@@ -107,5 +164,14 @@ export function useDomainAccess() {
     return access(domain) === 'create-only'
   }
 
-  return { profile, access, can, canCreateOnly }
+  /**
+   * fixes-features-aug-6 §2.1: True only when access is 'read-only' (UI shows
+   * the section but hides every write affordance: create/edit/delete). Use to
+   * gate write CTA visibility for PROFESORES/AUXILIARES on `pacientes` etc.
+   */
+  function isReadOnly(domain: Domain): boolean {
+    return access(domain) === 'read-only'
+  }
+
+  return { profile, access, can, canCreateOnly, isReadOnly }
 }
