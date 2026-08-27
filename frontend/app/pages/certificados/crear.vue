@@ -7,6 +7,11 @@ definePageMeta({
   layout: 'default',
 })
 
+const { isReadOnly } = useDomainAccess()
+if (isReadOnly('certificados')) {
+  await navigateTo('/certificados')
+}
+
 // ─── Composables ──────────────────────────────────────────────────────────────
 const { apiFetch } = useApi()
 const toast = useToast()

@@ -199,7 +199,7 @@ test.describe('Matrix parity (fixes-jul17-2 §1.2, §1.5 — extended by fixes-f
         instrumentos: 'true',
         empleados: 'false',
         nomina: 'false',
-        certificados: 'true',        // §2.5 — was false → true
+        certificados: "'read-only'", // qa-aug-27 F1 — was true (full write)
         empresa: 'false',
         notas: 'true',
         asistencia: 'false',
@@ -212,7 +212,7 @@ test.describe('Matrix parity (fixes-jul17-2 §1.2, §1.5 — extended by fixes-f
         instrumentos: 'false',
         empleados: 'true',
         nomina: 'true',
-        certificados: 'true',
+        certificados: "'read-only'", // qa-aug-27 F1
         // D1: stays false — GET /empresa/cargos is route-level exception only
         empresa: 'false',
         notas: 'false',

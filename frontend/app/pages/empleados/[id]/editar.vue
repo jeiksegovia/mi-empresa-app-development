@@ -1496,9 +1496,8 @@ onMounted(fetchEmployee)
                   label="Guardar Hoja de Vida"
                   icon="pi pi-check"
                   severity="success"
-                  :disabled="hojaVidaUploading"
+                  :disabled="hojaVidaUploading || lockedForMe"
                   data-testid="hoja-vida-save"
-                  :disabled="lockedForMe"
                   @click="saveHojaVida"
                 />
               </div>
@@ -1752,7 +1751,7 @@ onMounted(fetchEmployee)
                 <i class="pi pi-file-edit text-violet-500" /> Contratos del empleado
               </h3>
               <Button
-                v-if="authStore.isAdmin"
+                v-if="!lockedForMe"
                 label="Agregar contrato"
                 icon="pi pi-plus"
                 size="small"
@@ -1825,7 +1824,7 @@ onMounted(fetchEmployee)
                       <i class="pi pi-file-edit mr-1" />Firmado: {{ filenameFromKey(c.archivoFirmadoUrl) }}
                     </p>
                   </div>
-                  <div v-if="authStore.isAdmin" class="flex items-center gap-1">
+                  <div v-if="!lockedForMe" class="flex items-center gap-1">
                     <Button
                       v-if="!c.activo"
                       icon="pi pi-check"

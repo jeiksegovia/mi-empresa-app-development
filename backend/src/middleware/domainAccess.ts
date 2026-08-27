@@ -72,7 +72,7 @@ export const DOMAIN_ACCESS: Record<MatrixTipo, Record<Domain, DomainAccessValue>
     instrumentos: true,
     empleados: false,
     nomina: false,
-    certificados: true, // S3 — was false → true
+    certificados: 'read-only', // qa-aug-27 F1 — view/print/download only; ADMIN writes
     empresa: false,
     notas: true,
     asistencia: false,
@@ -85,9 +85,9 @@ export const DOMAIN_ACCESS: Record<MatrixTipo, Record<Domain, DomainAccessValue>
     instrumentos: false,
     empleados: true,
     nomina: true,
-    certificados: true,
-    // CONTRACT D1: stays false — GET /empresa/cargos is a route-level exception only
-    // (qa-session-aug-17 R2). Do NOT flip this cell for the cargos exception.
+    certificados: 'read-only', // qa-aug-27 F1 — view/print/download only; ADMIN writes
+    // CONTRACT D1: stays false — GET+POST /empresa/cargos is a route-level
+    // exception (qa-aug-17 R2 + aug-27 F3). PATCH/DELETE stay ADMIN.
     empresa: false,
     notas: false,
     asistencia: true,

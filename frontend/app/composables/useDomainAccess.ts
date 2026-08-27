@@ -41,8 +41,8 @@ export const DOMAIN_ACCESS: Record<TipoEmpleado, Record<Domain, DomainAccessValu
     instrumentos: true,
     empleados: false,
     nomina: false,
-    // fixes-features-aug-6 §2.5 (S3): GERONTOLOGA now has certificados access.
-    certificados: true,
+    // qa-aug-27 F1: GERONTOLOGA view/print/download only (was true / full write).
+    certificados: 'read-only',
     empresa: false,
     notas: true,
     asistencia: false,
@@ -57,7 +57,7 @@ export const DOMAIN_ACCESS: Record<TipoEmpleado, Record<Domain, DomainAccessValu
     instrumentos: false,
     empleados: true,
     nomina: true,
-    certificados: true,
+    certificados: 'read-only', // qa-aug-27 F1
     empresa: false,
     notas: false,
     asistencia: true,
