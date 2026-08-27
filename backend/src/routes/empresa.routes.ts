@@ -47,10 +47,11 @@ const updateCargoSchema = z.object({
 })
 
 /**
- * qa-session-aug-17 R2 / contract §2:
- * Allow EMPLEADO + CONTRATOS on GET /empresa/cargos only.
+ * qa-session-aug-17 R2 + aug-27 3rd pass:
+ * Allow EMPLEADO + CONTRATOS on GET (read catalog) and POST (create cargo)
+ * for /empresa/cargos only.
  * Matrix cell CONTRATOS.empresa stays false — this is NOT a matrix change.
- * All other roles/methods fall through to requireDomain('empresa').
+ * PATCH/DELETE stay ADMIN-only via requireDomain('empresa') + requireRole('ADMIN').
  */
 function requireEmpresaOrContratosGetCargos() {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -58,11 +59,21 @@ function requireEmpresaOrContratosGetCargos() {
       const user = (req as any).user
       const userId = (req as any).userId as number | undefined
       const rol = user?.rol
+      const method = req.method.toUpperCase()
 
-      if (rol === 'ADMIN' || (rol && rol !== 'EMPLEADO')) {
-        // ADMIN bypass / AUDITOR|OPERADOR fall-through — same as requireDomain.
+      if (rol === 'ADMIN') {
         next()
         return
+      }
+
+      // GET: AUDITOR/OPERADOR fall through (same as requireDomain). POST from
+      // those roles is not a CONTRATOS exception — they must not create cargos.
+      if (rol && rol !== 'EMPLEADO') {
+        if (method === 'GET') {
+          next()
+          return
+        }
+        return requireDomain('empresa')(req, res, next)
       }
 
       if (rol === 'EMPLEADO') {
@@ -81,14 +92,12 @@ function requireEmpresaOrContratosGetCargos() {
           ;(req as any).user = { ...(user || {}), rol: usuario.rol, tipoEmpleado }
         }
 
-        if (tipoEmpleado === 'CONTRATOS' && req.method.toUpperCase() === 'GET') {
+        if (tipoEmpleado === 'CONTRATOS' && (method === 'GET' || method === 'POST')) {
           next()
           return
         }
       }
 
-      // Everyone else (incl. GERONTOLOGA, PROFESORES, AUXILIARES, null-tipo legacy
-      // handled inside requireDomain) goes through the normal empresa matrix.
       return requireDomain('empresa')(req, res, next)
     } catch (error) {
       logger.error('requireEmpresaOrContratosGetCargos error:', error)
@@ -116,7 +125,7 @@ router.get('/cargos', requireEmpresaOrContratosGetCargos(), async (req: Request,
   }
 })
 
-router.post('/cargos', requireDomain('empresa'), requireRole('ADMIN'), validate(createCargoSchema), async (req: Request, res: Response): Promise<void> => {
+router.post('/cargos', requireEmpresaOrContratosGetCargos(), validate(createCargoSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const data = await cargoService.createCargo(req.body)
     res.status(201).json({ success: true, data })

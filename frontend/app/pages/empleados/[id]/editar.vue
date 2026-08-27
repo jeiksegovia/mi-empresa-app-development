@@ -217,6 +217,10 @@ function addFamilyMember() {
 function removeFamilyMember(i: number) { familyMembers.value.splice(i, 1) }
 
 async function saveNucleo() {
+  if (lockedForMe.value) {
+    toast.add({ severity: 'warn', summary: 'Empleado bloqueado', detail: 'Solo un administrador puede editar este empleado.', life: 4000 })
+    return
+  }
   saving2.value = true
   try {
     const valid = familyMembers.value.filter(f => f.nombre.trim() && f.apellido.trim() && f.fechaNacimiento && f.genero && f.parentesco)
@@ -262,6 +266,10 @@ async function onHojaVidaChange(event: Event) {
   }
 }
 async function saveHojaVida() {
+  if (lockedForMe.value) {
+    toast.add({ severity: 'warn', summary: 'Empleado bloqueado', detail: 'Solo un administrador puede editar este empleado.', life: 4000 })
+    return
+  }
   try {
     await apiFetch(`/employees/${route.params.id}`, {
       method: 'PUT',
@@ -363,7 +371,6 @@ const cargosEmpresa = ref<CargoEmpresa[]>([])
 const ADD_NEW_CARGO_SENTINEL = '__ADD_NEW__'
 
 const cargoEmpresaOptions = computed(() => [
-  { label: '— Sin cargo —', value: null as number | null },
   ...cargosEmpresa.value.map((c) => ({ label: c.nombre, value: c.id })),
   { label: '➕ Agregar otro cargo…', value: ADD_NEW_CARGO_SENTINEL as any },
 ])
@@ -385,6 +392,10 @@ async function fetchCargosEmpresa() {
 }
 
 async function saveNewCargo() {
+  if (lockedForMe.value) {
+    toast.add({ severity: 'warn', summary: 'Empleado bloqueado', detail: 'Solo un administrador puede editar este empleado.', life: 4000 })
+    return
+  }
   if (!newCargoNombre.value.trim()) {
     newCargoError.value = 'El nombre del cargo es obligatorio.'
     return
@@ -515,6 +526,19 @@ function openEditContrato(c: Contrato) {
 }
 
 async function saveContrato() {
+  if (lockedForMe.value) {
+    toast.add({ severity: 'warn', summary: 'Empleado bloqueado', detail: 'Solo un administrador puede editar este empleado.', life: 4000 })
+    return
+  }
+  if (!contratoForm.cargoId || contratoForm.cargoId === ADD_NEW_CARGO_SENTINEL) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Cargo requerido',
+      detail: 'Selecciona un cargo (o créalo con «Agregar otro cargo…») antes de guardar el contrato.',
+      life: 4000,
+    })
+    return
+  }
   // Inline validation: TERMINO_INDEFINIDO can omit fechaFin; others require it.
   if (contratoForm.tipoContrato !== 'TERMINO_INDEFINIDO' && !contratoForm.fechaFin) {
     toast.add({
@@ -557,7 +581,7 @@ async function saveContrato() {
     // D6: archivoFirmadoUrl (signed contract).
     if (contratoForm.archivoFirmadoUrl) payload.archivoFirmadoUrl = contratoForm.archivoFirmadoUrl
     // D7: cargoId — number FK; legacy cargo string is rejected per contract §4.7.
-    if (contratoForm.cargoId) payload.cargoId = contratoForm.cargoId
+    payload.cargoId = contratoForm.cargoId
     // qa-session-jul-24 R7: send only the matching salary field per
     // tipoContrato (avoids noisy 400s when OPS form accidentally carries
     // a valorMensual). On PUT, also send the *opposite* field as null
@@ -726,6 +750,10 @@ function addExperiencia() { experiencias.value.push({ empresa: '', telefonoEmpre
 function removeExperiencia(i: number) { experiencias.value.splice(i, 1) }
 
 async function saveLaboral() {
+  if (lockedForMe.value) {
+    toast.add({ severity: 'warn', summary: 'Empleado bloqueado', detail: 'Solo un administrador puede editar este empleado.', life: 4000 })
+    return
+  }
   saving3.value = true
   try {
     const validContacts = contactosEmergencia.value.filter(c => c.nombre.trim() && c.apellido.trim() && c.telefono.trim() && c.parentesco)
@@ -815,6 +843,10 @@ async function downloadEducacionDiploma(row: EducacionEmpleado) {
 }
 
 async function saveEducacion() {
+  if (lockedForMe.value) {
+    toast.add({ severity: 'warn', summary: 'Empleado bloqueado', detail: 'Solo un administrador puede editar este empleado.', life: 4000 })
+    return
+  }
   saving4.value = true
   try {
     const validEdu = educaciones.value.filter(e => e.institucion.trim() && e.nivelHabla.trim())
@@ -917,6 +949,10 @@ const certificados = ref<CertificadoEmpleadoInput[]>([])
 const migracion = reactive({ enabled: false, numeroPasaporte: '', pasaporteExpedicion: '', pasaporteVencimiento: '', numeroVisa: '', visaExpedicion: '', visaVencimiento: '' })
 
 async function saveCertificados() {
+  if (lockedForMe.value) {
+    toast.add({ severity: 'warn', summary: 'Empleado bloqueado', detail: 'Solo un administrador puede editar este empleado.', life: 4000 })
+    return
+  }
   saving5.value = true
   try {
     const validCertificados = certificados.value.filter(
@@ -1393,7 +1429,7 @@ onMounted(fetchEmployee)
               </div>
             </div>
             <div class="mt-4 flex justify-end">
-              <Button label="Guardar Núcleo Familiar" icon="pi pi-check" severity="success" :loading="saving2" @click="saveNucleo" />
+              <Button label="Guardar Núcleo Familiar" icon="pi pi-check" severity="success" :loading="saving2" :disabled="lockedForMe" @click="saveNucleo" />
             </div>
           </template>
         </Card>
@@ -1462,6 +1498,7 @@ onMounted(fetchEmployee)
                   severity="success"
                   :disabled="hojaVidaUploading"
                   data-testid="hoja-vida-save"
+                  :disabled="lockedForMe"
                   @click="saveHojaVida"
                 />
               </div>
@@ -1515,7 +1552,7 @@ onMounted(fetchEmployee)
           </template>
         </Card>
         <div class="flex justify-end">
-          <Button label="Guardar Info. Laboral" icon="pi pi-check" severity="success" :loading="saving3" @click="saveLaboral" />
+          <Button label="Guardar Info. Laboral" icon="pi pi-check" severity="success" :loading="saving3" :disabled="lockedForMe" @click="saveLaboral" />
         </div>
       </div>
 
@@ -1659,7 +1696,7 @@ onMounted(fetchEmployee)
           </template>
         </Card>
         <div class="flex justify-end">
-          <Button label="Guardar Educación y Vehículos" icon="pi pi-check" severity="success" :loading="saving4" @click="saveEducacion" />
+          <Button label="Guardar Educación y Vehículos" icon="pi pi-check" severity="success" :loading="saving4" :disabled="lockedForMe" @click="saveEducacion" />
         </div>
       </div>
 
@@ -1699,7 +1736,7 @@ onMounted(fetchEmployee)
           </template>
         </Card>
         <div class="flex justify-end">
-          <Button label="Guardar Certificados y Migración" icon="pi pi-check" severity="success" :loading="saving5" @click="saveCertificados" />
+          <Button label="Guardar Certificados y Migración" icon="pi pi-check" severity="success" :loading="saving5" :disabled="lockedForMe" @click="saveCertificados" />
         </div>
       </div>
 
@@ -2026,6 +2063,7 @@ onMounted(fetchEmployee)
               label="Guardar"
               icon="pi pi-check"
               :loading="contratoSaving"
+              :disabled="lockedForMe"
               data-testid="contrato-save"
               @click="saveContrato"
             />
@@ -2080,6 +2118,7 @@ onMounted(fetchEmployee)
               label="Crear y seleccionar"
               icon="pi pi-check"
               :loading="newCargoSaving"
+              :disabled="lockedForMe"
               data-testid="nuevo-cargo-save"
               @click="saveNewCargo"
             />

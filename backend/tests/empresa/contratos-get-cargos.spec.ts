@@ -3,8 +3,8 @@
  * CONTRATOS GET /empresa/cargos route-level exception.
  *
  * Matrix cell DOMAIN_ACCESS.CONTRATOS.empresa stays **false**.
- * Only GET /api/v1/empresa/cargos is allowed for EMPLEADO+CONTRATOS.
- * POST/PATCH/DELETE remain 403 DOMAIN_FORBIDDEN.
+ * GET + POST /api/v1/empresa/cargos allowed for EMPLEADO+CONTRATOS (aug-27).
+ * PATCH/DELETE remain 403 DOMAIN_FORBIDDEN.
  * GERONTOLOGA still 403 on GET cargos (no exception).
  */
 
@@ -82,15 +82,16 @@ test.describe('CONTRATOS GET /empresa/cargos exception (qa-aug-17 R2)', () => {
     expect(Array.isArray(body.data)).toBe(true)
   })
 
-  test('qa-contratos POST /empresa/cargos → 403 DOMAIN_FORBIDDEN', async ({ request }) => {
+  test('qa-contratos POST /empresa/cargos → 201 (create catalog cargo)', async ({ request }) => {
     const res = await request.post(`${API}/api/v1/empresa/cargos`, {
       headers: { Cookie: contratosCookie },
-      data: { nombre: `CTR-DENIED-${Date.now()}` },
+      data: { nombre: `CTR-OK-${Date.now()}` },
     })
-    expect(res.status()).toBe(403)
+    expect(res.status(), await res.text()).toBe(201)
     const body = await res.json()
-    expect(body.success).toBe(false)
-    expect(body.code).toBe('DOMAIN_FORBIDDEN')
+    expect(body.success).toBe(true)
+    expect(body.data?.id).toBeTruthy()
+    expect(body.data?.nombre).toBeTruthy()
   })
 
   test('qa-contratos PATCH /empresa/cargos/:id → 403 DOMAIN_FORBIDDEN', async ({ request }) => {
@@ -119,5 +120,14 @@ test.describe('CONTRATOS GET /empresa/cargos exception (qa-aug-17 R2)', () => {
     expect(res.status()).toBe(403)
     const body = await res.json()
     expect(body.code).toBe('DOMAIN_FORBIDDEN')
+  })
+
+  test('GERONTOLOGA POST /empresa/cargos → 403 (no create exception)', async ({ request }) => {
+    const res = await request.post(`${API}/api/v1/empresa/cargos`, {
+      headers: { Cookie: gerontoCookie },
+      data: { nombre: `GER-DENIED-${Date.now()}` },
+    })
+    expect(res.status()).toBe(403)
+    expect((await res.json()).code).toBe('DOMAIN_FORBIDDEN')
   })
 })

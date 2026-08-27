@@ -325,7 +325,7 @@ router.put('/:id/lock', requireRole('ADMIN'), (req: Request, res: Response) => h
 router.put('/:id/unlock', requireRole('ADMIN'), (req: Request, res: Response) => handleSetLock(req, res, false))
 
 // PUT /employees/:id/cargos — replace all cargos
-router.put('/:id/cargos', requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id/cargos', requireEmployeeUnlocked('id'), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid employee ID' }); return }
@@ -357,7 +357,7 @@ router.put('/:id/cargos', requireRole('ADMIN'), async (req: Request, res: Respon
 })
 
 // PUT /employees/:id/nucleo-familiar — replace all nucleo familiar
-router.put('/:id/nucleo-familiar', requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id/nucleo-familiar', requireEmployeeUnlocked('id'), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid employee ID' }); return }
@@ -392,7 +392,7 @@ router.put('/:id/nucleo-familiar', requireRole('ADMIN'), async (req: Request, re
 })
 
 // PUT /employees/:id/contactos-emergencia — replace all emergency contacts
-router.put('/:id/contactos-emergencia', requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id/contactos-emergencia', requireEmployeeUnlocked('id'), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid employee ID' }); return }
@@ -423,7 +423,7 @@ router.put('/:id/contactos-emergencia', requireRole('ADMIN'), async (req: Reques
 })
 
 // PUT /employees/:id/experiencias-laborales — replace all work experiences
-router.put('/:id/experiencias-laborales', requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id/experiencias-laborales', requireEmployeeUnlocked('id'), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid employee ID' }); return }
@@ -457,7 +457,7 @@ router.put('/:id/experiencias-laborales', requireRole('ADMIN'), async (req: Requ
 })
 
 // PUT /employees/:id/educacion-idiomas — replace all education/languages
-router.put('/:id/educacion-idiomas', requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id/educacion-idiomas', requireEmployeeUnlocked('id'), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid employee ID' }); return }
@@ -488,7 +488,7 @@ router.put('/:id/educacion-idiomas', requireRole('ADMIN'), async (req: Request, 
 })
 
 // PUT /employees/:id/vehiculos — replace all vehicles
-router.put('/:id/vehiculos', requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id/vehiculos', requireEmployeeUnlocked('id'), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid employee ID' }); return }
@@ -519,7 +519,7 @@ router.put('/:id/vehiculos', requireRole('ADMIN'), async (req: Request, res: Res
 })
 
 // PUT /employees/:id/datos-migracion — upsert migration data
-router.put('/:id/datos-migracion', requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id/datos-migracion', requireEmployeeUnlocked('id'), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid employee ID' }); return }
@@ -557,7 +557,7 @@ const certificadosPutSchema = z.object({
     archivoUrl: z.string().max(500).optional().nullable(),
   })),
 })
-router.put('/:id/certificados', requireRole('ADMIN'), validate(certificadosPutSchema), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id/certificados', requireEmployeeUnlocked('id'), validate(certificadosPutSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid employee ID' }); return }
@@ -616,7 +616,7 @@ router.get('/:id/educacion', async (req: Request, res: Response): Promise<void> 
   }
 })
 
-router.post('/:id/educacion', requireRole('ADMIN'), validate(createEducacionSchema), async (req: Request, res: Response): Promise<void> => {
+router.post('/:id/educacion', requireEmployeeUnlocked('id'), validate(createEducacionSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const empleadoId = parseInt(req.params.id as string)
     if (isNaN(empleadoId)) { res.status(400).json({ success: false, message: 'Invalid empleado ID' }); return }
@@ -629,7 +629,7 @@ router.post('/:id/educacion', requireRole('ADMIN'), validate(createEducacionSche
   }
 })
 
-router.patch('/:id/educacion/:eduId', requireRole('ADMIN'), validate(updateEducacionSchema), async (req: Request, res: Response): Promise<void> => {
+router.patch('/:id/educacion/:eduId', requireEmployeeUnlocked('id'), validate(updateEducacionSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const empleadoId = parseInt(req.params.id as string)
     const eduId = parseInt(req.params.eduId as string)
@@ -643,7 +643,7 @@ router.patch('/:id/educacion/:eduId', requireRole('ADMIN'), validate(updateEduca
   }
 })
 
-router.delete('/:id/educacion/:eduId', requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.delete('/:id/educacion/:eduId', requireEmployeeUnlocked('id'), async (req: Request, res: Response): Promise<void> => {
   try {
     const empleadoId = parseInt(req.params.id as string)
     const eduId = parseInt(req.params.eduId as string)
@@ -678,7 +678,7 @@ router.get('/:id/pendientes', async (req: Request, res: Response): Promise<void>
 const createPendienteSchema = z.object({
   descripcion: z.string().min(1).max(500),
 })
-router.post('/:id/pendientes', requireRole('ADMIN'), validate(createPendienteSchema), async (req: Request, res: Response): Promise<void> => {
+router.post('/:id/pendientes', requireEmployeeUnlocked('id'), validate(createPendienteSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid employee ID' }); return }
@@ -698,7 +698,7 @@ router.post('/:id/pendientes', requireRole('ADMIN'), validate(createPendienteSch
 const patchPendienteSchema = z.object({
   estado: z.enum(['PENDIENTE', 'RESUELTO']),
 })
-router.patch('/:id/pendientes/:pid', requireRole('ADMIN'), validate(patchPendienteSchema), async (req: Request, res: Response): Promise<void> => {
+router.patch('/:id/pendientes/:pid', requireEmployeeUnlocked('id'), validate(patchPendienteSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     const pid = parseInt(req.params.pid as string)
@@ -715,7 +715,7 @@ router.patch('/:id/pendientes/:pid', requireRole('ADMIN'), validate(patchPendien
 })
 
 // DELETE /employees/:id/pendientes/:pid (ADMIN)
-router.delete('/:id/pendientes/:pid', requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.delete('/:id/pendientes/:pid', requireEmployeeUnlocked('id'), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     const pid = parseInt(req.params.pid as string)
@@ -757,7 +757,7 @@ const createNovedadSchema = z.object({
     .optional(),
 })
 
-router.post('/:id/novedades', requireRole('ADMIN'), validate(createNovedadSchema), async (req: Request, res: Response): Promise<void> => {
+router.post('/:id/novedades', requireEmployeeUnlocked('id'), validate(createNovedadSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) { res.status(400).json({ success: false, message: 'Invalid employee ID' }); return }
@@ -771,7 +771,7 @@ router.post('/:id/novedades', requireRole('ADMIN'), validate(createNovedadSchema
   }
 })
 
-router.put('/:id/novedades/:nid', requireRole('ADMIN'), validate(createNovedadSchema), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id/novedades/:nid', requireEmployeeUnlocked('id'), validate(createNovedadSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     const nid = parseInt(req.params.nid as string)
@@ -785,7 +785,7 @@ router.put('/:id/novedades/:nid', requireRole('ADMIN'), validate(createNovedadSc
   }
 })
 
-router.delete('/:id/novedades/:nid', requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.delete('/:id/novedades/:nid', requireEmployeeUnlocked('id'), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     const nid = parseInt(req.params.nid as string)
