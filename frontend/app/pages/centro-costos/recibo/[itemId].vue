@@ -55,6 +55,7 @@ const toast = useToast()
 
 const loading = ref(false)
 const item = ref<ReciboItem | null>(null)
+const empresa = ref<{ nombre: string; nit: string; direccion: string | null } | null>(null)
 const loadError = ref<string | null>(null)
 
 function asNum(v: number | string | null | undefined): number {
@@ -73,6 +74,10 @@ function fmtMedioPago(m: ReciboItem['medioPago']): string {
   return '—'
 }
 
+function hasBeneficiario(it: ReciboItem): boolean {
+  return !!it.beneficiario?.nombre?.trim()
+}
+
 async function loadItem() {
   if (!Number.isFinite(itemId.value)) {
     loadError.value = 'Identificador de ítem inválido.'
@@ -81,14 +86,18 @@ async function loadItem() {
   loading.value = true
   loadError.value = null
   try {
-    const res = await apiFetch<{ success: boolean; data: ReciboItem }>(
-      `/centro-costos/items/${itemId.value}`,
-    )
+    const [res, emp] = await Promise.all([
+      apiFetch<{ success: boolean; data: ReciboItem }>(
+        `/centro-costos/items/${itemId.value}`,
+      ),
+      apiFetch<{ success: boolean; data: { nombre: string; nit: string; direccion: string | null } }>(
+        '/empresa',
+      ).catch(() => null),
+    ])
     item.value = res.data ?? null
-    // Auto-trigger print once the data lands.
+    empresa.value = emp?.data ?? null
     if (item.value) {
-      // Defer to allow the DOM to settle; print() opens the OS print dialog.
-      setTimeout(() => window.print(), 250)
+      requestPrint()
     }
   } catch (e: any) {
     const detail = e?.data?.message || e?.message || 'No se pudo cargar el recibo.'
@@ -99,20 +108,56 @@ async function loadItem() {
   }
 }
 
+/** Ignore a second Imprimir click for 1.5s so cancel/idle can finish. */
+const PRINT_COOLDOWN_MS = 1500
+const printLocked = ref(false)
+let lastPrintIntentAt = 0
+let unlockTimer: ReturnType<typeof setTimeout> | null = null
+
+function requestPrint() {
+  if (typeof window === 'undefined') return
+  const now = Date.now()
+  if (printLocked.value) return
+  if (now - lastPrintIntentAt < PRINT_COOLDOWN_MS) return
+  lastPrintIntentAt = now
+  printLocked.value = true
+  window.focus()
+  // Defer so a cancelled OS dialog can close before the next print().
+  setTimeout(() => window.print(), 50)
+  if (unlockTimer) clearTimeout(unlockTimer)
+  unlockTimer = setTimeout(() => {
+    printLocked.value = false
+    unlockTimer = null
+  }, PRINT_COOLDOWN_MS)
+}
+
 function goBack() {
-  // Avoid triggering print on a back-nav; the receipt lives in its own page.
-  if (typeof window !== 'undefined' && window.history.length > 1) {
-    window.history.back()
-  } else {
+  if (typeof window === 'undefined') {
     navigateTo('/centro-costos')
+    return
   }
+  // Script-opened tab: close it so the list tab keeps accordion / month / scroll.
+  // `?popup=1` is the fallback when window.opener is missing (some Chromium
+  // builds). Browsers ignore close() on a tab the user typed or bookmarked.
+  const openedAsPopup =
+    (window.opener && !window.opener.closed) ||
+    new URLSearchParams(window.location.search).get('popup') === '1'
+  if (openedAsPopup) {
+    window.close()
+    return
+  }
+  if (window.history.length > 1) {
+    window.history.back()
+    return
+  }
+  navigateTo('/centro-costos')
 }
 
 onMounted(loadItem)
 </script>
 
 <template>
-  <div class="recibo-page">
+  <div class="recibo-page" data-testid="recibo-print-page">
     <!-- Non-print toolbar: visible on screen, hidden on @media print. -->
     <div class="no-print mb-4 flex items-center justify-between">
       <Button
@@ -128,7 +173,8 @@ onMounted(loadItem)
         icon="pi pi-print"
         severity="primary"
         data-testid="recibo-print"
-        @click="() => window.print()"
+        :disabled="printLocked"
+        @click="requestPrint"
       />
     </div>
 
@@ -140,17 +186,16 @@ onMounted(loadItem)
       <p class="text-red-600">{{ loadError }}</p>
     </div>
 
-    <article v-else-if="item" class="recibo" data-testid="recibo-content">
+    <article v-else-if="item" class="recibo" data-testid="recibo-content" data-print-ready="true">
       <header class="recibo-header">
-        <h1 class="recibo-title">Recibo #{{ item.id }}</h1>
-        <p class="recibo-subtitle">{{ item.centro.nombre }}</p>
+        <p v-if="empresa" class="recibo-empresa" data-testid="recibo-empresa">{{ empresa.nombre }}</p>
+        <p v-if="empresa?.nit" class="recibo-meta">NIT {{ empresa.nit }}</p>
+        <p v-if="empresa?.direccion" class="recibo-meta">{{ empresa.direccion }}</p>
+        <h1 class="recibo-title">RECIBO DE CAJA</h1>
+        <p class="recibo-subtitle">Nº <span data-testid="recibo-id">{{ item.id }}</span></p>
       </header>
 
       <dl class="recibo-list">
-        <div class="recibo-row">
-          <dt class="recibo-label">Recibo #</dt>
-          <dd class="recibo-value" data-testid="recibo-id">{{ item.id }}</dd>
-        </div>
         <div class="recibo-row">
           <dt class="recibo-label">Fecha</dt>
           <dd class="recibo-value" data-testid="recibo-fecha">{{ item.fecha }}</dd>
@@ -159,10 +204,10 @@ onMounted(loadItem)
           <dt class="recibo-label">Pagador</dt>
           <dd class="recibo-value" data-testid="recibo-pagador">{{ item.pagador ?? '—' }}</dd>
         </div>
-        <div class="recibo-row">
+        <div v-if="hasBeneficiario(item)" class="recibo-row">
           <dt class="recibo-label">Beneficiario</dt>
           <dd class="recibo-value" data-testid="recibo-beneficiario">
-            {{ item.beneficiario?.nombre ?? '—' }}
+            {{ item.beneficiario?.nombre }}
           </dd>
         </div>
         <div class="recibo-row">
@@ -170,23 +215,27 @@ onMounted(loadItem)
           <dd class="recibo-value" data-testid="recibo-concepto">{{ item.centro.nombre }}</dd>
         </div>
         <div class="recibo-row">
+          <dt class="recibo-label">Detalle</dt>
+          <dd class="recibo-value" data-testid="recibo-detalle">{{ item.nombre }}</dd>
+        </div>
+        <div class="recibo-row">
           <dt class="recibo-label">Cantidad</dt>
           <dd class="recibo-value" data-testid="recibo-cantidad">{{ item.cantidad }}</dd>
         </div>
         <div class="recibo-row">
-          <dt class="recibo-label">Valor unitario</dt>
+          <dt class="recibo-label">V. unitario</dt>
           <dd class="recibo-value" data-testid="recibo-valor-unitario">
             $ {{ fmtMoney(item.valorUnitario) }}
           </dd>
         </div>
-        <div class="recibo-row">
-          <dt class="recibo-label">Valor total</dt>
+        <div class="recibo-row recibo-row-total">
+          <dt class="recibo-label">TOTAL</dt>
           <dd class="recibo-value" data-testid="recibo-valor-total">
             $ {{ fmtMoney(item.valorTotal) }}
           </dd>
         </div>
         <div class="recibo-row">
-          <dt class="recibo-label">Medio de pago</dt>
+          <dt class="recibo-label">Medio</dt>
           <dd class="recibo-value" data-testid="recibo-medio-pago">
             {{ fmtMedioPago(item.medioPago) }}
           </dd>
@@ -198,10 +247,8 @@ onMounted(loadItem)
       </dl>
 
       <footer class="recibo-footer">
-        <p>
-          Impreso el
-          {{ new Date().toLocaleDateString('es-CO') }} —
-          Recibo generado automáticamente por el sistema.
+        <p data-testid="recibo-footer">
+          Impreso {{ new Date().toLocaleDateString('es-CO') }}
         </p>
       </footer>
     </article>
@@ -209,33 +256,64 @@ onMounted(loadItem)
 </template>
 
 <style scoped>
+/* 80mm thermal sheet. Screen = print: 80mm paper, 4mm margin, 72mm ticket. */
 .recibo-page {
-  max-width: 640px;
+  box-sizing: border-box;
+  width: 80mm;
+  max-width: 80mm;
   margin: 0 auto;
-  padding: 1.5rem;
+  padding: 4mm;
+  background: #fff;
 }
 
 .recibo {
+  box-sizing: border-box;
+  width: 100%;
   background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 1.5rem 2rem;
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: #000;
+  border: 1px dashed #000;
+  border-radius: 0;
+  padding: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow: visible;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+.recibo,
+.recibo * {
+  color: #000;
 }
 
 .recibo-header {
-  border-bottom: 1px solid #e5e7eb;
-  padding-bottom: 0.75rem;
-  margin-bottom: 1rem;
+  text-align: center;
+  border-bottom: 1px dashed #000;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+.recibo-empresa {
+  font-weight: 700;
+  font-size: 13px;
+  margin: 0 0 2px;
+  text-transform: uppercase;
+  word-break: break-word;
+}
+.recibo-meta {
+  margin: 0;
+  font-size: 11px;
+  color: #000;
+  word-break: break-word;
 }
 .recibo-title {
-  font-size: 1.5rem;
+  font-size: 13px;
   font-weight: 700;
-  margin: 0;
+  letter-spacing: 0.04em;
+  margin: 8px 0 0;
 }
 .recibo-subtitle {
-  color: #6b7280;
-  margin-top: 0.25rem;
+  margin: 2px 0 0;
+  font-size: 12px;
 }
 
 .recibo-list {
@@ -245,52 +323,109 @@ onMounted(loadItem)
 .recibo-row {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  padding: 0.5rem 0;
-  border-bottom: 1px dashed #e5e7eb;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px dotted #000;
 }
-.recibo-row:last-of-type {
+/* Drop the dotted rule immediately above TOTAL so it does not stack
+ * with TOTAL's dashed top (that was the double line under V. unitario). */
+.recibo-row:has(+ .recibo-row-total) {
+  border-bottom: none;
+}
+.recibo-row:last-child {
   border-bottom: none;
 }
 .recibo-label {
+  flex: 0 0 38%;
   font-weight: 500;
-  color: #6b7280;
+  color: #000;
   margin: 0;
+  word-break: break-word;
 }
 .recibo-value {
+  flex: 1 1 62%;
   font-weight: 600;
-  color: #111827;
+  color: #000;
   margin: 0;
   text-align: right;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.recibo-row-total {
+  border-top: 1px dashed #000;
+  border-bottom: 1px dashed #000;
+  margin-top: 4px;
+  padding: 6px 0;
+  font-size: 13px;
+}
+.recibo-row-total .recibo-label,
+.recibo-row-total .recibo-value {
+  color: #000;
+  font-weight: 700;
 }
 
 .recibo-footer {
-  margin-top: 1.5rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #e5e7eb;
-  color: #6b7280;
-  font-size: 0.8rem;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #000;
+  color: #000;
+  font-size: 10px;
   text-align: center;
 }
+.recibo-footer p {
+  margin: 0;
+}
 
-/* Print rules: hide the toolbar and any non-print chrome.
- * The default layout renders the app sidebar in <aside> and the app header
- * in <header class="sticky top-0 z-30 ...">. We hide those plus our own
- * `.no-print` toolbar. The receipt's own `<header class="recibo-header">`
- * does NOT carry the .sticky utility, so it survives.
- */
 @media print {
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+  :global(html),
+  :global(body) {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  :global(.min-h-screen) {
+    min-height: 0 !important;
+    height: auto !important;
+  }
   :global(.no-print),
   :global(aside),
-  :global(header.sticky) {
+  :global(header.sticky),
+  :global(.p-toast),
+  :global(.p-toast-message) {
     display: none !important;
+  }
+  :global(main) {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+  .recibo-page {
+    width: 80mm;
+    max-width: 80mm;
+    margin: 0;
+    padding: 4mm;
   }
   .recibo {
     border: none;
     padding: 0;
+    width: 100%;
+    overflow: visible;
+    color: #000 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
-  .recibo-page {
-    padding: 0;
+  .recibo,
+  .recibo * {
+    color: #000 !important;
+    border-color: #000 !important;
   }
 }
 </style>

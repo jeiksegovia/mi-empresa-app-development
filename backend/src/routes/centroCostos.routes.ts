@@ -113,6 +113,7 @@ const createCentroSchema = z.object({
   // aug-17 D11/D13
   precioUnitario: optionalPositiveDecimalLike,
   habilitarRecibo: z.boolean().optional(),
+  ocultarBeneficiario: z.boolean().optional(),
 })
 
 const updateCentroSchema = z.object({
@@ -122,6 +123,7 @@ const updateCentroSchema = z.object({
   orden: z.number().int().optional(),
   precioUnitario: optionalPositiveDecimalLike,
   habilitarRecibo: z.boolean().optional(),
+  ocultarBeneficiario: z.boolean().optional(),
 })
 
 /* -------------------------------------------------------------------------- */

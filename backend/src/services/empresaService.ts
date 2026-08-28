@@ -13,6 +13,22 @@ export interface EmpresaDetail {
   updatedAt: Date
 }
 
+// aug-28: GET /empresa is readable by any authenticated role (recibo header
+// needs it for CONTRATOS printing a receipt). nombre/nit/direccion are the
+// company's own public-facing details, not personal data — safe to expose
+// to every logged-in profile. telefono/email/limitarFechaContratos/activa
+// stay ADMIN-only (full EmpresaDetail via the route's own role check).
+export interface EmpresaPublic {
+  id: number
+  nombre: string
+  nit: string
+  direccion: string | null
+}
+
+export function toPublicEmpresa(e: EmpresaDetail): EmpresaPublic {
+  return { id: e.id, nombre: e.nombre, nit: e.nit, direccion: e.direccion }
+}
+
 export interface UpdateEmpresaInput {
   nombre?: string
   nit?: string
@@ -160,7 +176,12 @@ export async function updateEmpresa(id: number, input: UpdateEmpresaInput): Prom
  * idempotent: a second run is a no-op (rename matches zero rows; UPDATE
  * by name matches 14 rows whose orden already equals the target).
  */
-export async function seedCentrosCostos(): Promise<{ inserted: number; renamed: number; reordered: number }> {
+export async function seedCentrosCostos(): Promise<{
+  inserted: number
+  renamed: number
+  reordered: number
+  valoracionesHidden: number
+}> {
   const prisma = getPrisma()
   const renamed = await applyAug17SeedFix()
   const result = await prisma.centroCostos.createMany({
@@ -169,11 +190,14 @@ export async function seedCentrosCostos(): Promise<{ inserted: number; renamed: 
       tipo: c.tipo,
       activo: true,
       orden: c.orden,
+      // Valoraciones: hide beneficiario by default (aug-28). Other INGRESOS keep it required.
+      ocultarBeneficiario: c.nombre === 'Valoraciones',
     })),
     skipDuplicates: true,
   })
   const reordered = await applyAug17OrdenFix()
-  return { inserted: result.count, renamed, reordered }
+  const valoracionesHidden = await applyValoracionesOcultarBeneficiario()
+  return { inserted: result.count, renamed, reordered, valoracionesHidden }
 }
 
 /**
@@ -235,4 +259,17 @@ async function applyAug17OrdenFix(): Promise<number> {
     count += result.count
   }
   return count
+}
+
+/**
+ * aug-28: existing Valoraciones rows (skipDuplicates) keep ocultarBeneficiario=false
+ * until this UPDATE. Safe to re-run: second call matches 0 rows.
+ */
+async function applyValoracionesOcultarBeneficiario(): Promise<number> {
+  const prisma = getPrisma()
+  const result = await prisma.centroCostos.updateMany({
+    where: { tipo: 'INGRESOS', nombre: 'Valoraciones', ocultarBeneficiario: false },
+    data: { ocultarBeneficiario: true },
+  })
+  return result.count
 }

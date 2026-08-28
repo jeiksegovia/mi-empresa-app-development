@@ -58,14 +58,14 @@ const CONTRATOS = {
 // ─── Fixtures (mirror contract §1.3 + §2.3 — aug-17: 8 INGRESOS + 6 EGRESOS) ─
 // `precioUnitario` and `habilitarRecibo` are the new INGRESOS-only centro fields.
 const INGRESOS_CENTROS = [
-  { id: 17, nombre: 'Mensualidades completas', orden: 1, precioUnitario: '1500000.00', habilitarRecibo: true },
-  { id: 18, nombre: 'Mensualidad por 4 días',  orden: 2, precioUnitario: '500000.00',  habilitarRecibo: false },
-  { id: 19, nombre: 'Mensualidad por 3 días',  orden: 3, precioUnitario: '400000.00',  habilitarRecibo: false },
-  { id: 20, nombre: 'Mensualidades por día',   orden: 4, precioUnitario: '50000.00',   habilitarRecibo: false },
-  { id: 21, nombre: 'Transporte completo',     orden: 5, precioUnitario: '80000.00',   habilitarRecibo: false },
-  { id: 22, nombre: 'Transporte por 3 días',   orden: 6, precioUnitario: '50000.00',   habilitarRecibo: false },
-  { id: 23, nombre: 'Ingresos adicionales',    orden: 7, precioUnitario: null,         habilitarRecibo: false }, // sin precio (R26)
-  { id: 24, nombre: 'Valoraciones',            orden: 8, precioUnitario: '70000.00',   habilitarRecibo: false },
+  { id: 17, nombre: 'Mensualidades completas', orden: 1, precioUnitario: '1500000.00', habilitarRecibo: true,  ocultarBeneficiario: false },
+  { id: 18, nombre: 'Mensualidad por 4 días',  orden: 2, precioUnitario: '500000.00',  habilitarRecibo: false, ocultarBeneficiario: false },
+  { id: 19, nombre: 'Mensualidad por 3 días',  orden: 3, precioUnitario: '400000.00',  habilitarRecibo: false, ocultarBeneficiario: false },
+  { id: 20, nombre: 'Mensualidades por día',   orden: 4, precioUnitario: '50000.00',   habilitarRecibo: false, ocultarBeneficiario: false },
+  { id: 21, nombre: 'Transporte completo',     orden: 5, precioUnitario: '80000.00',   habilitarRecibo: false, ocultarBeneficiario: false },
+  { id: 22, nombre: 'Transporte por 3 días',   orden: 6, precioUnitario: '50000.00',   habilitarRecibo: false, ocultarBeneficiario: false },
+  { id: 23, nombre: 'Ingresos adicionales',    orden: 7, precioUnitario: null,         habilitarRecibo: false, ocultarBeneficiario: false }, // sin precio (R26)
+  { id: 24, nombre: 'Valoraciones',            orden: 8, precioUnitario: '70000.00',   habilitarRecibo: false, ocultarBeneficiario: true },
 ] as const
 
 const EGRESOS_CENTROS = [
@@ -89,6 +89,7 @@ function buildCentros() {
       orden: c.orden,
       precioUnitario: c.precioUnitario as string | null,
       habilitarRecibo: c.habilitarRecibo,
+      ocultarBeneficiario: c.ocultarBeneficiario,
       createdAt: ts,
       updatedAt: ts,
     })),
@@ -101,6 +102,7 @@ function buildCentros() {
       orden: c.orden,
       precioUnitario: null as string | null,
       habilitarRecibo: false,
+      ocultarBeneficiario: false,
       createdAt: ts,
       updatedAt: ts,
     })),
@@ -187,14 +189,15 @@ function buildBalance(centros: ReturnType<typeof buildCentros>) {
 }
 
 async function mockAuth(page: Page, user: typeof ADMIN | typeof GERONTOLOGA | typeof CONTRATOS) {
-  await page.route('**/api/v1/auth/me', (route) =>
+  const ctx = page.context()
+  await ctx.route('**/api/v1/auth/me', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ success: true, user }),
     }),
   )
-  await page.route('**/api/v1/auth/login', (route) =>
+  await ctx.route('**/api/v1/auth/login', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -223,7 +226,32 @@ async function mockCentroCostosEndpoints(page: Page, options: {
     return initialGrupos
   }
 
-  await page.route('**/api/v1/patients?**', (route) =>
+  const ctx = page.context()
+
+  await ctx.route('**/api/v1/empresa', (route) => {
+    if (route.request().method() !== 'GET') {
+      return route.continue()
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        data: {
+          id: 1,
+          nombre: 'Centro Día Demo',
+          nit: '900123456-1',
+          direccion: 'Calle 10 #20-30',
+          telefono: '6014567890',
+          email: 'demo@miempresa.com',
+          activa: true,
+          limitarFechaContratos: false,
+        },
+      }),
+    })
+  })
+
+  await ctx.route('**/api/v1/patients?**', (route) => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -238,10 +266,10 @@ async function mockCentroCostosEndpoints(page: Page, options: {
         limit: 200,
         totalPages: 1,
       }),
-    }),
-  )
+    })
+  })
 
-  await page.route('**/api/v1/centro-costos**', async (route) => {
+  await ctx.route('**/api/v1/centro-costos**', async (route) => {
     const req = route.request()
     const url = req.url()
     const method = req.method()
@@ -288,6 +316,10 @@ async function mockCentroCostosEndpoints(page: Page, options: {
         habilitarRecibo:
           body.tipo === 'INGRESOS' && body.habilitarRecibo != null
             ? !!body.habilitarRecibo
+            : false,
+        ocultarBeneficiario:
+          body.tipo === 'INGRESOS' && body.ocultarBeneficiario != null
+            ? !!body.ocultarBeneficiario
             : false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -505,6 +537,7 @@ test.describe('Centro de Costos — frontend smoke (aug-17)', () => {
     await page.getByTestId('cc-centro-descripcion').locator('textarea').fill('Recursos para navidad')
     await page.getByTestId('cc-centro-precio').locator('input').fill('50000')
     await page.getByTestId('cc-centro-habilitar-recibo').check()
+    await expect(page.getByTestId('cc-centro-ocultar-beneficiario')).toBeVisible()
 
     const post = page.waitForResponse(
       (r) => /\/api\/v1\/centro-costos$/.test(r.url()) && r.request().method() === 'POST',
@@ -518,6 +551,7 @@ test.describe('Centro de Costos — frontend smoke (aug-17)', () => {
     expect(body.tipo).toBe('INGRESOS')
     expect(Number(body.precioUnitario)).toBe(50000)
     expect(body.habilitarRecibo).toBe(true)
+    expect(body.ocultarBeneficiario).toBe(false)
   })
 
   test('AC#3 CONTRATOS: no balance card, no month input, no create-centro button', async ({ page }) => {
@@ -589,6 +623,32 @@ test.describe('Centro de Costos — frontend smoke (aug-17)', () => {
     expect(Number(body.valorUnitario)).toBe(1500000)
   })
 
+  test('aug-28 Valoraciones: beneficiario hidden and not required', async ({ page }) => {
+    await mockCentroCostosEndpoints(page, { user: ADMIN })
+    await page.goto(`${FRONTEND}/centro-costos`)
+    await page.getByTestId('centro-costos-grupo-header-24').click()
+    await expect(page.getByTestId('centro-costos-add-item-24')).toBeVisible({ timeout: 15000 })
+    await page.getByTestId('centro-costos-add-item-24').click()
+    await expect(page.getByTestId('centro-costos-item-dialog')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByTestId('cc-item-pagador')).toBeVisible()
+    await expect(page.getByTestId('cc-item-beneficiario')).toHaveCount(0)
+
+    await page.getByTestId('cc-item-nombre').locator('input').fill('Valoración agosto')
+    await page.getByTestId('cc-item-fecha').fill('2026-08-17')
+    await page.getByTestId('cc-item-pagador').locator('input').fill('Familia Pérez')
+
+    const post = page.waitForResponse(
+      (r) => /\/api\/v1\/centro-costos\/\d+\/items$/.test(r.url()) && r.request().method() === 'POST',
+      { timeout: 15000 },
+    )
+    await page.getByTestId('cc-item-guardar').click()
+    const resp = await post
+    expect(resp.status()).toBe(201)
+    const body = JSON.parse(resp.request().postData() || '{}')
+    expect(body.pagador).toBe('Familia Pérez')
+    expect(body.beneficiarioClienteId).toBeNull()
+  })
+
   test('AC#5 EGRESOS dialog: typed valorUnitario; no pagador/beneficiario', async ({ page }) => {
     await mockCentroCostosEndpoints(page, { user: ADMIN })
     await page.goto(`${FRONTEND}/centro-costos`)
@@ -647,6 +707,29 @@ test.describe('Centro de Costos — frontend smoke (aug-17)', () => {
     await page.getByTestId('cc-item-guardar').click()
 
     await expect(page.getByTestId('centro-costos-print-after-create-dialog')).toBeVisible({ timeout: 10000 })
+  })
+
+  test('AC#6 Imprimir recibo opens a new tab and leaves the list', async ({ page, context }) => {
+    await mockCentroCostosEndpoints(page, { user: ADMIN })
+    await page.goto(`${FRONTEND}/centro-costos`)
+    await page.getByTestId('centro-costos-grupo-header-17').click()
+    await page.getByTestId('centro-costos-add-item-17').click()
+    await page.getByTestId('cc-item-nombre').locator('input').fill('Recibo demo')
+    await page.getByTestId('cc-item-fecha').fill('2026-08-17')
+    await page.getByTestId('cc-item-pagador').locator('input').fill('Familia Pérez')
+    await page.getByTestId('cc-item-beneficiario').selectOption({ label: 'Juan Cliente Demo' })
+    await page.getByTestId('cc-item-guardar').click()
+    await expect(page.getByTestId('centro-costos-print-after-create-dialog')).toBeVisible({ timeout: 10000 })
+
+    const popupPromise = context.waitForEvent('page')
+    await page.getByTestId('cc-print-now').click()
+    const popup = await popupPromise
+    await popup.waitForLoadState('domcontentloaded')
+    expect(popup.url()).toMatch(/\/centro-costos\/recibo\/\d+/)
+    expect(page.url()).toContain('/centro-costos')
+    expect(page.url()).not.toContain('/recibo/')
+    await expect(page.getByTestId('centro-costos-print-after-create-dialog')).toHaveCount(0)
+    await popup.close()
   })
 
   test('AC#6 After INGRESOS save on a NON-habilitarRecibo centro, no print CTA', async ({ page }) => {

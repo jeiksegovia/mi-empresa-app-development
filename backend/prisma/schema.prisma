@@ -769,6 +769,9 @@ model CentroCostos {
   precioUnitario Decimal?         @map("precio_unitario") @db.Decimal(15, 2)
   // aug-17 D13: enables print-recibo CTA after creating an ítem on this centro
   habilitarRecibo Boolean         @default(false) @map("habilitar_recibo")
+  // aug-28: hide beneficiario on the ítem dialog and skip the required check.
+  // Seed/migration turns this on for Valoraciones; ADMIN can toggle per centro.
+  ocultarBeneficiario Boolean     @default(false) @map("ocultar_beneficiario")
   createdAt      DateTime         @default(now())  @map("created_at")
   updatedAt      DateTime         @updatedAt       @map("updated_at")
 

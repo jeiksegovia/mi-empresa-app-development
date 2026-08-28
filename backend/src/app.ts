@@ -29,8 +29,11 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (server-to-server, curl)
     if (!origin) return callback(null, true)
-    // In development allow any localhost port
-    if (isDev && /^https?:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true)
+    // In development allow localhost plus LAN / Tailscale so a phone on WiFi
+    // can hit the same-origin cookie (same IP, ports 3100 + 3101).
+    if (isDev && /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|100\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$/.test(origin)) {
+      return callback(null, true)
+    }
     if (config.cors.origins.includes(origin)) return callback(null, true)
     callback(null, false)
   },

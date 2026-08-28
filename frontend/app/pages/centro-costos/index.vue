@@ -17,7 +17,7 @@
  *    server-copied from centro.precioUnitario (ignored on INGRESOS). If
  *    centro.precioUnitario is null → 400 → UI blocks save.
  *  - R29–R30: after an INGRESOS create, if centro.habilitarRecibo → offer
- *    print → navigate /centro-costos/recibo/:itemId.
+ *    print → open /centro-costos/recibo/:itemId in a new tab (list stays).
  *
  * Money wire type is `string` (Prisma Decimal serialized as `"1500.00"`).
  * Sum/render only at the leaf via Number() — see comment on `sumGrupo`.
@@ -46,6 +46,8 @@ interface CentroCostos {
   precioUnitario: string | null
   // aug-17 D13: enables print-recibo CTA after creating an ítem on this centro.
   habilitarRecibo: boolean
+  // aug-28: hide beneficiario on the ítem dialog; field is not required.
+  ocultarBeneficiario: boolean
   createdAt: string
   updatedAt: string
 }
@@ -428,13 +430,13 @@ async function saveItem() {
     return
   }
 
-  // INGRESOS: pagador + beneficiario required.
+  // INGRESOS: pagador required. Beneficiario required unless the centro hides it.
   if (isIngresoDialog.value) {
     if (!dialogForm.pagador.trim()) {
       toast.add({ severity: 'warn', summary: 'Validación', detail: 'El pagador es obligatorio en ingresos.', life: 3000 })
       return
     }
-    if (dialogForm.beneficiarioClienteId == null) {
+    if (!dialogCentroRef.value?.ocultarBeneficiario && dialogForm.beneficiarioClienteId == null) {
       toast.add({ severity: 'warn', summary: 'Validación', detail: 'El beneficiario es obligatorio en ingresos.', life: 3000 })
       return
     }
@@ -461,7 +463,9 @@ async function saveItem() {
       // We still send it for explicitness — backend will drop it.
       body.valorUnitario = asNum(dialogIngresoPrecioSource.value)
       body.pagador = dialogForm.pagador.trim()
-      body.beneficiarioClienteId = dialogForm.beneficiarioClienteId
+      body.beneficiarioClienteId = dialogCentroRef.value?.ocultarBeneficiario
+        ? (dialogForm.beneficiarioClienteId ?? null)
+        : dialogForm.beneficiarioClienteId
       if (dialogForm.medioPago) body.medioPago = dialogForm.medioPago
     }
     let savedItem: CentroCostosItem | null = null
@@ -529,11 +533,30 @@ function dismissPrintAfterCreate() {
   printAfterCreateItemId.value = null
   printAfterCreateCentroNombre.value = ''
 }
+
+/**
+ * Open the recibo in a new tab so the list keeps accordion / month / dialog
+ * state. Must run inside the click stack — Chrome treats delayed window.open
+ * as a popup and blocks it. window.open (not target=_blank) also sets
+ * window.opener so Volver can close the tab.
+ */
+function openReciboTab(itemId: number) {
+  const path = `/centro-costos/recibo/${itemId}?popup=1`
+  if (typeof window === 'undefined') {
+    navigateTo(path)
+    return
+  }
+  const opened = window.open(path, '_blank')
+  if (!opened) {
+    navigateTo(`/centro-costos/recibo/${itemId}`)
+  }
+}
+
 function navigateToRecibo() {
   if (printAfterCreateItemId.value == null) return
   const id = printAfterCreateItemId.value
+  openReciboTab(id)
   dismissPrintAfterCreate()
-  navigateTo(`/centro-costos/recibo/${id}`)
 }
 
 // ─── Create / edit centro dialog (R20) ───────────────────────────────────────
@@ -545,6 +568,7 @@ interface CentroDialogForm {
   orden: number
   precioUnitario: string | null   // INGRESOS only; stored as "1500.00" or "" (null)
   habilitarRecibo: boolean        // INGRESOS only
+  ocultarBeneficiario: boolean    // INGRESOS only — hide + skip required
   activo: boolean                 // for PUT deactivate
 }
 
@@ -559,6 +583,7 @@ const centroDialogForm = reactive<CentroDialogForm>({
   orden: 0,
   precioUnitario: null,
   habilitarRecibo: false,
+  ocultarBeneficiario: false,
   activo: true,
 })
 
@@ -570,6 +595,7 @@ function resetCentroDialog(): void {
   centroDialogForm.orden = 0
   centroDialogForm.precioUnitario = null
   centroDialogForm.habilitarRecibo = false
+  centroDialogForm.ocultarBeneficiario = false
   centroDialogForm.activo = true
 }
 
@@ -587,6 +613,7 @@ function openEditCentro(centro: CentroCostos) {
   centroDialogForm.orden = centro.orden
   centroDialogForm.precioUnitario = centro.precioUnitario
   centroDialogForm.habilitarRecibo = centro.habilitarRecibo
+  centroDialogForm.ocultarBeneficiario = centro.ocultarBeneficiario
   centroDialogForm.activo = centro.activo
   centroDialogEditing.value = true
   centroDialogVisible.value = true
@@ -627,6 +654,7 @@ async function saveCentro() {
             ? null
             : Number(centroDialogForm.precioUnitario)
         body.habilitarRecibo = centroDialogForm.habilitarRecibo
+        body.ocultarBeneficiario = centroDialogForm.ocultarBeneficiario
       }
       await apiFetch(`/centro-costos/${centroDialogForm.id}`, { method: 'PUT', body })
       toast.add({ severity: 'success', summary: 'Guardado', detail: 'Centro actualizado.', life: 2500 })
@@ -643,6 +671,7 @@ async function saveCentro() {
             ? null
             : Number(centroDialogForm.precioUnitario)
         body.habilitarRecibo = centroDialogForm.habilitarRecibo
+        body.ocultarBeneficiario = centroDialogForm.ocultarBeneficiario
       }
       await apiFetch('/centro-costos', { method: 'POST', body })
       toast.add({ severity: 'success', summary: 'Guardado', detail: 'Centro creado.', life: 2500 })
@@ -1039,8 +1068,19 @@ watch(periodRef, async () => {
                     <span v-else class="text-xs text-[var(--text-color-secondary)]">—</span>
                   </template>
                 </Column>
-                <Column header="Acciones" style="min-width: 110px">
+                <Column header="Acciones" style="min-width: 140px">
                   <template #body="{ data }">
+                    <Button
+                      v-if="g.centro.tipo === 'INGRESOS' && g.centro.habilitarRecibo"
+                      icon="pi pi-print"
+                      size="small"
+                      severity="secondary"
+                      text
+                      rounded
+                      v-tooltip.top="'Imprimir recibo'"
+                      :data-testid="`centro-costos-print-item-${data.id}`"
+                      @click="openReciboTab(data.id)"
+                    />
                     <Button
                       icon="pi pi-pencil"
                       size="small"
@@ -1194,7 +1234,7 @@ watch(periodRef, async () => {
                 />
               </div>
             </div>
-            <div>
+            <div v-if="!dialogCentroRef?.ocultarBeneficiario">
               <label class="block text-sm font-medium mb-1" for="cc-beneficiario">
                 Beneficiario *
               </label>
@@ -1421,6 +1461,14 @@ watch(periodRef, async () => {
                 data-testid="cc-centro-habilitar-recibo"
               />
               Habilitar impresión de recibo al crear ítems
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                v-model="centroDialogForm.ocultarBeneficiario"
+                data-testid="cc-centro-ocultar-beneficiario"
+              />
+              Ocultar campo beneficiario (no requerido)
             </label>
           </div>
         </template>

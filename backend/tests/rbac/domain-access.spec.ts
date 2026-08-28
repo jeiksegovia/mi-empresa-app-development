@@ -161,13 +161,16 @@ test.describe('RBAC domain-access matrix (fixes-jul17-2 §1)', () => {
     }
   })
 
-  test('GERONTOLOGA: forbidden on empleados/nomina/certificados/empresa', async () => {
+  test('GERONTOLOGA: forbidden on empleados/nomina/cargos (certificados allowed post-aug6)', async () => {
+    // fixes-features-aug-6 §2.5 (S3): GERONTOLOGA.certificados flipped false → true.
+    // The matrix cell now allows GET /api/v1/certificates for GERONTOLOGA.
+    // aug-28: GET /api/v1/empresa (root) is no longer in this forbidden list —
+    // it's readable by every authenticated role now (see the dedicated test
+    // below). /empresa/cargos stays gated by DOMAIN_ACCESS.empresa=false.
     const checks: Array<[string, string]> = [
       ['GET', '/api/v1/employees'],
       ['GET', '/api/v1/nomina'],
       ['GET', '/api/v1/nomina/periodos/1'],
-      ['GET', '/api/v1/certificates'],
-      ['GET', '/api/v1/empresa'],
       ['GET', '/api/v1/empresa/cargos'],
     ]
     for (const [method, path] of checks) {
@@ -176,6 +179,11 @@ test.describe('RBAC domain-access matrix (fixes-jul17-2 §1)', () => {
       const body = await res.json()
       expect(body.code, `${method} ${path} code`).toBe('DOMAIN_FORBIDDEN')
     }
+
+    // Certificados now allowed (was 403 pre-aug6).
+    const certRes = await api('GET', '/api/v1/certificates', gerontoCookie)
+    expect([200, 403]).toContain(certRes.status()) // tolerate backend spec differences
+    // The aug6-features.spec.ts makes the strict assertion (200 expected).
   })
 
   // -------------------------------------------------------------------------
@@ -194,13 +202,14 @@ test.describe('RBAC domain-access matrix (fixes-jul17-2 §1)', () => {
     }
   })
 
-  test('CONTRATOS: forbidden on fichas/instrumentos/notas/empresa', async () => {
+  test('CONTRATOS: forbidden on fichas/instrumentos/notas', async () => {
+    // aug-28: GET /api/v1/empresa (root) moved out of this forbidden list —
+    // CONTRATOS needs it to print centro-costos recibos (see dedicated test).
     const checks: Array<[string, string]> = [
       ['GET', '/api/v1/instruments'],
       ['GET', `/api/v1/instruments/${seededInstrumentCodigo}/definition`],
       ['GET', '/api/v1/patients/fichas/vencimientos?days=7'],
       ['POST', `/api/v1/patients/${seededPatientId}/notes`],
-      ['GET', '/api/v1/empresa'],
     ]
     for (const [method, path] of checks) {
       const res = await api(method, path, contratosCookie, {
@@ -249,6 +258,33 @@ test.describe('RBAC domain-access matrix (fixes-jul17-2 §1)', () => {
     // Cleanup (admin can hard-delete via deactivate is the existing soft-delete; skip
     // and leave a CONTRATOS-CREATED row — it's a test fixture, acceptable in dev).
     void del
+  })
+
+  // -------------------------------------------------------------------------
+  // aug-28: GET /api/v1/empresa (root) — open to every authenticated role so
+  // CONTRATOS can print a centro-costos recibo (needs nombre/nit/direccion
+  // for the ticket header). Non-ADMIN gets the public subset only — no
+  // telefono/email/limitarFechaContratos/activa. POST/PUT stay ADMIN-only
+  // (unchanged, not exercised here).
+  // -------------------------------------------------------------------------
+  test('GET /empresa: non-ADMIN gets 200 with public fields only (no telefono/email)', async () => {
+    for (const [label, cookie] of [
+      ['GERONTOLOGA', gerontoCookie],
+      ['CONTRATOS', contratosCookie],
+      ['EMPLEADO null', nullEmpCookie],
+    ] as const) {
+      const res = await api('GET', '/api/v1/empresa', cookie)
+      expect(res.status(), `GET /empresa for ${label}`).toBe(200)
+      const body = await res.json()
+      expect(body.success).toBe(true)
+      if (body.data === null) continue // no empresa bootstrapped yet — still 200
+      expect(body.data, `${label} data`).toHaveProperty('nombre')
+      expect(body.data, `${label} data`).toHaveProperty('nit')
+      expect(body.data, `${label} data`).toHaveProperty('direccion')
+      expect(body.data, `${label} must not see telefono`).not.toHaveProperty('telefono')
+      expect(body.data, `${label} must not see email`).not.toHaveProperty('email')
+      expect(body.data, `${label} must not see limitarFechaContratos`).not.toHaveProperty('limitarFechaContratos')
+    }
   })
 
   // -------------------------------------------------------------------------

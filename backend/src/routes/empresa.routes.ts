@@ -177,18 +177,26 @@ router.delete('/cargos/:id', requireDomain('empresa'), requireRole('ADMIN'), asy
   }
 })
 
-// GET /empresa - get current empresa (admin only)
+// GET /empresa - read current empresa. aug-28: open to ANY authenticated
+// role (not gated by requireDomain/requireRole) — nombre/nit/direccion are
+// the company's own public info, and the centro-costos recibo page needs
+// them for every profile that can print (CONTRATOS, ADMIN, ...). ADMIN gets
+// the full record (telefono/email/limitarFechaContratos/activa included,
+// used by /empresa and /empresa/editar); every other role gets the public
+// subset only. Writes (POST/PUT below) stay ADMIN-only.
 // W6: normalize the empty-state response to 200 { data: null } so the frontend
 // can render a "create mode" form without treating 404 as an error. The dev
 // QA report shows the previous 404 was surfacing as a load-time error.
-router.get('/', requireDomain('empresa'), requireRole('ADMIN'), async (_req: Request, res: Response): Promise<void> => {
+router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const empresa = await empresaService.getEmpresa()
     if (!empresa) {
       res.status(200).json({ success: true, data: null })
       return
     }
-    res.json({ success: true, data: empresa })
+    const isAdmin = (req as any).user?.rol === 'ADMIN'
+    const data = isAdmin ? empresa : empresaService.toPublicEmpresa(empresa)
+    res.json({ success: true, data })
   } catch (error) {
     logger.error('Get empresa error:', error)
     res.status(500).json({ success: false, message: 'Error fetching empresa' })

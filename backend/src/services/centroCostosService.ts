@@ -140,6 +140,8 @@ export interface CentroCostosDTO {
   // aug-17 D11/D13: per-centro unit price (INGRESOS only) and recibo flag
   precioUnitario: string | null
   habilitarRecibo: boolean
+  // aug-28: hide beneficiario on ítem dialog + skip required check
+  ocultarBeneficiario: boolean
   createdAt: string
   updatedAt: string
 }
@@ -152,6 +154,7 @@ export interface CreateCentroInput {
   // aug-17 D11/D13: optional on create — INGRESOS only. If absent, stored null.
   precioUnitario?: number | string | null
   habilitarRecibo?: boolean
+  ocultarBeneficiario?: boolean
 }
 
 export interface UpdateCentroInput {
@@ -162,6 +165,7 @@ export interface UpdateCentroInput {
   // aug-17 D11/D13
   precioUnitario?: number | string | null
   habilitarRecibo?: boolean
+  ocultarBeneficiario?: boolean
 }
 
 function toCentroDTO(c: any): CentroCostosDTO {
@@ -174,6 +178,7 @@ function toCentroDTO(c: any): CentroCostosDTO {
     orden: c.orden,
     precioUnitario: c.precioUnitario == null ? null : c.precioUnitario.toFixed(2),
     habilitarRecibo: c.habilitarRecibo,
+    ocultarBeneficiario: !!c.ocultarBeneficiario,
     createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
     updatedAt: c.updatedAt instanceof Date ? c.updatedAt.toISOString() : c.updatedAt,
   }
@@ -206,6 +211,7 @@ export async function createCentro(input: CreateCentroInput): Promise<CentroCost
         orden: input.orden ?? 0,
         precioUnitario: toOptionalMoneyDecimal(input.precioUnitario ?? null, 'precioUnitario'),
         habilitarRecibo: input.habilitarRecibo ?? false,
+        ocultarBeneficiario: input.ocultarBeneficiario ?? false,
       },
     })
     return toCentroDTO(created)
@@ -235,6 +241,9 @@ export async function updateCentro(id: number, input: UpdateCentroInput): Promis
     }
     if (input.habilitarRecibo !== undefined) {
       data.habilitarRecibo = input.habilitarRecibo
+    }
+    if (input.ocultarBeneficiario !== undefined) {
+      data.ocultarBeneficiario = input.ocultarBeneficiario
     }
     const updated = await prisma.centroCostos.update({
       where: { id },
@@ -388,22 +397,24 @@ export async function createItem(centroId: number, input: CreateItemInput): Prom
     if (!input.pagador || !input.pagador.trim()) {
       throw Object.assign(new Error('pagador es requerido para INGRESOS'), { status: 400, field: 'pagador' })
     }
-    if (input.beneficiarioClienteId == null) {
+    // aug-28: beneficiario is required unless the centro hides the field.
+    if (!centro.ocultarBeneficiario && input.beneficiarioClienteId == null) {
       throw Object.assign(
         new Error('beneficiarioClienteId es requerido para INGRESOS'),
         { status: 400, field: 'beneficiarioClienteId' },
       )
     }
-    // Validate the cliente exists
-    const clienteExists = await prisma.cliente.findUnique({
-      where: { id: input.beneficiarioClienteId },
-      select: { id: true },
-    })
-    if (!clienteExists) {
-      throw Object.assign(new Error('Beneficiario (cliente) no existe'), {
-        status: 400,
-        field: 'beneficiarioClienteId',
+    if (input.beneficiarioClienteId != null) {
+      const clienteExists = await prisma.cliente.findUnique({
+        where: { id: input.beneficiarioClienteId },
+        select: { id: true },
       })
+      if (!clienteExists) {
+        throw Object.assign(new Error('Beneficiario (cliente) no existe'), {
+          status: 400,
+          field: 'beneficiarioClienteId',
+        })
+      }
     }
   } else {
     // EGRESOS: client-sent valorUnitario required (positive); ingreso fields stored null
@@ -425,7 +436,7 @@ export async function createItem(centroId: number, input: CreateItemInput): Prom
       proveedor: input.proveedor ?? null,
       fechaFactura: input.fechaFactura ? new Date(input.fechaFactura + 'T00:00:00.000Z') : null,
       pagador: centro.tipo === 'INGRESOS' ? input.pagador!.trim() : null,
-      beneficiarioClienteId: centro.tipo === 'INGRESOS' ? input.beneficiarioClienteId! : null,
+      beneficiarioClienteId: centro.tipo === 'INGRESOS' ? input.beneficiarioClienteId ?? null : null,
       medioPago: centro.tipo === 'INGRESOS' ? input.medioPago ?? null : null,
     },
   })
