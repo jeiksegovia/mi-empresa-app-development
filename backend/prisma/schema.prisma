@@ -615,6 +615,8 @@ model Cliente {
   contactosEmergencia     ContactoEmergenciaCliente[]
   registrosFichas         RegistroFichaCompletada[]
   notasCliente            NotaCliente[]
+  // aug-17 D11: items where this cliente is the beneficiario (INGRESOS only)
+  itemsComoBeneficiario   CentroCostosItem[] @relation("ClienteBeneficiarioItems")
 
   @@index([numeroDocumento])
   @@index([estado])
@@ -742,26 +744,36 @@ model NotaCliente {
 }
 
 // ========================================
-// CENTRO DE COSTOS MODULE (ago-5)
+// CENTRO DE COSTOS MODULE (ago-5 + aug-17)
 //
 // Replaces the legacy FINANCE MODULE (ProductoServicio / Prefactura / Egreso
 // were scaffolded for a different product-catalog + invoicing concept and had
 // zero code references). The current shape is INGRESOS | EGRESOS centros
 // holding uniform monthly ítems (CentroCostosItem).
+//
+// aug-17 (D10/D11/D13): `fecha` is required on every ítem (periodo still
+// derived as first-of-month(fecha) for month-bucket queries). INGRESOS ítems
+// carry pagador / beneficiarioClienteId / medioPago directly on the ítem
+// (no child table). `precioUnitario` lives on the parent centro (INGRESOS
+// only) and is copied to ítems on create. `habilitarRecibo` toggles print.
 // ========================================
 
 model CentroCostos {
-  id          Int              @id @default(autoincrement()) @map("centro_id")
-  nombre      String           @db.VarChar(200)
-  tipo        TipoCentroCostos
-  descripcion String?          @db.Text
-  activo      Boolean          @default(true)
-  orden       Int              @default(0)
-  createdAt   DateTime         @default(now())  @map("created_at")
-  updatedAt   DateTime         @updatedAt       @map("updated_at")
+  id             Int              @id @default(autoincrement()) @map("centro_id")
+  nombre         String           @db.VarChar(200)
+  tipo           TipoCentroCostos
+  descripcion    String?          @db.Text
+  activo         Boolean          @default(true)
+  orden          Int              @default(0)
+  // aug-17 D11: per-centro unit price for INGRESOS — copied into ítems on create
+  precioUnitario Decimal?         @map("precio_unitario") @db.Decimal(15, 2)
+  // aug-17 D13: enables print-recibo CTA after creating an ítem on this centro
+  habilitarRecibo Boolean         @default(false) @map("habilitar_recibo")
+  createdAt      DateTime         @default(now())  @map("created_at")
+  updatedAt      DateTime         @updatedAt       @map("updated_at")
 
   // Relations
-  items       CentroCostosItem[]
+  items          CentroCostosItem[]
 
   @@unique([tipo, nombre])
   @@index([tipo, activo])
@@ -769,25 +781,35 @@ model CentroCostos {
 }
 
 model CentroCostosItem {
-  id             Int       @id @default(autoincrement()) @map("item_id")
-  centroCostosId Int       @map("centro_costos_id")
-  nombre         String    @db.VarChar(200)
-  notas          String?   @db.Text
-  cantidad       Int       @default(1) // D5: integer (developer call, 2026-08-05)
-  valorUnitario  Decimal   @map("valor_unitario") @db.Decimal(15, 2)
-  valorTotal     Decimal   @map("valor_total")    @db.Decimal(15, 2) // persisted, server-computed
-  periodo        DateTime  @db.Date                                   // normalized to day 1
-  numeroFactura  String?   @map("numero_factura") @db.VarChar(100)    // egreso-only, optional
-  proveedor      String?   @db.VarChar(200)                           // egreso-only, optional
-  fechaFactura   DateTime? @map("fecha_factura")  @db.Date            // egreso-only, optional
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt      @map("updated_at")
+  id                    Int       @id @default(autoincrement()) @map("item_id")
+  centroCostosId        Int       @map("centro_costos_id")
+  nombre                String    @db.VarChar(200)
+  notas                 String?   @db.Text
+  cantidad              Int       @default(1) // D5: integer (developer call, 2026-08-05)
+  valorUnitario         Decimal   @map("valor_unitario") @db.Decimal(15, 2)
+  valorTotal            Decimal   @map("valor_total")    @db.Decimal(15, 2) // persisted, server-computed
+  // aug-17 D10: required day-level date. Periodo is still normalized to
+  // first-of-month(fecha) for bucket queries. Existing rows backfilled from
+  // periodo before adding NOT NULL.
+  fecha                 DateTime  @db.Date
+  periodo               DateTime  @db.Date                                   // normalized to day 1
+  numeroFactura         String?   @map("numero_factura") @db.VarChar(100)    // egreso-only, optional
+  proveedor             String?   @db.VarChar(200)                           // egreso-only, optional
+  fechaFactura          DateTime? @map("fecha_factura")  @db.Date            // egreso-only, optional
+  // aug-17 D11: INGRESOS-only metadata. Stored null for EGRESOS.
+  pagador               String?   @db.VarChar(200)
+  beneficiarioClienteId Int?      @map("beneficiario_cliente_id")
+  medioPago             MedioPagoIngreso? @map("medio_pago")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt      @map("updated_at")
 
   // Relations
   centroCostos CentroCostos @relation(fields: [centroCostosId], references: [id], onDelete: Restrict)
+  beneficiario Cliente?     @relation("ClienteBeneficiarioItems", fields: [beneficiarioClienteId], references: [id], onDelete: SetNull)
 
   @@index([periodo])
   @@index([centroCostosId, periodo])
+  @@index([beneficiarioClienteId])
   @@map("centro_costos_items")
 }
 
@@ -857,6 +879,10 @@ model Empresa {
   telefono  String?  @db.VarChar(20)
   email     String?  @db.VarChar(255)
   activa    Boolean  @default(true)
+  // aug-27 F4: when true, CONTRATOS may only create/edit ítems dated today
+  // or the previous Colombian business day. Default false so July/August
+  // backfill can run; ADMIN flips this like a lock.
+  limitarFechaContratos Boolean @default(false) @map("limitar_fecha_contratos")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -1026,6 +1052,13 @@ enum VisibilidadNota {
 enum TipoCentroCostos {
   INGRESOS
   EGRESOS
+}
+
+// aug-17 D11: INGRESOS-only payment method (stored on CentroCostosItem).
+// Additive enum value — existing rows remain null.
+enum MedioPagoIngreso {
+  EFECTIVO
+  TRANSFERENCIA
 }
 
 enum TipoCertificadoEmpresa {

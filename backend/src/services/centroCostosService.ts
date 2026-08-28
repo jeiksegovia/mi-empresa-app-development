@@ -1,9 +1,11 @@
 import { getPrisma } from '../config/database.js'
 import { Prisma } from '../generated/prisma/index.js'
+import { contratosAllowedFechas, serverTodayBogota } from '../utils/dateBogota.js'
 
-// centro-costos-ago-5 service. All data access lives here; routes stay thin.
-// Decimal values are passed to Prisma as `Prisma.Decimal`; on the way out
-// Prisma already serializes them as strings over JSON (contract §1.2).
+// centro-costos-ago-5 + aug-17 service. All data access lives here; routes
+// stay thin. Decimal values are passed to Prisma as `Prisma.Decimal`; on
+// the way out Prisma already serializes them as strings over JSON
+// (contract §1.2).
 
 /* -------------------------------------------------------------------------- */
 /*  Helpers — pure string math, no Date() local parsing (WI-3)                */
@@ -28,6 +30,46 @@ export function normalizePeriodo(input: string): string {
 }
 
 /** Bounds for a "YYYY-MM" period: [start of month, start of next month). */
+export function itemFechaYmd(fecha: Date | string): string {
+  if (fecha instanceof Date) return fecha.toISOString().slice(0, 10)
+  return String(fecha).slice(0, 10)
+}
+
+export type ContratosFechaPolicy = {
+  limitarFechaContratos: boolean
+  today: string
+  previousBusinessDay: string
+  allowed: string[]
+}
+
+export async function getContratosFechaPolicy(): Promise<ContratosFechaPolicy> {
+  const prisma = getPrisma()
+  const empresa = await prisma.empresa.findFirst({
+    where: { activa: true },
+    orderBy: { id: 'asc' },
+    select: { limitarFechaContratos: true },
+  })
+  const limitar = empresa?.limitarFechaContratos ?? false
+  const window = contratosAllowedFechas(serverTodayBogota())
+  return {
+    limitarFechaContratos: limitar,
+    today: window.today,
+    previousBusinessDay: window.previousBusinessDay,
+    allowed: window.allowed,
+  }
+}
+
+export function assertContratosFechaAllowed(policy: ContratosFechaPolicy, fechaYmd: string): void {
+  if (!policy.limitarFechaContratos) return
+  if (policy.allowed.includes(fechaYmd)) return
+  throw Object.assign(
+    new Error(
+      `CONTRATOS solo puede registrar ítems con fecha de hoy (${policy.today}) o el día hábil anterior (${policy.previousBusinessDay})`,
+    ),
+    { status: 403, field: 'fecha' },
+  )
+}
+
 export function periodBounds(periodoYYYYMM: string): { start: Date; end: Date } {
   const m = PERIODO_SHORT.exec(periodoYYYYMM)
   if (!m) {
@@ -61,6 +103,29 @@ function toMoneyDecimal(input: number | string, field: string): Prisma.Decimal {
   return new Prisma.Decimal(n.toFixed(2))
 }
 
+/**
+ * Optional-money variant: returns `null` for null/undefined/empty-string,
+ * throws 400 for negative/NaN, otherwise a positive 2dp Decimal. Used for
+ * `precioUnitario` (aug-17 D11) which is intentionally nullable.
+ */
+function toOptionalMoneyDecimal(input: number | string | null | undefined, field: string): Prisma.Decimal | null {
+  if (input === null || input === undefined) return null
+  if (typeof input === 'string' && input.trim() === '') return null
+  let n: number
+  if (typeof input === 'number') {
+    n = input
+  } else {
+    n = Number(input)
+  }
+  if (!Number.isFinite(n)) {
+    throw Object.assign(new Error(`${field} debe ser un número`), { status: 400, field })
+  }
+  if (n < 0) {
+    throw Object.assign(new Error(`${field} debe ser ≥ 0`), { status: 400, field })
+  }
+  return new Prisma.Decimal(n.toFixed(2))
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Centros                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -72,6 +137,9 @@ export interface CentroCostosDTO {
   descripcion: string | null
   activo: boolean
   orden: number
+  // aug-17 D11/D13: per-centro unit price (INGRESOS only) and recibo flag
+  precioUnitario: string | null
+  habilitarRecibo: boolean
   createdAt: string
   updatedAt: string
 }
@@ -81,6 +149,9 @@ export interface CreateCentroInput {
   tipo: 'INGRESOS' | 'EGRESOS'
   descripcion?: string | null
   orden?: number
+  // aug-17 D11/D13: optional on create — INGRESOS only. If absent, stored null.
+  precioUnitario?: number | string | null
+  habilitarRecibo?: boolean
 }
 
 export interface UpdateCentroInput {
@@ -88,6 +159,9 @@ export interface UpdateCentroInput {
   descripcion?: string | null
   activo?: boolean
   orden?: number
+  // aug-17 D11/D13
+  precioUnitario?: number | string | null
+  habilitarRecibo?: boolean
 }
 
 function toCentroDTO(c: any): CentroCostosDTO {
@@ -98,6 +172,8 @@ function toCentroDTO(c: any): CentroCostosDTO {
     descripcion: c.descripcion ?? null,
     activo: c.activo,
     orden: c.orden,
+    precioUnitario: c.precioUnitario == null ? null : c.precioUnitario.toFixed(2),
+    habilitarRecibo: c.habilitarRecibo,
     createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
     updatedAt: c.updatedAt instanceof Date ? c.updatedAt.toISOString() : c.updatedAt,
   }
@@ -128,6 +204,8 @@ export async function createCentro(input: CreateCentroInput): Promise<CentroCost
         descripcion: input.descripcion ?? null,
         activo: true,
         orden: input.orden ?? 0,
+        precioUnitario: toOptionalMoneyDecimal(input.precioUnitario ?? null, 'precioUnitario'),
+        habilitarRecibo: input.habilitarRecibo ?? false,
       },
     })
     return toCentroDTO(created)
@@ -146,14 +224,21 @@ export async function updateCentro(id: number, input: UpdateCentroInput): Promis
     throw Object.assign(new Error('Centro no encontrado'), { status: 404, field: 'id' })
   }
   try {
+    const data: Prisma.CentroCostosUpdateInput = {
+      ...(input.nombre !== undefined && { nombre: input.nombre }),
+      ...(input.descripcion !== undefined && { descripcion: input.descripcion }),
+      ...(input.activo !== undefined && { activo: input.activo }),
+      ...(input.orden !== undefined && { orden: input.orden }),
+    }
+    if (input.precioUnitario !== undefined) {
+      data.precioUnitario = toOptionalMoneyDecimal(input.precioUnitario, 'precioUnitario')
+    }
+    if (input.habilitarRecibo !== undefined) {
+      data.habilitarRecibo = input.habilitarRecibo
+    }
     const updated = await prisma.centroCostos.update({
       where: { id },
-      data: {
-        ...(input.nombre !== undefined && { nombre: input.nombre }),
-        ...(input.descripcion !== undefined && { descripcion: input.descripcion }),
-        ...(input.activo !== undefined && { activo: input.activo }),
-        ...(input.orden !== undefined && { orden: input.orden }),
-      },
+      data,
     })
     return toCentroDTO(updated)
   } catch (e: any) {
@@ -196,10 +281,15 @@ export interface CentroCostosItemDTO {
   cantidad: number
   valorUnitario: string
   valorTotal: string
-  periodo: string // YYYY-MM-DD
+  fecha: string         // YYYY-MM-DD (aug-17 D10)
+  periodo: string       // YYYY-MM-DD, always day 1 of fecha's month
   numeroFactura: string | null
   proveedor: string | null
   fechaFactura: string | null
+  // aug-17 D11: INGRESOS-only metadata (null on EGRESOS)
+  pagador: string | null
+  beneficiarioClienteId: number | null
+  medioPago: 'EFECTIVO' | 'TRANSFERENCIA' | null
   createdAt: string
   updatedAt: string
 }
@@ -208,11 +298,16 @@ export interface CreateItemInput {
   nombre: string
   notas?: string | null
   cantidad?: number
-  valorUnitario: number | string
-  periodo: string
+  valorUnitario?: number | string    // EGRESOS only; ignored on INGRESOS (server copies centro.precioUnitario)
+  fecha: string                     // aug-17 D10: required YYYY-MM-DD
+  periodo?: string                  // optional override — server always recomputes from fecha
   numeroFactura?: string | null
   proveedor?: string | null
   fechaFactura?: string | null
+  // aug-17 D11: required on INGRESOS, ignored on EGRESOS
+  pagador?: string | null
+  beneficiarioClienteId?: number | null
+  medioPago?: 'EFECTIVO' | 'TRANSFERENCIA' | null
 }
 
 export interface UpdateItemInput {
@@ -220,10 +315,22 @@ export interface UpdateItemInput {
   notas?: string | null
   cantidad?: number
   valorUnitario?: number | string
+  fecha?: string                     // aug-17 D10: setting fecha also recomputes periodo
   periodo?: string
   numeroFactura?: string | null
   proveedor?: string | null
   fechaFactura?: string | null
+  // aug-17 D11
+  pagador?: string | null
+  beneficiarioClienteId?: number | null
+  medioPago?: 'EFECTIVO' | 'TRANSFERENCIA' | null
+}
+
+function isoDate(d: any): string | null {
+  if (d == null) return null
+  if (d instanceof Date) return d.toISOString().slice(0, 10)
+  if (typeof d === 'string') return d.slice(0, 10)
+  return d
 }
 
 function toItemDTO(i: any): CentroCostosItemDTO {
@@ -235,22 +342,14 @@ function toItemDTO(i: any): CentroCostosItemDTO {
     cantidad: i.cantidad,
     valorUnitario: i.valorUnitario.toFixed(2),
     valorTotal: i.valorTotal.toFixed(2),
-    periodo:
-      i.periodo instanceof Date
-        ? i.periodo.toISOString().slice(0, 10)
-        : typeof i.periodo === 'string'
-        ? i.periodo.slice(0, 10)
-        : i.periodo,
+    fecha: isoDate(i.fecha)!,
+    periodo: isoDate(i.periodo)!,
     numeroFactura: i.numeroFactura ?? null,
     proveedor: i.proveedor ?? null,
-    fechaFactura:
-      i.fechaFactura == null
-        ? null
-        : i.fechaFactura instanceof Date
-        ? i.fechaFactura.toISOString().slice(0, 10)
-        : typeof i.fechaFactura === 'string'
-        ? i.fechaFactura.slice(0, 10)
-        : i.fechaFactura,
+    fechaFactura: isoDate(i.fechaFactura),
+    pagador: i.pagador ?? null,
+    beneficiarioClienteId: i.beneficiarioClienteId ?? null,
+    medioPago: i.medioPago ?? null,
     createdAt: i.createdAt instanceof Date ? i.createdAt.toISOString() : i.createdAt,
     updatedAt: i.updatedAt instanceof Date ? i.updatedAt.toISOString() : i.updatedAt,
   }
@@ -262,9 +361,55 @@ export async function createItem(centroId: number, input: CreateItemInput): Prom
   if (!centro) {
     throw Object.assign(new Error('Centro no encontrado'), { status: 404, field: 'id' })
   }
+  // Validate fecha (required, YYYY-MM-DD)
+  if (!input.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(input.fecha)) {
+    throw Object.assign(new Error('fecha debe tener formato YYYY-MM-DD'), { status: 400, field: 'fecha' })
+  }
+  const fechaDate = new Date(input.fecha + 'T00:00:00.000Z')
+  if (Number.isNaN(fechaDate.getTime())) {
+    throw Object.assign(new Error('fecha inválida'), { status: 400, field: 'fecha' })
+  }
+  // Periodo is always first-of-month(fecha)
+  const periodoNorm = input.fecha.slice(0, 7) + '-01'
+
   const cantidad = input.cantidad ?? 1
-  const valorUnitario = toMoneyDecimal(input.valorUnitario, 'valorUnitario')
-  const periodoNorm = normalizePeriodo(input.periodo)
+
+  let valorUnitario: Prisma.Decimal
+  if (centro.tipo === 'INGRESOS') {
+    // aug-17 D11/R26: copy centro.precioUnitario; client valorUnitario ignored; 400 if null.
+    if (centro.precioUnitario == null) {
+      throw Object.assign(
+        new Error('El centro de INGRESOS no tiene precio unitario configurado'),
+        { status: 400, field: 'precioUnitario' },
+      )
+    }
+    valorUnitario = centro.precioUnitario
+    // aug-17 D11/R25: INGRESOS requires pagador + beneficiarioClienteId
+    if (!input.pagador || !input.pagador.trim()) {
+      throw Object.assign(new Error('pagador es requerido para INGRESOS'), { status: 400, field: 'pagador' })
+    }
+    if (input.beneficiarioClienteId == null) {
+      throw Object.assign(
+        new Error('beneficiarioClienteId es requerido para INGRESOS'),
+        { status: 400, field: 'beneficiarioClienteId' },
+      )
+    }
+    // Validate the cliente exists
+    const clienteExists = await prisma.cliente.findUnique({
+      where: { id: input.beneficiarioClienteId },
+      select: { id: true },
+    })
+    if (!clienteExists) {
+      throw Object.assign(new Error('Beneficiario (cliente) no existe'), {
+        status: 400,
+        field: 'beneficiarioClienteId',
+      })
+    }
+  } else {
+    // EGRESOS: client-sent valorUnitario required (positive); ingreso fields stored null
+    valorUnitario = toMoneyDecimal(input.valorUnitario as number | string, 'valorUnitario')
+  }
+
   const valorTotal = new Prisma.Decimal(cantidad).mul(valorUnitario)
   const created = await prisma.centroCostosItem.create({
     data: {
@@ -274,10 +419,14 @@ export async function createItem(centroId: number, input: CreateItemInput): Prom
       cantidad,
       valorUnitario,
       valorTotal,
+      fecha: fechaDate,
       periodo: new Date(periodoNorm + 'T00:00:00.000Z'),
       numeroFactura: input.numeroFactura ?? null,
       proveedor: input.proveedor ?? null,
       fechaFactura: input.fechaFactura ? new Date(input.fechaFactura + 'T00:00:00.000Z') : null,
+      pagador: centro.tipo === 'INGRESOS' ? input.pagador!.trim() : null,
+      beneficiarioClienteId: centro.tipo === 'INGRESOS' ? input.beneficiarioClienteId! : null,
+      medioPago: centro.tipo === 'INGRESOS' ? input.medioPago ?? null : null,
     },
   })
   return toItemDTO(created)
@@ -285,10 +434,16 @@ export async function createItem(centroId: number, input: CreateItemInput): Prom
 
 export async function updateItem(itemId: number, input: UpdateItemInput): Promise<CentroCostosItemDTO> {
   const prisma = getPrisma()
-  const existing = await prisma.centroCostosItem.findUnique({ where: { id: itemId } })
+  const existing = await prisma.centroCostosItem.findUnique({
+    where: { id: itemId },
+    include: { centroCostos: true },
+  })
   if (!existing) {
     throw Object.assign(new Error('Ítem no encontrado'), { status: 404, field: 'itemId' })
   }
+
+  const centro = existing.centroCostos
+  const isIngreso = centro.tipo === 'INGRESOS'
 
   const data: Prisma.CentroCostosItemUpdateInput = {}
   if (input.nombre !== undefined) data.nombre = input.nombre
@@ -298,14 +453,62 @@ export async function updateItem(itemId: number, input: UpdateItemInput): Promis
   if (input.fechaFactura !== undefined) {
     data.fechaFactura = input.fechaFactura ? new Date(input.fechaFactura + 'T00:00:00.000Z') : null
   }
-  if (input.periodo !== undefined) {
+  // aug-17 D11: ingreso fields
+  if (input.pagador !== undefined) {
+    data.pagador = isIngreso ? input.pagador : null
+  }
+  if (input.medioPago !== undefined) {
+    data.medioPago = isIngreso ? input.medioPago : null
+  }
+  if (input.beneficiarioClienteId !== undefined) {
+    if (isIngreso && input.beneficiarioClienteId != null) {
+      const clienteExists = await prisma.cliente.findUnique({
+        where: { id: input.beneficiarioClienteId },
+        select: { id: true },
+      })
+      if (!clienteExists) {
+        throw Object.assign(new Error('Beneficiario (cliente) no existe'), {
+          status: 400,
+          field: 'beneficiarioClienteId',
+        })
+      }
+      data.beneficiario = { connect: { id: input.beneficiarioClienteId } }
+    } else {
+      data.beneficiario = { disconnect: true }
+    }
+  }
+
+  // aug-17 D10: setting fecha also recomputes periodo
+  let fechaDate: Date | undefined
+  if (input.fecha !== undefined) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.fecha)) {
+      throw Object.assign(new Error('fecha debe tener formato YYYY-MM-DD'), { status: 400, field: 'fecha' })
+    }
+    fechaDate = new Date(input.fecha + 'T00:00:00.000Z')
+    if (Number.isNaN(fechaDate.getTime())) {
+      throw Object.assign(new Error('fecha inválida'), { status: 400, field: 'fecha' })
+    }
+    data.fecha = fechaDate
+    data.periodo = new Date(input.fecha.slice(0, 7) + '-01T00:00:00.000Z')
+  } else if (input.periodo !== undefined) {
+    // allow legacy callers; recomputed deterministically from string math
     data.periodo = new Date(normalizePeriodo(input.periodo) + 'T00:00:00.000Z')
   }
 
   // Recompute valorTotal whenever cantidad or valorUnitario change.
-  const newCantidad = input.cantidad ?? existing.cantidad
-  const newValorUnitario =
-    input.valorUnitario !== undefined ? toMoneyDecimal(input.valorUnitario, 'valorUnitario') : existing.valorUnitario
+  let newCantidad = input.cantidad ?? existing.cantidad
+  let newValorUnitario: Prisma.Decimal
+
+  if (isIngreso) {
+    // Ingresos: server-managed precioUnitario (centro.precioUnitario).
+    // If user explicitly sends valorUnitario on update for an ingreso, ignore it.
+    newValorUnitario = centro.precioUnitario ?? existing.valorUnitario
+  } else {
+    newValorUnitario =
+      input.valorUnitario !== undefined
+        ? toMoneyDecimal(input.valorUnitario, 'valorUnitario')
+        : existing.valorUnitario
+  }
   if (input.cantidad !== undefined) data.cantidad = input.cantidad
   data.valorUnitario = newValorUnitario
   data.valorTotal = new Prisma.Decimal(newCantidad).mul(newValorUnitario)
@@ -321,6 +524,35 @@ export async function deleteItem(itemId: number): Promise<void> {
     throw Object.assign(new Error('Ítem no encontrado'), { status: 404, field: 'itemId' })
   }
   await prisma.centroCostosItem.delete({ where: { id: itemId } })
+}
+
+/**
+ * aug-17 R31: GET /centro-costos/items/:itemId — fetch one ítem with its
+ * parent centro and the beneficiario (Cliente) hydrated as `{ id, nombre }`
+ * (or `null`). 404 if missing. Used by the recibo print page.
+ */
+export interface ItemWithRelationsDTO extends CentroCostosItemDTO {
+  centro: CentroCostosDTO
+  beneficiario: { id: number; nombre: string } | null
+}
+
+export async function getItemWithRelations(itemId: number): Promise<ItemWithRelationsDTO> {
+  const prisma = getPrisma()
+  const row = await prisma.centroCostosItem.findUnique({
+    where: { id: itemId },
+    include: {
+      centroCostos: true,
+      beneficiario: { select: { id: true, nombre: true } },
+    },
+  })
+  if (!row) {
+    throw Object.assign(new Error('Ítem no encontrado'), { status: 404, field: 'itemId' })
+  }
+  return {
+    ...toItemDTO(row),
+    centro: toCentroDTO(row.centroCostos),
+    beneficiario: row.beneficiario ? { id: row.beneficiario.id, nombre: row.beneficiario.nombre } : null,
+  }
 }
 
 /* -------------------------------------------------------------------------- */

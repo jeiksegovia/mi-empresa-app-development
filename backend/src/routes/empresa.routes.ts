@@ -24,6 +24,7 @@ const updateEmpresaSchema = z.object({
   direccion: z.string().optional(),
   telefono: z.string().optional(),
   email: z.string().email().optional().or(z.literal('')),
+  limitarFechaContratos: z.boolean().optional(),
 })
 
 // W6: Empresa bootstrap from empty DB. nombre + nit are REQUIRED on create;
