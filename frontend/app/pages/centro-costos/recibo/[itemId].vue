@@ -55,7 +55,7 @@ const toast = useToast()
 
 const loading = ref(false)
 const item = ref<ReciboItem | null>(null)
-const empresa = ref<{ nombre: string; nit: string; direccion: string | null } | null>(null)
+const empresa = ref<{ nombre: string; nit: string; direccion: string | null; telefono: string | null } | null>(null)
 const loadError = ref<string | null>(null)
 
 function asNum(v: number | string | null | undefined): number {
@@ -90,7 +90,7 @@ async function loadItem() {
       apiFetch<{ success: boolean; data: ReciboItem }>(
         `/centro-costos/items/${itemId.value}`,
       ),
-      apiFetch<{ success: boolean; data: { nombre: string; nit: string; direccion: string | null } }>(
+      apiFetch<{ success: boolean; data: { nombre: string; nit: string; direccion: string | null; telefono: string | null } }>(
         '/empresa',
       ).catch(() => null),
     ])
@@ -191,6 +191,7 @@ onMounted(loadItem)
         <p v-if="empresa" class="recibo-empresa" data-testid="recibo-empresa">{{ empresa.nombre }}</p>
         <p v-if="empresa?.nit" class="recibo-meta">NIT {{ empresa.nit }}</p>
         <p v-if="empresa?.direccion" class="recibo-meta">{{ empresa.direccion }}</p>
+        <p v-if="empresa?.telefono" class="recibo-meta" data-testid="recibo-telefono">{{ empresa.telefono }}</p>
         <h1 class="recibo-title">RECIBO DE CAJA</h1>
         <p class="recibo-subtitle">Nº <span data-testid="recibo-id">{{ item.id }}</span></p>
       </header>

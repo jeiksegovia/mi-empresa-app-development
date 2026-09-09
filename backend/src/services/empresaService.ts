@@ -14,19 +14,22 @@ export interface EmpresaDetail {
 }
 
 // aug-28: GET /empresa is readable by any authenticated role (recibo header
-// needs it for CONTRATOS printing a receipt). nombre/nit/direccion are the
-// company's own public-facing details, not personal data — safe to expose
-// to every logged-in profile. telefono/email/limitarFechaContratos/activa
+// needs it for CONTRATOS printing a receipt). nombre/nit/direccion/telefono
+// are the company's own public-facing details, not personal data — safe to
+// expose to every logged-in profile. email/limitarFechaContratos/activa
 // stay ADMIN-only (full EmpresaDetail via the route's own role check).
+// sep-8: telefono added to the public subset so the recibo print template
+// can show it below dirección.
 export interface EmpresaPublic {
   id: number
   nombre: string
   nit: string
   direccion: string | null
+  telefono: string | null
 }
 
 export function toPublicEmpresa(e: EmpresaDetail): EmpresaPublic {
-  return { id: e.id, nombre: e.nombre, nit: e.nit, direccion: e.direccion }
+  return { id: e.id, nombre: e.nombre, nit: e.nit, direccion: e.direccion, telefono: e.telefono }
 }
 
 export interface UpdateEmpresaInput {

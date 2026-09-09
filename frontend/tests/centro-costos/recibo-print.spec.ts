@@ -344,6 +344,7 @@ test.describe('recibo 80mm print layout', () => {
     await expect(ticket).toBeVisible({ timeout: 15000 })
 
     await expect(page.getByTestId('recibo-empresa')).toContainText('Centro Día Los Almendros')
+    await expect(page.getByTestId('recibo-telefono')).toContainText('6014567890')
     await expect(page.getByTestId('recibo-id')).toHaveText('117')
     await expect(page.getByTestId('recibo-fecha')).toHaveText('2026-08-17')
     await expect(page.getByTestId('recibo-pagador')).toContainText('Familia Pérez')
