@@ -428,4 +428,38 @@ test.describe('qa-session-aug-17 — R6 Actividades page + nav (MOCKED)', () => 
     await expect(page.getByTestId('actividades-form-card')).toHaveCount(0)
     await expect(page.getByTestId('actividades-guardar')).toHaveCount(0)
   })
+
+  test('list shows empleado name + cargo, not empleado id', async ({ page }) => {
+    await mockAuth(page, ADMIN)
+    await page.route('**/api/v1/actividades**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: [
+            {
+              id: 9,
+              empleadoId: 395,
+              empleadoNombre: 'Pedro Profesor',
+              empleadoCargo: 'Docente',
+              fecha: '2026-09-08',
+              texto: 'Clase de la mañana',
+              registradoPor: 1,
+              createdAt: '2026-09-08T12:00:00.000Z',
+              updatedAt: '2026-09-08T12:00:00.000Z',
+            },
+          ],
+        }),
+      }),
+    )
+    await page.goto(`${FRONTEND}/actividades`)
+    await expect(page.getByTestId('actividades-table')).toBeVisible({ timeout: 15000 })
+    await expect(page.getByTestId('actividades-empleado-nombre')).toHaveText('Pedro Profesor')
+    await expect(page.getByTestId('actividades-empleado-cargo')).toHaveText('Docente')
+    await expect(page.getByText('#395')).toHaveCount(0)
+    await expect(page.getByText('395', { exact: true })).toHaveCount(0)
+    await expect(page.getByRole('columnheader', { name: 'Empleado' })).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: 'Cargo' })).toBeVisible()
+  })
 })

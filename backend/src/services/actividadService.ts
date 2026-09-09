@@ -33,6 +33,10 @@ export interface UpdateActividadInput {
 export interface RegistroActividadDto {
   id: number
   empleadoId: number
+  /** Display: "Nombre Apellido". Always present when the empleado exists. */
+  empleadoNombre: string | null
+  /** Active contrato.cargo.nombre, else latest legacy Cargo.nombreCargo. */
+  empleadoCargo: string | null
   fecha: string
   texto: string
   registradoPor: number
@@ -53,6 +57,45 @@ function formatFecha(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
+type EmpleadoEmbed = {
+  nombre: string
+  apellido: string
+  contratos?: Array<{ cargo?: { nombre: string } | null }>
+  cargos?: Array<{ nombreCargo: string }>
+} | null
+
+function resolveEmpleadoNombre(empleado: EmpleadoEmbed): string | null {
+  if (!empleado) return null
+  return `${empleado.nombre} ${empleado.apellido}`.trim() || null
+}
+
+function resolveEmpleadoCargo(empleado: EmpleadoEmbed): string | null {
+  if (!empleado) return null
+  const fromContrato = empleado.contratos?.[0]?.cargo?.nombre
+  if (fromContrato) return fromContrato
+  return empleado.cargos?.[0]?.nombreCargo ?? null
+}
+
+const EMPLEADO_INCLUDE = {
+  empleado: {
+    select: {
+      nombre: true,
+      apellido: true,
+      contratos: {
+        where: { activo: true },
+        take: 1,
+        orderBy: { fechaInicio: 'desc' as const },
+        select: { cargo: { select: { nombre: true } } },
+      },
+      cargos: {
+        orderBy: { fechaIngreso: 'desc' as const },
+        take: 1,
+        select: { nombreCargo: true },
+      },
+    },
+  },
+} as const
+
 function toDto(row: {
   id: number
   empleadoId: number
@@ -61,10 +104,13 @@ function toDto(row: {
   registradoPor: number
   createdAt: Date
   updatedAt: Date
+  empleado?: EmpleadoEmbed
 }): RegistroActividadDto {
   return {
     id: row.id,
     empleadoId: row.empleadoId,
+    empleadoNombre: resolveEmpleadoNombre(row.empleado ?? null),
+    empleadoCargo: resolveEmpleadoCargo(row.empleado ?? null),
     fecha: formatFecha(row.fecha),
     texto: row.texto,
     registradoPor: row.registradoPor,
@@ -125,6 +171,7 @@ export async function listActividades(
   const rows = await prisma.registroActividad.findMany({
     where,
     orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+    include: EMPLEADO_INCLUDE,
   })
   return rows.map(toDto)
 }
@@ -203,6 +250,7 @@ export async function createActividad(
         texto,
         registradoPor: caller.userId,
       },
+      include: EMPLEADO_INCLUDE,
     })
     return toDto(row)
   } catch (e: any) {
@@ -248,7 +296,11 @@ export async function updateActividad(
   }
 
   try {
-    const row = await prisma.registroActividad.update({ where: { id }, data })
+    const row = await prisma.registroActividad.update({
+      where: { id },
+      data,
+      include: EMPLEADO_INCLUDE,
+    })
     return toDto(row)
   } catch (e: any) {
     if (e?.code === 'P2002') {

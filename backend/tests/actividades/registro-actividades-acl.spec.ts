@@ -151,6 +151,10 @@ test.describe('Registro de actividades — ACL + behavior (qa-session-aug-17 R6)
     const id: number = created.data.id
     expect(created.data.empleadoId).toBe(AUXILIAR_EMPLEADO_ID)
     expect(created.data.texto).toBe('admin note')
+    // sep-8: list/create payload carries display name + cargo (id stays for ACL).
+    expect(created.data.empleadoNombre).toBeTruthy()
+    expect(typeof created.data.empleadoNombre).toBe('string')
+    expect(created.data).toHaveProperty('empleadoCargo')
 
     // GET — should include the created row
     const list = await request.get(`${API_BASE}/api/v1/actividades`, {
@@ -158,7 +162,11 @@ test.describe('Registro de actividades — ACL + behavior (qa-session-aug-17 R6)
     })
     expect(list.status()).toBe(200)
     const listBody = await list.json()
-    expect(listBody.data.find((r: any) => r.id === id)).toBeTruthy()
+    const listed = listBody.data.find((r: any) => r.id === id)
+    expect(listed).toBeTruthy()
+    expect(listed.empleadoNombre).toBeTruthy()
+    expect(listed).toHaveProperty('empleadoCargo')
+    expect(listed.empleadoId).toBe(AUXILIAR_EMPLEADO_ID)
 
     // PUT — update texto
     const update = await request.put(`${API_BASE}/api/v1/actividades/${id}`, {
@@ -183,7 +191,8 @@ test.describe('Registro de actividades — ACL + behavior (qa-session-aug-17 R6)
     request,
   }) => {
     const today = serverTodayBogota()
-    const past = ymdOffset(-1)
+    // Fixed far-past date so UTC-offset helpers cannot collide with Bogotá "today".
+    const past = '2026-01-01'
 
     // POST today with own row → 201
     const ok = await request.post(`${API_BASE}/api/v1/actividades`, {
@@ -193,6 +202,8 @@ test.describe('Registro de actividades — ACL + behavior (qa-session-aug-17 R6)
     expect(ok.status(), 'PROFESORES POST today').toBe(201)
     const okBody = await ok.json()
     expect(okBody.data.empleadoId).toBe(PROFESOR_EMPLEADO_ID)
+    expect(okBody.data.empleadoNombre).toBe('Pedro Profesor')
+    expect(okBody.data).toHaveProperty('empleadoCargo')
 
     // Duplicate POST same day → 409 DUPLICATE_DAY
     const dup = await request.post(`${API_BASE}/api/v1/actividades`, {
@@ -260,6 +271,8 @@ test.describe('Registro de actividades — ACL + behavior (qa-session-aug-17 R6)
     expect(ok.status(), 'AUXILIARES POST today').toBe(201)
     const okBody = await ok.json()
     expect(okBody.data.empleadoId).toBe(AUXILIAR_EMPLEADO_ID)
+    expect(okBody.data.empleadoNombre).toBe('Ana Auxiliar')
+    expect(okBody.data).toHaveProperty('empleadoCargo')
 
     const list = await request.get(`${API_BASE}/api/v1/actividades`, {
       headers: { Cookie: auxiliarCookie },
@@ -351,5 +364,111 @@ test.describe('Registro de actividades — ACL + behavior (qa-session-aug-17 R6)
     const empleadoIds = new Set(listBody.data.map((r: any) => r.empleadoId))
     expect(empleadoIds.has(PROFESOR_EMPLEADO_ID), 'sees PROFESOR row').toBe(true)
     expect(empleadoIds.has(AUXILIAR_EMPLEADO_ID), 'sees AUXILIAR row').toBe(true)
+  })
+
+  // -------------------------------------------------------------------------
+  // sep-8: list/create/update carry empleadoNombre + empleadoCargo.
+  // empleadoId stays on the API for ACL; the UI no longer prints it.
+  // -------------------------------------------------------------------------
+  test('GET/POST/PUT include empleadoNombre + empleadoCargo (Pedro Profesor)', async ({
+    request,
+  }) => {
+    const today = serverTodayBogota()
+    const list = await request.get(`${API_BASE}/api/v1/actividades`, {
+      headers: { Cookie: adminCookie },
+    })
+    expect(list.status()).toBe(200)
+    const rows = (await list.json()).data as any[]
+    const profesorRow = rows.find((r) => r.empleadoId === PROFESOR_EMPLEADO_ID)
+    const auxiliarRow = rows.find((r) => r.empleadoId === AUXILIAR_EMPLEADO_ID)
+    expect(profesorRow, 'profesor row on GET').toBeTruthy()
+    expect(profesorRow.empleadoNombre).toBe('Pedro Profesor')
+    expect(profesorRow).toHaveProperty('empleadoCargo')
+    expect(auxiliarRow, 'auxiliar row on GET').toBeTruthy()
+    expect(auxiliarRow.empleadoNombre).toBe('Ana Auxiliar')
+    expect(auxiliarRow).toHaveProperty('empleadoCargo')
+
+    const createdId: number = profesorRow.id
+    const put = await request.put(`${API_BASE}/api/v1/actividades/${createdId}`, {
+      headers: { Cookie: adminCookie },
+      data: { texto: 'profesor today (renamed)' },
+    })
+    expect(put.status(), await put.text()).toBe(200)
+    const updated = (await put.json()).data
+    expect(updated.empleadoNombre).toBe('Pedro Profesor')
+    expect(updated).toHaveProperty('empleadoCargo')
+    expect(updated.empleadoId).toBe(PROFESOR_EMPLEADO_ID)
+  })
+
+  test('empleadoCargo prefers active contrato CargoEmpresa.nombre', async ({ request }) => {
+    const connectionString = process.env.DATABASE_URL!
+    const adapter = new PrismaPg({ connectionString })
+    const prisma = new PrismaClient({ adapter })
+    const stamp = Date.now()
+    const doc = `91${String(stamp).slice(-8)}`
+    let empId = 0
+    let cargoId = 0
+    let actividadId = 0
+    try {
+      const emp = await prisma.empleado.create({
+        data: {
+          nombre: 'Cargo',
+          apellido: 'Probe',
+          tipoDocumento: 'CC',
+          numeroDocumento: doc,
+          genero: 'Masculino',
+          fechaNacimiento: new Date('1991-02-02'),
+          estado: 'ACTIVO',
+        },
+      })
+      empId = emp.id
+      await prisma.cargo.create({
+        data: {
+          empleadoId: empId,
+          fechaIngreso: new Date('2020-01-01'),
+          nombreCargo: 'LEGACY-CARGO',
+          ubicacion: 'Bogotá',
+        },
+      })
+      const empresa = await prisma.empresa.findFirst({ select: { id: true } })
+      expect(empresa, 'empresa row').toBeTruthy()
+      const catalog = await prisma.cargoEmpresa.create({
+        data: { empresaId: empresa!.id, nombre: `QA-ACT-CARGO-${stamp}` },
+      })
+      cargoId = catalog.id
+      await prisma.contrato.create({
+        data: {
+          empleadoId: empId,
+          tipoContrato: 'TERMINO_INDEFINIDO',
+          fechaInicio: new Date('2026-01-01'),
+          cargoId,
+          valorMensual: 1_000_000,
+          activo: true,
+        },
+      })
+      const today = serverTodayBogota()
+      const post = await request.post(`${API_BASE}/api/v1/actividades`, {
+        headers: { Cookie: adminCookie },
+        data: { fecha: today, texto: 'cargo probe', empleadoId: empId },
+      })
+      expect(post.status(), await post.text()).toBe(201)
+      const created = (await post.json()).data
+      actividadId = created.id
+      expect(created.empleadoNombre).toBe('Cargo Probe')
+      expect(created.empleadoCargo).toBe(`QA-ACT-CARGO-${stamp}`)
+    } finally {
+      if (actividadId) {
+        await prisma.registroActividad.delete({ where: { id: actividadId } }).catch(() => {})
+      }
+      if (empId) {
+        await prisma.contrato.deleteMany({ where: { empleadoId: empId } }).catch(() => {})
+        await prisma.cargo.deleteMany({ where: { empleadoId: empId } }).catch(() => {})
+        await prisma.empleado.delete({ where: { id: empId } }).catch(() => {})
+      }
+      if (cargoId) {
+        await prisma.cargoEmpresa.delete({ where: { id: cargoId } }).catch(() => {})
+      }
+      await prisma.$disconnect()
+    }
   })
 })

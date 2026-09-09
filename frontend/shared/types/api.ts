@@ -124,6 +124,10 @@ export interface User {
 export interface RegistroActividadDto {
   id: number
   empleadoId: number
+  /** "Nombre Apellido" from the linked empleado. */
+  empleadoNombre: string | null
+  /** Active contrato cargo name, else latest legacy cargo. */
+  empleadoCargo: string | null
   fecha: string // YYYY-MM-DD
   texto: string
   registradoPor: number

@@ -325,9 +325,19 @@ onMounted(fetchList)
             </template>
           </Column>
 
-          <Column header="Empleado" style="min-width: 100px">
+          <Column header="Empleado" style="min-width: 160px">
             <template #body="{ data }">
-              <span class="text-sm text-[var(--text-color-secondary)]">#{{ data.empleadoId }}</span>
+              <span class="text-sm font-medium" data-testid="actividades-empleado-nombre">
+                {{ data.empleadoNombre || '—' }}
+              </span>
+            </template>
+          </Column>
+
+          <Column header="Cargo" style="min-width: 140px">
+            <template #body="{ data }">
+              <span class="text-sm text-[var(--text-color-secondary)]" data-testid="actividades-empleado-cargo">
+                {{ data.empleadoCargo || '—' }}
+              </span>
             </template>
           </Column>
 
