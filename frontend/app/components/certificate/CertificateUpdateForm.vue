@@ -388,10 +388,12 @@ onMounted(async () => {
         Notas <span class="text-xs text-[var(--text-color-secondary)]">(opcional)</span>
       </label>
       <Textarea
-        v-model="localValue.notas"
+        :model-value="localValue.notas"
         rows="2"
         placeholder="Notas de esta actualización..."
         class="w-full"
+        data-testid="cert-update-notas"
+        @update:model-value="(v) => patchModel({ notas: String(v ?? '') })"
       />
     </div>
 
@@ -403,8 +405,9 @@ onMounted(async () => {
         </label>
         <input
           type="date"
-          v-model="localValue.fechaEmision"
+          :value="localValue.fechaEmision"
           class="w-full px-3 py-2 border border-[var(--surface-border)] rounded-lg bg-[var(--surface-card)] text-[var(--text-color)] text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+          @input="(e) => patchModel({ fechaEmision: (e.target as HTMLInputElement).value })"
         />
       </div>
       <div>
@@ -413,8 +416,9 @@ onMounted(async () => {
         </label>
         <input
           type="date"
-          v-model="localValue.fechaVencimiento"
+          :value="localValue.fechaVencimiento"
           class="w-full px-3 py-2 border border-[var(--surface-border)] rounded-lg bg-[var(--surface-card)] text-[var(--text-color)] text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+          @input="(e) => patchModel({ fechaVencimiento: (e.target as HTMLInputElement).value })"
         />
       </div>
     </div>
