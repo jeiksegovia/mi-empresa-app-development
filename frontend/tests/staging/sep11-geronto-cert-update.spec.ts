@@ -57,6 +57,10 @@ test.describe('sep-11 GERONTOLOGA cert create + first update (staging UI)', () =
     await notas.click()
     await notas.pressSequentially(`primera actualizacion ui ${stamp}`, { delay: 15 })
 
+    const updatesResp = page.waitForResponse(
+      (res) => res.request().method() === 'POST' && /\/certificates\/\d+\/updates/.test(res.url()),
+      { timeout: 20000 },
+    )
     await page.getByTestId('cert-crear-submit').click()
 
     await expect.poll(() => posts.some((p) => /\/certificates$/.test(p.url.split('?')[0]) && p.status === 201), {
@@ -64,12 +68,12 @@ test.describe('sep-11 GERONTOLOGA cert create + first update (staging UI)', () =
     }).toBeTruthy()
 
     const debug = await page.evaluate(() => sessionStorage.getItem('sep11-cert-debug'))
-    const updatePost = posts.find((p) => /\/certificates\/\d+\/updates/.test(p.url))
+    const updateRes = await updatesResp
+    posts.push({ url: updateRes.url(), status: updateRes.status() })
     expect(
-      updatePost,
-      `expected POST /certificates/:id/updates. posts=${JSON.stringify(posts)} debug=${debug}`,
-    ).toBeTruthy()
-    expect(updatePost!.status, 'first update must not 403').toBe(201)
+      updateRes.status(),
+      `first update must not 403. posts=${JSON.stringify(posts)} debug=${debug}`,
+    ).toBe(201)
 
     await expect(page).not.toHaveURL(/\/certificados\/crear/)
     await expect(page.getByText(/falló la primera actualización/i)).toHaveCount(0)
