@@ -82,7 +82,11 @@ const localValue = computed({
 })
 
 function patchModel(patch: Partial<CertificateUpdateFormValue>) {
-  localValue.value = { ...localValue.value, ...patch }
+  // Mutate the parent object in place. Replacing the whole object via the
+  // computed setter can drop fields when the parent uses Object.assign on a
+  // reactive() target (crear.vue). In-place assign always reaches firstUpdate.
+  Object.assign(localValue.value, patch)
+  emit('update:modelValue', localValue.value)
 }
 
 function hasContent(): boolean {

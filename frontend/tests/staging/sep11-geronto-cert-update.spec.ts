@@ -52,7 +52,9 @@ test.describe('sep-11 GERONTOLOGA cert create + first update (staging UI)', () =
     const stamp = Date.now()
     await page.getByPlaceholder('Ej: RUT 2024').fill(`STG SEP11 UI ${stamp}`)
 
-    await page.getByPlaceholder('Notas de esta actualización...').fill(`primera actualizacion ui ${stamp}`)
+    const notas = page.getByPlaceholder('Notas de esta actualización...')
+    await notas.click()
+    await notas.pressSequentially(`primera actualizacion ui ${stamp}`, { delay: 15 })
 
     await page.getByRole('button', { name: /crear certificado/i }).click()
 
