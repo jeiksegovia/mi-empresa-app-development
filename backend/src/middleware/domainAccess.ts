@@ -72,7 +72,7 @@ export const DOMAIN_ACCESS: Record<MatrixTipo, Record<Domain, DomainAccessValue>
     instrumentos: true,
     empleados: false,
     nomina: false,
-    certificados: 'read-only', // qa-aug-27 F1 — view/print/download only; ADMIN writes
+    certificados: 'create-only', // qa-sep-2 F1 — GERONTOLOGA POST/upload; no PUT/DELETE
     empresa: false,
     notas: true,
     asistencia: false,

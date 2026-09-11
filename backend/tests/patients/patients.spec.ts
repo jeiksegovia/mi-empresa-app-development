@@ -174,11 +174,40 @@ test.describe('Patients API', () => {
           numeroDocumento: '12345678',
           genero: 'Masculino',
           fechaNacimiento: '1990-01-01',
-          email: 'not-an-email',
+          // still has @ so it is not treated as a leftover placeholder
+          email: 'not-an-email@',
         },
       });
       expect(response.status()).toBe(400);
     });
+
+    test('sep-11: blank / whitespace / no-@ placeholder email is omitted → 201', async ({ request }) => {
+      const cases = ['', '   ', 'correo', 'ejemplo@correo']
+      // last one HAS @ and looks like an email — that one must still 201 if valid.
+      // Split: placeholders without @ vs a real-looking email.
+      for (const email of ['', '   ', 'correo']) {
+        const uniqueDoc = `PATMAIL${Date.now()}${Math.floor(Math.random() * 999)}`
+        const response = await request.post(`${API_BASE}/api/v1/patients`, {
+          headers: { Cookie: sessionCookie },
+          data: {
+            nombre: 'Email Coerce',
+            tipoDocumento: 'CC',
+            numeroDocumento: uniqueDoc,
+            genero: 'Femenino',
+            fechaNacimiento: '1991-02-02',
+            email,
+          },
+        })
+        expect(response.status(), `email=${JSON.stringify(email)} ${await response.text()}`).toBe(201)
+        const body = await response.json()
+        expect(body.data.email == null || body.data.email === '').toBeTruthy()
+        if (body.data.id) {
+          await request.delete(`${API_BASE}/api/v1/patients/${body.data.id}`, {
+            headers: { Cookie: sessionCookie },
+          })
+        }
+      }
+    })
 
     test('should create a patient successfully with minimal fields', async ({ request }) => {
       const uniqueDoc = `PAT${Date.now()}`;

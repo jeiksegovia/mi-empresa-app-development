@@ -44,6 +44,7 @@ interface CertificateStats {
 const { apiFetch } = useApi()
 const toast = useToast()
 const authStore = useAuthStore()
+const { canCreateOnly } = useDomainAccess()
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const certificates = ref<CertificateSummary[]>([])
@@ -250,9 +251,10 @@ onMounted(async () => {
     >
       <template #actions>
         <Button
-          v-if="authStore.isAdmin"
+          v-if="authStore.isAdmin || canCreateOnly('certificados')"
           label="Nuevo Certificado"
           icon="pi pi-plus"
+          data-testid="cert-nuevo"
           @click="navigateTo('/certificados/crear')"
         />
       </template>

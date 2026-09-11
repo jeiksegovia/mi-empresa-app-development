@@ -114,8 +114,9 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   }
 })
 
-// POST /certificates (admin only)
-router.post('/', requireRole('ADMIN'), validate(createCertificateSchema), async (req: Request, res: Response): Promise<void> => {
+// POST /certificates — qa-sep-2 F1: GERONTOLOGA create-only (matrix) + ADMIN.
+// CONTRATOS stays read-only → 403 DOMAIN_FORBIDDEN. PUT/DELETE remain ADMIN.
+router.post('/', validate(createCertificateSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id
     const cert = await certificateService.createCertificate(req.body, userId)
@@ -174,8 +175,11 @@ router.delete('/:id', requireRole('ADMIN'), async (req: Request, res: Response):
   }
 })
 
-// POST /certificates/:id/updates — append an update row to history (admin only)
-router.post('/:id/updates', requireRole('ADMIN'), validate(addCertificateUpdateSchema), async (req: Request, res: Response): Promise<void> => {
+// POST /certificates/:id/updates — append history (file/comprobante/fechas).
+// qa-sep-11: GERONTOLOGA create-only must attach the first update after POST /
+// (prod 403 left empty certs). Matrix already allows POST; drop ADMIN-only.
+// PUT/DELETE of the cert remain requireRole('ADMIN'). CONTRATOS is read-only.
+router.post('/:id/updates', validate(addCertificateUpdateSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string)
     if (isNaN(id)) {

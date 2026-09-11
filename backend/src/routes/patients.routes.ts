@@ -31,7 +31,19 @@ const createPatientSchema = z.object({
   fechaNacimiento: dateYMD,
   genero: z.string().min(1).max(20),
   telefono: z.string().optional(),
-  email: z.string().email().optional().or(z.literal('')),
+  // sep-11: blank / whitespace / leftover placeholder without "@" → omitted.
+  // Real emails still run z.string().email(). Prod CONTRATOS 400s were Zod
+  // invalid_string on email, not DOMAIN_FORBIDDEN.
+  email: z
+    .union([z.string(), z.literal(''), z.undefined()])
+    .optional()
+    .transform((v) => {
+      if (v === undefined || v === null) return undefined
+      const t = String(v).trim()
+      if (!t || !t.includes('@')) return undefined
+      return t
+    })
+    .pipe(z.string().email().optional()),
   estado: z.enum(['ACTIVO', 'INACTIVO']).optional(),
   notas: z.string().optional(),
   informacionSeguro: z.string().optional(),
@@ -283,6 +295,98 @@ router.post('/:id/notes', requireDomain('notas'), validate(createNoteSchema), as
       return
     }
     res.status(500).json({ success: false, message: 'Error creating note' })
+  }
+})
+
+// fixes-features-aug-6 §4.3: GET /patients/:id/notes — LIST endpoint.
+// requireDomain('notas') lets PROFESORES/AUXILIARES through (matrix
+// `notas: 'create-only'` allows GET); the autor filter is applied INSIDE
+// the service based on the caller's tipoEmpleado.
+router.get('/:id/notes', requireDomain('notas'), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const patientId = parseInt(req.params.id as string)
+    if (isNaN(patientId)) {
+      res.status(400).json({ success: false, message: 'Invalid patient ID' })
+      return
+    }
+    const user = req.user as any
+    const notes = await patientService.listNotesForPatient(patientId, {
+      userId: user.id,
+      rol: user.rol,
+      tipoEmpleado: user.tipoEmpleado ?? null,
+    })
+    res.json({ success: true, data: notes })
+  } catch (error: any) {
+    if (error.message === 'Patient not found') {
+      res.status(404).json({ success: false, message: 'Patient not found' })
+      return
+    }
+    logger.error('List notes error:', error)
+    res.status(500).json({ success: false, message: 'Error listing notes' })
+  }
+})
+
+// fixes-features-aug-6 §4.3: PUT /patients/:id/notes/:noteId — update.
+// Matrix `notas: 'create-only'` already 403s PROFESORES/AUXILIARES at the
+// requireDomain layer; service-side guard is defense-in-depth.
+router.put('/:id/notes/:noteId', requireDomain('notas'), validate(createNoteSchema.partial()), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const noteId = parseInt(req.params.noteId as string)
+    if (isNaN(noteId)) {
+      res.status(400).json({ success: false, message: 'Invalid note ID' })
+      return
+    }
+    const user = req.user as any
+    const updated = await patientService.updateNote(noteId, {
+      userId: user.id,
+      rol: user.rol,
+      tipoEmpleado: user.tipoEmpleado ?? null,
+    }, req.body)
+    if (!updated) {
+      res.status(403).json({
+        success: false,
+        message: 'Su perfil no permite editar notas',
+        code: 'DOMAIN_FORBIDDEN',
+      })
+      return
+    }
+    res.json({ success: true, data: updated })
+  } catch (error: any) {
+    logger.error('Update note error:', error)
+    res.status(500).json({ success: false, message: 'Error updating note' })
+  }
+})
+
+// fixes-features-aug-6 §4.3: DELETE /patients/:id/notes/:noteId — same guard.
+router.delete('/:id/notes/:noteId', requireDomain('notas'), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const noteId = parseInt(req.params.noteId as string)
+    if (isNaN(noteId)) {
+      res.status(400).json({ success: false, message: 'Invalid note ID' })
+      return
+    }
+    const user = req.user as any
+    const ok = await patientService.deleteNote(noteId, {
+      userId: user.id,
+      rol: user.rol,
+      tipoEmpleado: user.tipoEmpleado ?? null,
+    })
+    if (!ok) {
+      res.status(403).json({
+        success: false,
+        message: 'Su perfil no permite eliminar notas',
+        code: 'DOMAIN_FORBIDDEN',
+      })
+      return
+    }
+    res.json({ success: true, message: 'Note deleted' })
+  } catch (error: any) {
+    if (error.code === 'P2025') {
+      res.status(404).json({ success: false, message: 'Note not found' })
+      return
+    }
+    logger.error('Delete note error:', error)
+    res.status(500).json({ success: false, message: 'Error deleting note' })
   }
 })
 

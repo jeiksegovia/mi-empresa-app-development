@@ -41,8 +41,8 @@ export const DOMAIN_ACCESS: Record<TipoEmpleado, Record<Domain, DomainAccessValu
     instrumentos: true,
     empleados: false,
     nomina: false,
-    // qa-aug-27 F1: GERONTOLOGA view/print/download only (was true / full write).
-    certificados: 'read-only',
+    // qa-sep-2 F1: GERONTOLOGA create/upload; no edit/delete after create.
+    certificados: 'create-only',
     empresa: false,
     notas: true,
     asistencia: false,

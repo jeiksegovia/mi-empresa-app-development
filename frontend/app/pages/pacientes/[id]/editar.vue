@@ -250,7 +250,8 @@ async function handleSubmit() {
     }
 
     if (form.telefono.trim()) payload.telefono = form.telefono.trim()
-    if (form.email.trim()) payload.email = form.email.trim()
+    const emailTrimmed = form.email.trim()
+    if (emailTrimmed && emailTrimmed.includes('@')) payload.email = emailTrimmed
     if (form.direccion.trim()) payload.direccion = form.direccion.trim()
     // B3/B4/B5: include additive cliente fields only when set. Backend
     // accepts null/undefined for these so we don't send empty strings.

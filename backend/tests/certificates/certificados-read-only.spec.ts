@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test'
 
 /**
- * qa-aug-27 F1: CONTRATOS + GERONTOLOGA certificados = read-only.
- * GET list/detail 200. POST/PUT/DELETE 403 DOMAIN_FORBIDDEN.
- * ADMIN still creates.
+ * qa-sep-2 F1: CONTRATOS certificados = read-only.
+ * GERONTOLOGA = create-only (POST 201, PUT/DELETE 403).
+ * ADMIN still full write.
  */
 
 const API = process.env.TEST_API_URL || 'http://localhost:3101'
@@ -22,7 +22,7 @@ async function login(request: any, email: string, password: string): Promise<str
 
 test.describe.configure({ mode: 'serial' })
 
-test.describe('Certificados read-only for CONTRATOS + GERONTOLOGA (qa-aug-27 F1)', () => {
+test.describe('Certificados CONTRATOS read-only + GERONTOLOGA create-only (qa-sep-2 F1)', () => {
   let adminCookie: string
   let contratosCookie: string
   let gerontoCookie: string
@@ -76,6 +76,37 @@ test.describe('Certificados read-only for CONTRATOS + GERONTOLOGA (qa-aug-27 F1)
     const r = await request.post(`${API}/api/v1/certificates`, {
       headers: { Cookie: contratosCookie },
       data: { tipoCertificado: 'OTRO', nombre: 'SHOULD-FAIL' },
+    })
+    expect(r.status()).toBe(403)
+    expect((await r.json()).code).toBe('DOMAIN_FORBIDDEN')
+  })
+
+  test('GERONTOLOGA POST → 201 create-only', async ({ request }) => {
+    const r = await request.post(`${API}/api/v1/certificates`, {
+      headers: { Cookie: gerontoCookie },
+      data: { tipoCertificado: 'OTRO', nombre: `QA-SEP2-GER-${Date.now()}` },
+    })
+    expect(r.status(), await r.text()).toBe(201)
+  })
+
+  test('GERONTOLOGA POST /certificates/:id/updates → 201 (first-file attach)', async ({ request }) => {
+    const created = await request.post(`${API}/api/v1/certificates`, {
+      headers: { Cookie: gerontoCookie },
+      data: { tipoCertificado: 'OTRO', nombre: `QA-SEP11-UPD-${Date.now()}` },
+    })
+    expect(created.status(), await created.text()).toBe(201)
+    const id = (await created.json()).data.id
+    const upd = await request.post(`${API}/api/v1/certificates/${id}/updates`, {
+      headers: { Cookie: gerontoCookie },
+      data: { archivoUrl: 'certificates/qa-sep11-placeholder.pdf', notas: 'primer archivo' },
+    })
+    expect(upd.status(), await upd.text()).toBe(201)
+  })
+
+  test('CONTRATOS POST /certificates/:id/updates → 403 DOMAIN_FORBIDDEN', async ({ request }) => {
+    const r = await request.post(`${API}/api/v1/certificates/${certId}/updates`, {
+      headers: { Cookie: contratosCookie },
+      data: { notas: 'should fail' },
     })
     expect(r.status()).toBe(403)
     expect((await r.json()).code).toBe('DOMAIN_FORBIDDEN')
