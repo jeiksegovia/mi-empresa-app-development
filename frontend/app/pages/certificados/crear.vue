@@ -119,8 +119,25 @@ async function onSubmit() {
     // Read the child at submit time. Parent `firstUpdate` can lag if v-model
     // emits were dropped (jul-11 B4a / sep-11). The child always has the typed
     // notas/fechas/file keys.
-    const fromChild = firstUpdateFormRef.value?.getValue?.()
+    const child = firstUpdateFormRef.value as
+      | { getValue?: () => CertificateUpdateFormValue; draft?: CertificateUpdateFormValue }
+      | null
+    const fromChild = child?.getValue?.() || (child?.draft ? { ...child.draft } : null)
     const merged = { ...firstUpdate, ...(fromChild || {}) }
+    try {
+      sessionStorage.setItem(
+        'sep11-cert-debug',
+        JSON.stringify({
+          hasRef: Boolean(firstUpdateFormRef.value),
+          fromChild,
+          parent: {
+            notas: firstUpdate.notas,
+            archivoUrl: firstUpdate.archivoUrl,
+          },
+          merged,
+        }),
+      )
+    } catch { /* ignore */ }
     const hasUpdate = Boolean(
       merged.archivoUrl ||
         merged.comprobantePagoUrl ||

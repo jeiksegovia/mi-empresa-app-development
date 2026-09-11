@@ -222,7 +222,15 @@ function getValue(): CertificateUpdateFormValue {
   return { ...draft }
 }
 
-defineExpose({ clearDraft, reset, hasContent, hasFileContent, getValue })
+defineExpose({
+  clearDraft,
+  reset,
+  hasContent,
+  hasFileContent,
+  getValue,
+  // Expose the reactive draft too — production minify can drop getValue.
+  draft,
+})
 
 watch(
   () => [draft.notas, draft.fechaEmision, draft.fechaVencimiento],

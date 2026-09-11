@@ -63,8 +63,12 @@ test.describe('sep-11 GERONTOLOGA cert create + first update (staging UI)', () =
       timeout: 20000,
     }).toBeTruthy()
 
+    const debug = await page.evaluate(() => sessionStorage.getItem('sep11-cert-debug'))
     const updatePost = posts.find((p) => /\/certificates\/\d+\/updates/.test(p.url))
-    expect(updatePost, `expected POST /certificates/:id/updates. posts=${JSON.stringify(posts)}`).toBeTruthy()
+    expect(
+      updatePost,
+      `expected POST /certificates/:id/updates. posts=${JSON.stringify(posts)} debug=${debug}`,
+    ).toBeTruthy()
     expect(updatePost!.status, 'first update must not 403').toBe(201)
 
     await expect(page).not.toHaveURL(/\/certificados\/crear/)
