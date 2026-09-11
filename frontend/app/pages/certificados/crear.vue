@@ -116,16 +116,28 @@ async function onSubmit() {
     const newId = created.data.id
     let firstUpdatePosted = false
 
-    // D2: optional first update. Only post if at least one field is set.
-    if (hasFirstUpdateContent()) {
+    // Read the child at submit time. Parent `firstUpdate` can lag if v-model
+    // emits were dropped (jul-11 B4a / sep-11). The child always has the typed
+    // notas/fechas/file keys.
+    const fromChild = firstUpdateFormRef.value?.getValue?.()
+    const merged = { ...firstUpdate, ...(fromChild || {}) }
+    const hasUpdate = Boolean(
+      merged.archivoUrl ||
+        merged.comprobantePagoUrl ||
+        merged.notas.trim() ||
+        merged.fechaEmision ||
+        merged.fechaVencimiento,
+    )
+
+    if (hasUpdate) {
       const updatePayload: Record<string, unknown> = {}
-      if (firstUpdate.archivoUrl) updatePayload.archivoUrl = firstUpdate.archivoUrl
-      if (firstUpdate.comprobantePagoUrl) {
-        updatePayload.comprobantePagoUrl = firstUpdate.comprobantePagoUrl
+      if (merged.archivoUrl) updatePayload.archivoUrl = merged.archivoUrl
+      if (merged.comprobantePagoUrl) {
+        updatePayload.comprobantePagoUrl = merged.comprobantePagoUrl
       }
-      if (firstUpdate.notas.trim()) updatePayload.notas = firstUpdate.notas.trim()
-      if (firstUpdate.fechaEmision) updatePayload.fechaEmision = firstUpdate.fechaEmision
-      if (firstUpdate.fechaVencimiento) updatePayload.fechaVencimiento = firstUpdate.fechaVencimiento
+      if (merged.notas.trim()) updatePayload.notas = merged.notas.trim()
+      if (merged.fechaEmision) updatePayload.fechaEmision = merged.fechaEmision
+      if (merged.fechaVencimiento) updatePayload.fechaVencimiento = merged.fechaVencimiento
 
       try {
         await apiFetch(`/certificates/${newId}/updates`, {

@@ -218,7 +218,11 @@ function reset() {
   clearDraft()
 }
 
-defineExpose({ clearDraft, reset, hasContent, hasFileContent })
+function getValue(): CertificateUpdateFormValue {
+  return { ...localValue.value }
+}
+
+defineExpose({ clearDraft, reset, hasContent, hasFileContent, getValue })
 
 watch(
   () => [localValue.value.notas, localValue.value.fechaEmision, localValue.value.fechaVencimiento],
