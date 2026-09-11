@@ -40,10 +40,11 @@ test.describe('sep-11 GERONTOLOGA cert create + first update (staging UI)', () =
     await page.getByRole('button', { name: /iniciar sesión/i }).click()
     await page.waitForURL((url: URL) => !url.pathname.includes('/login'), { timeout: 20000 })
 
-    await page.goto(`${FE}/certificados`)
+    await page.goto(`${FE}/certificados?cb=${Date.now()}`, { waitUntil: 'networkidle' })
     await expect(page.getByTestId('cert-nuevo')).toBeVisible({ timeout: 15000 })
     await page.getByTestId('cert-nuevo').click()
     await page.waitForURL(/\/certificados\/crear/, { timeout: 15000 })
+    await expect(page.getByTestId('cert-crear-submit')).toBeVisible({ timeout: 15000 })
 
     await page.getByText('Tipo de Certificado', { exact: false }).first().waitFor({ timeout: 10000 })
     await page.locator('.p-select, [role="combobox"]').first().click()
@@ -56,7 +57,7 @@ test.describe('sep-11 GERONTOLOGA cert create + first update (staging UI)', () =
     await notas.click()
     await notas.pressSequentially(`primera actualizacion ui ${stamp}`, { delay: 15 })
 
-    await page.getByRole('button', { name: /crear certificado/i }).click()
+    await page.getByTestId('cert-crear-submit').click()
 
     await expect.poll(() => posts.some((p) => /\/certificates$/.test(p.url.split('?')[0]) && p.status === 201), {
       timeout: 20000,

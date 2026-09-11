@@ -428,6 +428,7 @@ onMounted(async () => {
                 label="Crear Certificado"
                 icon="pi pi-check"
                 :loading="saving"
+                data-testid="cert-crear-submit"
               />
             </div>
 
