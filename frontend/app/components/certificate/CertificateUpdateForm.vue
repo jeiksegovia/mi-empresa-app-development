@@ -75,28 +75,28 @@ const comprobanteFileInputRef = ref<HTMLInputElement | null>(null)
 const comprobanteUploading = ref(false)
 const comprobanteProgress = ref<'idle' | 'uploading' | 'done' | 'error'>('idle')
 
-// v-model bridge
-const localValue = computed({
-  get: () => props.modelValue,
-  set: (v) => emit('update:modelValue', v),
+// Child-owned draft. Nested v-model on a computed-of-props never updates the
+// parent (staging SPA skipped POST /updates even when the textarea showed text).
+const draft = reactive<CertificateUpdateFormValue>({
+  notas: props.modelValue.notas,
+  fechaEmision: props.modelValue.fechaEmision,
+  fechaVencimiento: props.modelValue.fechaVencimiento,
+  archivoUrl: props.modelValue.archivoUrl,
+  comprobantePagoUrl: props.modelValue.comprobantePagoUrl,
 })
 
 function patchModel(patch: Partial<CertificateUpdateFormValue>) {
-  // Mutate the parent object in place. Replacing the whole object via the
-  // computed setter can drop fields when the parent uses Object.assign on a
-  // reactive() target (crear.vue). In-place assign always reaches firstUpdate.
-  Object.assign(localValue.value, patch)
-  emit('update:modelValue', localValue.value)
+  Object.assign(draft, patch)
+  emit('update:modelValue', { ...draft })
 }
 
 function hasContent(): boolean {
-  const v = localValue.value
   return Boolean(
-    v.archivoUrl ||
-      v.comprobantePagoUrl ||
-      v.notas.trim() ||
-      v.fechaEmision ||
-      v.fechaVencimiento,
+    draft.archivoUrl ||
+      draft.comprobantePagoUrl ||
+      draft.notas.trim() ||
+      draft.fechaEmision ||
+      draft.fechaVencimiento,
   )
 }
 
@@ -191,9 +191,9 @@ function writeDraft() {
     sessionStorage.setItem(
       draftKey.value,
       JSON.stringify({
-        notas: localValue.value.notas,
-        fechaEmision: localValue.value.fechaEmision,
-        fechaVencimiento: localValue.value.fechaVencimiento,
+        notas: draft.notas,
+        fechaEmision: draft.fechaEmision,
+        fechaVencimiento: draft.fechaVencimiento,
         ts: Date.now(),
       })
     )
@@ -219,23 +219,23 @@ function reset() {
 }
 
 function getValue(): CertificateUpdateFormValue {
-  return { ...localValue.value }
+  return { ...draft }
 }
 
 defineExpose({ clearDraft, reset, hasContent, hasFileContent, getValue })
 
 watch(
-  () => [localValue.value.notas, localValue.value.fechaEmision, localValue.value.fechaVencimiento],
-  () => writeDraft()
+  () => [draft.notas, draft.fechaEmision, draft.fechaVencimiento],
+  () => writeDraft(),
 )
 
 onMounted(async () => {
-  const draft = readDraft()
-  if (draft) {
+  const saved = readDraft()
+  if (saved) {
     patchModel({
-      notas: draft.notas ?? localValue.value.notas,
-      fechaEmision: draft.fechaEmision ?? localValue.value.fechaEmision,
-      fechaVencimiento: draft.fechaVencimiento ?? localValue.value.fechaVencimiento,
+      notas: saved.notas ?? draft.notas,
+      fechaEmision: saved.fechaEmision ?? draft.fechaEmision,
+      fechaVencimiento: saved.fechaVencimiento ?? draft.fechaVencimiento,
     })
   }
 
@@ -248,7 +248,7 @@ onMounted(async () => {
   const restoredArchivo = await restoreFile(archivoStashKey.value)
   if (restoredArchivo) {
     archivoFile.value = restoredArchivo
-    if (localValue.value.archivoUrl) {
+    if (draft.archivoUrl) {
       archivoProgress.value = 'done'
     } else {
       archivoProgress.value = 'uploading'
@@ -266,7 +266,7 @@ onMounted(async () => {
   const restoredComp = await restoreFile(comprobanteStashKey.value)
   if (restoredComp) {
     comprobanteFile.value = restoredComp
-    if (localValue.value.comprobantePagoUrl) {
+    if (draft.comprobantePagoUrl) {
       comprobanteProgress.value = 'done'
     } else {
       comprobanteProgress.value = 'uploading'
@@ -396,7 +396,7 @@ onMounted(async () => {
         Notas <span class="text-xs text-[var(--text-color-secondary)]">(opcional)</span>
       </label>
       <Textarea
-        :model-value="localValue.notas"
+        v-model="draft.notas"
         rows="2"
         placeholder="Notas de esta actualización..."
         class="w-full"
@@ -413,9 +413,8 @@ onMounted(async () => {
         </label>
         <input
           type="date"
-          :value="localValue.fechaEmision"
+          v-model="draft.fechaEmision"
           class="w-full px-3 py-2 border border-[var(--surface-border)] rounded-lg bg-[var(--surface-card)] text-[var(--text-color)] text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-          @input="(e) => patchModel({ fechaEmision: (e.target as HTMLInputElement).value })"
         />
       </div>
       <div>
@@ -424,9 +423,8 @@ onMounted(async () => {
         </label>
         <input
           type="date"
-          :value="localValue.fechaVencimiento"
+          v-model="draft.fechaVencimiento"
           class="w-full px-3 py-2 border border-[var(--surface-border)] rounded-lg bg-[var(--surface-card)] text-[var(--text-color)] text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-          @input="(e) => patchModel({ fechaVencimiento: (e.target as HTMLInputElement).value })"
         />
       </div>
     </div>
