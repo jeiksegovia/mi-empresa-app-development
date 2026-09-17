@@ -37,13 +37,19 @@ rotation; prod SSM param deletion) were both caught and recovered with no data l
 (TaskList() now returns empty — all completed / namespace reset. Do NOT read empty as "not done".)
 
 ## 3. In-flight / incomplete
-- Commit `cd1eb6e` on `master` — NOT pushed (developer gate).
-- Working tree still has ~203 uncommitted paths = OTHER teams' WIP + unrelated + framework/temp. Leave them.
-- S2 upload test specs are UNCOMMITTED (gitignored — see §7/§10): `backend/tests/uploads/{upload-ownership-idor,uploads-folder-whitelist}.spec.ts`.
+- Two commits on `main`, BOTH pushed to origin: `cd1eb6e` (security code + IaC + tests) and
+  `e16982a` (context/ + development/ docs + this re-anchor + gitignore + doc redactions).
+- Working tree still has ~60 uncommitted paths = OTHER teams' code (backend/src services, frontend
+  pages), `.claude/` framework, temp. Leave them (not this cycle's scope).
+- S2 upload test specs remain UNCOMMITTED (gitignored — see §7/§10): `backend/tests/uploads/{upload-ownership-idor,uploads-folder-whitelist}.spec.ts`.
 
 ## 4. External sync record
-- No PRs/tickets. Commit only, on explicit instruction; NEVER push without approval. HEAD = `cd1eb6e`.
-- Deploys use the working-tree-zip convention (not clean git tags) — repo pattern.
+- Remote `origin` = `git@github.com:jeiksegovia/mi-empresa-app-development.git` (PRIVATE). `main`
+  pushed through `e16982a` (HEAD). Added this session (repo had no remote before).
+- Committed docs were REDACTED: AWS access-key IDs (`AKIA…`/`ASIA…`) + staging test password
+  scrubbed. Real AWS secret keys were never in-repo (gitignored SSM/`prod-db`).
+- Commit + push ONLY on explicit developer approval (standing rule). Deploys use the working-tree-zip
+  convention (not clean git tags) — repo pattern.
 
 ## 5. Live system state (VITAL)
 - Account `540657241795`, region `us-east-1`, AWS profile `disruptive`. Staging live-probe only; prod by parity + explicit approval.
@@ -95,9 +101,10 @@ Fixes: `development/security-fixes-backend/orchestration-ctx/decisions/`:
 5. FE test-suite cleanup: `qa-canary`/`fichas`/`qa-upload-roundtrip` staging specs use non-whitelisted folders (now 400 by design).
 
 ## 10. Developer gates (open)
-- Push `cd1eb6e`? (held per git-approval rule)
-- Approve uploads-tests gitignore negation + commit?
-- Approve the fresh-deploy addendum (p-secrets + create-instance SSH default)?
+- ✅ DONE: committed (`cd1eb6e` code, `e16982a` docs) + pushed to private origin.
+- OPEN: uploads-tests gitignore negation + commit (S2 specs still local).
+- OPEN: fresh-deploy addendum (p-secrets bootstrap + `create-instance.sh` SSH admin-IP default).
+- OPTIONAL: rotate bootstrap keys / scrub the access-key IDs already in git history (private repo, IDs only, secret keys never committed → low risk).
 
 ## 11. Task / agent traceability
 > TaskList IDs reset per session; agent IDs session-scoped. Durable key = task-dir.
