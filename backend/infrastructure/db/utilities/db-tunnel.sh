@@ -13,37 +13,50 @@ set -e
 # the RDS endpoint reachable from the instance.
 #
 # Usage:
-#   ./db-tunnel.sh --stage <staging|prod> [--port 5433] [--profile disruptive]
+#   ./db-tunnel.sh --stage <staging|prod> [--port 5433] [--profile PROFILE]
+#                  [--allow-current-ip]
 #
 # Then in another terminal:
 #   psql "postgresql://miempresa:<password>@localhost:5433/miempresa_<stage>"
+#
+# F-01 wiring: pass --allow-current-ip to refresh the port-22 allow-list
+# before opening the tunnel (handles public-IP drift). Default is OFF so this
+# script never makes surprise AWS API calls.
 # ============================================================================
 
 STAGE=""
 REGION="us-east-1"
 PROFILE=""
 LOCAL_PORT=5433
+ALLOW_CURRENT_IP=false
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --stage)   STAGE="$2";      shift 2 ;;
-        --region)  REGION="$2";     shift 2 ;;
-        --profile) PROFILE="$2";    shift 2 ;;
-        --port)    LOCAL_PORT="$2"; shift 2 ;;
+        --stage)            STAGE="$2";           shift 2 ;;
+        --region)           REGION="$2";          shift 2 ;;
+        --profile)          PROFILE="$2";         shift 2 ;;
+        --port)             LOCAL_PORT="$2";      shift 2 ;;
+        --allow-current-ip) ALLOW_CURRENT_IP=true; shift ;;
         --help)
-            grep '^#' "$0" | sed 's/^# \{0,1\}//' | head -18
+            grep '^#' "$0" | sed 's/^# \{0,1\}//' | head -22
             exit 0 ;;
         *) echo "ERROR: Unknown argument: $1" >&2; exit 1 ;;
     esac
 done
 
 if [[ "$STAGE" != "staging" && "$STAGE" != "prod" ]]; then
-    echo "Usage: $0 --stage <staging|prod> [--port 5433] [--profile PROFILE]" >&2
+    echo "Usage: $0 --stage <staging|prod> [--port 5433] [--profile PROFILE] [--allow-current-ip]" >&2
     exit 1
 fi
 
 AWS=(aws)
 [ -n "$PROFILE" ] && AWS=(aws --profile "$PROFILE")
+
+if $ALLOW_CURRENT_IP; then
+    echo "Refreshing port-22 allow-list via ssh-allow-current-ip.sh (idempotent)..."
+    "${SCRIPT_DIR}/ssh-allow-current-ip.sh" --stage "${STAGE}" --no-ssh 2>/dev/null || true
+fi
 
 SSH_KEY="${HOME}/.ssh/miempresa-lightsail-key.pem"
 if [ ! -f "$SSH_KEY" ]; then

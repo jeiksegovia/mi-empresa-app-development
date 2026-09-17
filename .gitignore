@@ -56,6 +56,14 @@ backend/src/generated/
 prisma/migrations/*.sql
 !prisma/migrations/migration_lock.toml
 
+# PROD DB foundation seed — contains real company/business data (NIT, address,
+# real user emails). Never commit. Ships only via the manual seed-prod.sh run.
+backend/prisma/prod-db/
+
+# Security-audit raw evidence — live staging secrets, infra dumps, IPs, logs.
+# Never commit. The shareable output is the redacted security-audit-report.md.
+development/security-audit-backend/evidence/
+
 # Test coverage
 coverage/
 .nyc_output/
@@ -129,3 +137,5 @@ backend/.playwright-mcp/page-2026-07-10T13-21-40-648Z.yml
 backend/.playwright-mcp/page-2026-07-10T13-21-45-158Z.yml
 backend/.playwright-mcp/page-2026-07-10T13-21-53-475Z.yml
 backend/.playwright-mcp/page-2026-07-10T13-22-04-111Z.yml
+backend/.claude/settings.json
+frontend/.claude/settings.json

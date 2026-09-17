@@ -66,6 +66,35 @@ function xAmzExpires(presignedUrl: string): number {
   return Number(match[1])
 }
 
+/**
+ * Extract the ISO `expiration` from a presigned POST policy document.
+ *
+ * `createPresignedPost` returns `{ url, fields }` where the URL has no
+ * `X-Amz-Expires` query param — the expiry is encoded in the base64
+ * `Policy` form field (capital P, per the AWS SDK source). We decode it
+ * and read `expiration` (ISO-8601).
+ */
+function policyExpiration(presignedPost: { url: string; fields: Record<string, string> }): Date {
+  const policy = presignedPost.fields?.Policy
+  if (!policy) throw new Error(`No Policy field in presigned POST: url=${presignedPost.url.slice(0, 200)}`)
+  let decoded: string
+  try {
+    decoded = Buffer.from(policy, 'base64').toString('utf8')
+  } catch (e) {
+    throw new Error(`Failed to base64-decode Policy: ${(e as Error).message}`)
+  }
+  let parsed: any
+  try {
+    parsed = JSON.parse(decoded)
+  } catch (e) {
+    throw new Error(`Failed to JSON-parse policy: ${(e as Error).message}`)
+  }
+  if (typeof parsed.expiration !== 'string') {
+    throw new Error(`Policy has no ISO expiration: ${decoded}`)
+  }
+  return new Date(parsed.expiration)
+}
+
 // -------------------------------------------------------------------------
 // Module-level state — restore the default (undefined) after every test.
 // -------------------------------------------------------------------------
@@ -206,13 +235,19 @@ test.describe('s3Service — generateUploadUrl (I1, I2)', () => {
       fixedProvider(identity({ expiration: exp, sessionToken: 'session-token' })),
     )
 
-    const url = await generateUploadUrl(
+    const presigned = await generateUploadUrl(
       'uploads/test.pdf',
       'application/pdf',
       300,
     )
-    // Upload is constrained to at most 540s by the 10-min remaining lifetime
-    expect(xAmzExpires(url)).toBeLessThanOrEqual(540)
+    // Presigned POST encodes the expiry in the base64 policy document
+    // (no X-Amz-Expires in the URL). Decode and check it falls inside the
+    // 10-min remaining window (clamped to 540s by the safety margin).
+    const expiresAt = policyExpiration(presigned).getTime()
+    const now = Date.now()
+    expect(expiresAt - now).toBeLessThanOrEqual(540 * 1000)
+    // And the policy must NOT exceed the credential lifetime (≈600s)
+    expect(expiresAt - now).toBeLessThanOrEqual(10 * 60 * 1000)
   })
 
   test('default-chain (no provider): generateUploadUrl emits a URL — guard does NOT fire', async () => {
@@ -280,8 +315,13 @@ test.describe('s3Service — generateDownloadUrl (I1, I2, I3)', () => {
       fixedProvider(identity({ expiration: exp, sessionToken: 'session-token' })),
     )
 
-    const url = await generateUploadUrl('uploads/test.pdf', 'application/pdf')
-    expect(xAmzExpires(url)).toBe(300)
+    const presigned = await generateUploadUrl('uploads/test.pdf', 'application/pdf')
+    // Presigned POST policy `expiration` is `now + 300s` (default) when
+    // the credential lifetime is comfortably larger than 300s.
+    const expiresAt = policyExpiration(presigned).getTime()
+    const deltaMs = expiresAt - Date.now()
+    expect(deltaMs).toBeGreaterThanOrEqual(295 * 1000)
+    expect(deltaMs).toBeLessThanOrEqual(305 * 1000)
   })
 
   test('I1+I2 combined: guard fires before clamp on pathologically expired creds', async () => {

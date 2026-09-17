@@ -8,10 +8,17 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
   if (err.name === 'PrismaClientKnownRequestError') {
     const prismaError = err as any
     if (prismaError.code === 'P2002') {
+      // S8: do NOT echo Prisma's `meta.target` (the underlying constraint
+      // name) to the client — it leaks the schema. Keep it in the server
+      // log (the top-level `logger.error` already captured `err`).
+      logger.warn(
+        `Prisma P2002 unique-constraint violation on target=${JSON.stringify(
+          prismaError.meta?.target,
+        )}`,
+      )
       res.status(409).json({
         success: false,
         message: 'A record with this value already exists',
-        errors: { constraint: prismaError.meta?.target },
       })
       return
     }
@@ -31,9 +38,14 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
       if (!errors[path]) errors[path] = []
       errors[path].push(e.message)
     })
+    // contract §2.3: 400 with field. Use the first error path as the canonical
+    // field for the simple {success,message,field} envelope; full per-field
+    // detail is still in `errors`.
+    const firstPath = err.errors[0]?.path?.join('.') || ''
     res.status(400).json({
       success: false,
       message: 'Validation error',
+      ...(firstPath ? { field: firstPath } : {}),
       errors,
     })
     return

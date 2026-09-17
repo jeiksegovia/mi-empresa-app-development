@@ -1,6 +1,10 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import type { AwsCredentialIdentity, AwsCredentialIdentityProvider } from '@aws-sdk/types'
+import { createPresignedPost } from '@aws-sdk/s3-presigned-post'
+import type {
+  AwsCredentialIdentity,
+  AwsCredentialIdentityProvider,
+} from '@aws-sdk/types'
 import { config } from '../config/env.js'
 import { resolveS3Credentials } from '../config/awsCredentials.js'
 
@@ -162,28 +166,48 @@ async function resolveActiveCredentials(): Promise<
 }
 
 /**
- * I3 (default expiry): download presigns default to **900s (15 min)** —
- * ample for "open in new tab" UX while quartering the bearer leak window
- * compared with the legacy 3600s. Callers may still pass an explicit
- * `expiresIn`, but anything within `clampExpiresToCredLifetime` will be
- * further reduced to the cred-remaining lifetime (I2).
+ * S4 (size cap): the upload presign is a POST policy signed by S3 with a
+ * `ContentLengthRange` condition that rejects any PUT whose body length
+ * falls outside `[0, config.upload.maxFileSizeBytes]`. S3 enforces this
+ * server-side, so a malicious client cannot bypass the size limit by
+ * skipping the body size check on our side.
+ *
+ * We intentionally switch from presigned PUT (`getSignedUrl`) to
+ * presigned POST (`createPresignedPost`) because `ContentLengthRange` is a
+ * POST-policy condition; presigned PUT URLs do not support range checks.
+ * The browser submits via `multipart/form-data` with `fields` as the
+ * leading form fields and the file under the `file` (or any) input.
+ *
+ * `effectiveExpiresIn` is the policy expiry; the URL/fields are valid
+ * for that window (clamped to the credential lifetime by I2).
  */
 export async function generateUploadUrl(
   key: string,
   contentType: string,
   expiresIn = 300,
-): Promise<string> {
+): Promise<{
+  url: string
+  fields: Record<string, string>
+}> {
   const now = Date.now()
   const creds = await resolveActiveCredentials()
   assertCredentialsUsable(creds, now)
   const effectiveExpiresIn = clampExpiresToCredLifetime(expiresIn, creds, now)
 
-  const command = new PutObjectCommand({
+  const maxBytes = config.upload.maxFileSizeBytes
+  const presigned = await createPresignedPost(_s3Client, {
     Bucket: requireBucket(),
     Key: key,
-    ContentType: contentType,
+    Fields: {
+      'Content-Type': contentType,
+    },
+    Conditions: [
+      ['content-length-range', 0, maxBytes],
+      ['eq', '$Content-Type', contentType],
+    ],
+    Expires: effectiveExpiresIn,
   })
-  return getSignedUrl(_s3Client, command, { expiresIn: effectiveExpiresIn })
+  return { url: presigned.url, fields: presigned.fields }
 }
 
 export async function generateDownloadUrl(

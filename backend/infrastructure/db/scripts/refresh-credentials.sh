@@ -3,10 +3,11 @@ set -e
 set -o pipefail
 
 # ============================================================================
-# STS Credential Refresh Script
+# STS Credential Refresh Script (decision 01: per-env bootstrap key + role)
 # ============================================================================
 # This script automatically refreshes AWS temporary credentials by assuming
-# the CodeDeployInstanceRole using bootstrap IAM user credentials.
+# the per-env SCOPED CodeDeployInstanceRole-${STAGE} using the per-env
+# bootstrap IAM user (miempresa-bootstrap-${STAGE}).
 #
 # Runs via CRON at :00 and :45 of every hour, so the 1-hour session is always
 # renewed with at least 15 minutes of margin.
@@ -21,6 +22,13 @@ set -o pipefail
 # The CodeDeploy on-premises registration uses this exact assumed-role ARN;
 # a changing session name would break every deployment.
 #
+# ASSUME-PATH ISOLATION (decision 01): the [bootstrap] section of
+# /root/.aws/credentials holds the PER-ENV bootstrap access key
+# (miempresa-bootstrap-${STAGE}) — NOT the legacy single miempresa-bootstrap
+# key. The scoped role's trust policy accepts ONLY that per-env user, so a
+# staging host that leaks its bootstrap key cannot sts:AssumeRole the prod
+# role (and vice versa).
+#
 # AWS Best Practice: Use STS temporary credentials instead of long-term
 # credentials on EC2/Lightsail instances for enhanced security.
 # ============================================================================
@@ -32,7 +40,7 @@ AWS_REGION="${AWS_REGION:-us-east-1}"
 exec >> "$LOG_FILE" 2>&1
 
 echo "=========================================="
-echo "STS Credential Refresh"
+echo "STS Credential Refresh (decision 01: per-env bootstrap)"
 echo "=========================================="
 echo "Started: $(date)"
 echo ""
@@ -42,6 +50,8 @@ echo ""
 # ============================================================================
 
 echo "Loading configuration..."
+
+STAGE=$(cat /etc/miempresa-stage 2>/dev/null || echo "staging")
 
 # Get AWS account ID from bootstrap credentials
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity \
@@ -55,19 +65,20 @@ if [ -z "$AWS_ACCOUNT_ID" ]; then
     exit 1
 fi
 
-ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/CodeDeployInstanceRole"
+# DECISION 01: assume the PER-ENV SCOPED role, NOT the legacy wildcard.
+ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/CodeDeployInstanceRole-${STAGE}"
 # Stable session name — must match the --iam-session-arn used at registration
-STAGE=$(cat /etc/miempresa-stage 2>/dev/null || echo "staging")
 ROLE_SESSION_NAME="miempresa-backend-${STAGE}"
 
-echo "  AWS Account ID: ${AWS_ACCOUNT_ID}"
-echo "  Role ARN: ${ROLE_ARN}"
-echo "  Session Name: ${ROLE_SESSION_NAME}"
-echo "  Region: ${AWS_REGION}"
+echo "  Stage:           ${STAGE}"
+echo "  AWS Account ID:  ${AWS_ACCOUNT_ID}"
+echo "  Role ARN:        ${ROLE_ARN}"
+echo "  Session Name:    ${ROLE_SESSION_NAME}"
+echo "  Region:          ${AWS_REGION}"
 echo ""
 
 # ============================================================================
-# Assume Role with Bootstrap Credentials
+# Assume Role with per-env Bootstrap Credentials
 # ============================================================================
 
 echo "Assuming role..."
@@ -81,7 +92,10 @@ TEMP_CREDS=$(aws sts assume-role \
     --output json 2>&1)
 
 if [ $? -ne 0 ]; then
-    echo "✗ ERROR: Failed to assume role"
+    echo "✗ ERROR: Failed to assume role ${ROLE_ARN}"
+    echo "  If you see AccessDenied here, the per-env bootstrap user for ${STAGE}"
+    echo "  does not exist yet, or its key was not pushed to /root/.aws/credentials"
+    echo "  (decision 01). Re-run create-instance.sh / push the per-env key."
     echo "$TEMP_CREDS"
     exit 1
 fi
@@ -119,15 +133,18 @@ echo "Updating credentials file..."
 mkdir -p /root/.aws
 mkdir -p /home/ec2-user/.aws
 
-# CRITICAL: preserve the [bootstrap] section — it holds the long-lived keys this
-# script itself needs on the NEXT run. Overwriting the file without it bricks
+# CRITICAL: preserve the [bootstrap] section — it holds the per-env long-lived
+# key THIS script needs on the NEXT run. Overwriting the file without it bricks
 # the refresh cycle within the hour.
+# DECISION 01: the [bootstrap] section holds the PER-ENV bootstrap key
+# (miempresa-bootstrap-${STAGE}), not the legacy miempresa-bootstrap key.
 BOOTSTRAP_KEY_ID=$(awk '/^\[bootstrap\]/{f=1;next}/^\[/{f=0}f&&/aws_access_key_id/{print $3}' /root/.aws/credentials 2>/dev/null)
 BOOTSTRAP_SECRET=$(awk '/^\[bootstrap\]/{f=1;next}/^\[/{f=0}f&&/aws_secret_access_key/{print $3}' /root/.aws/credentials 2>/dev/null)
 
 if [ -z "$BOOTSTRAP_KEY_ID" ] || [ -z "$BOOTSTRAP_SECRET" ]; then
     echo "✗ ERROR: [bootstrap] section not found in /root/.aws/credentials"
     echo "  Refusing to overwrite the credentials file (would brick future refreshes)."
+    echo "  Re-run create-instance.sh to push the per-env bootstrap key for ${STAGE}."
     exit 1
 fi
 
@@ -187,9 +204,11 @@ echo "Updating CodeDeploy agent configuration..."
 
 mkdir -p /etc/codedeploy-agent/conf
 
+# DECISION 01: iam_session_arn now points at the per-env SCOPED role, not the
+# legacy wildcard. The CodeDeploy on-prem registration uses this exact ARN.
 cat > /etc/codedeploy-agent/conf/codedeploy.onpremises.yml <<EOF
 ---
-iam_session_arn: arn:aws:sts::${AWS_ACCOUNT_ID}:assumed-role/CodeDeployInstanceRole/${ROLE_SESSION_NAME}
+iam_session_arn: arn:aws:sts::${AWS_ACCOUNT_ID}:assumed-role/CodeDeployInstanceRole-${STAGE}/${ROLE_SESSION_NAME}
 aws_credentials_file: /root/.aws/credentials
 region: ${AWS_REGION}
 EOF

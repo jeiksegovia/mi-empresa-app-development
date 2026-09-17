@@ -3,17 +3,41 @@ if (!process.env.AWS_LAMBDA_FUNCTION_NAME) {
   dotenv.config()
 }
 
+const nodeEnv = process.env.NODE_ENV || 'development'
+const isProduction = nodeEnv === 'production'
+
+/**
+ * S1 (cheap code hardening): refuse to boot in production if `JWT_SECRET`
+ * is unset. A signed cookie/JWT defaulting to a hard-coded fallback would
+ * let an attacker forge tokens. Crash-fast here so the misconfiguration
+ * surfaces at startup, not at first /login.
+ *
+ * Local dev (NODE_ENV !== 'production') keeps a deterministic placeholder
+ * so contributors don't have to set one just to boot the API. Tests that
+ * need to assert the throw pass NODE_ENV=production explicitly.
+ */
+function resolveJwtSecret(): string {
+  const fromEnv = process.env.JWT_SECRET?.trim()
+  if (fromEnv) return fromEnv
+  if (isProduction) {
+    throw new Error(
+      'JWT_SECRET is required when NODE_ENV=production — refusing to boot with an unset signing key',
+    )
+  }
+  return 'dev-secret-change-me'
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '3101', 10),
-  nodeEnv: process.env.NODE_ENV || 'development',
-  isDev: process.env.NODE_ENV !== 'production',
+  nodeEnv,
+  isDev: !isProduction,
 
   database: {
     url: process.env.DATABASE_URL || 'postgresql://miempresa:miempresa123@localhost:15432/miempresa_dev',
   },
 
   jwt: {
-    secret: process.env.JWT_SECRET || 'dev-secret-change-me',
+    secret: resolveJwtSecret(),
     expiration: process.env.JWT_EXPIRATION || '24h',
   },
 

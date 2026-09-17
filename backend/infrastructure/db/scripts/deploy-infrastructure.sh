@@ -51,6 +51,17 @@ CFN_DIR="${SCRIPT_DIR}/../cloudformation"
 # ----------------------------------------------------------------------------
 DEV_LOCAL_ORIGINS="https://miempresa-stg.disruptiveexp.com,http://localhost:3100,http://localhost:3101,http://localhost:3102,http://100.85.193.33:3100,http://10.57.126.228:3100"
 
+# ----------------------------------------------------------------------------
+# Single source of truth for the public domains, mirroring the exact IsProd
+# branching in cloudformation/edge-stack.yml and cloudformation/amplify-stack.yml
+# (RootDomain default 'disruptiveexp.com' in both templates; prod gets NO
+# suffix, staging gets '-stg'). Keep these two literals in sync with those
+# templates if the domain scheme ever changes.
+# ----------------------------------------------------------------------------
+ROOT_DOMAIN="disruptiveexp.com"
+STAGING_FRONTEND_URL="https://miempresa-stg.${ROOT_DOMAIN}"
+PROD_FRONTEND_URL="https://miempresa.${ROOT_DOMAIN}"
+
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
@@ -104,27 +115,67 @@ get_param() {
 }
 
 # ============================================================================
-# 1. IAM Stack (global)
+# Helper: resolve the AWS-managed `alias/aws/ssm` KMS key to its key ARN.
+# CFN cannot resolve KMS aliases at template render time, so we look it up
+# once and pass the resolved ARN to the IAM stack via parameter override.
+# Failure is non-fatal here — the operator will get an explicit error from
+# cfn-lint/cfn when the IAM stack is deployed with an empty SSMKMSKeyArn.
 # ============================================================================
-log_info "Deploying IAM Stack..."
+resolve_ssm_kms_arn() {
+    "${AWS[@]}" kms describe-key \
+        --key-id alias/aws/ssm \
+        --region "${REGION}" \
+        --query 'KeyMetadata.Arn' \
+        --output text 2>/dev/null || echo ""
+}
+
+# ============================================================================
+# 1. IAM Stack (global, env-INDEPENDENT — decision 02)
+# ============================================================================
+# Decision 02: the iam-stack template statically declares BOTH staging and prod
+# scoped identities (per-env roles, policies, bootstrap users, keys, SSM) PLUS
+# the legacy wildcard role + legacy bootstrap user kept during the additive
+# migration. There is NO `Environment` parameter on the IAM stack — a
+# per-stage deploy of this script is a no-op for IAM after the first run.
+# Both scoped identities coexist from day one; each INSTANCE migrates to its
+# own identity at its own time (staging via #8, prod via #10).
+# ============================================================================
+log_info "Deploying IAM Stack (env-independent, decision 02)..."
 
 IAM_STACK_NAME="${PROJECT_NAME}-iam"
+SSM_KMS_ARN=$(resolve_ssm_kms_arn)
+if [ -z "$SSM_KMS_ARN" ]; then
+    log_error "Could not resolve KMS key ARN for alias/aws/ssm in ${REGION}."
+    log_error "Run: aws kms describe-key --key-id alias/aws/ssm --region ${REGION}"
+    exit 1
+fi
+log_info "  KMS key for SSM: ${SSM_KMS_ARN}"
 
 "${AWS[@]}" cloudformation deploy \
     --template-file "${CFN_DIR}/iam-stack.yml" \
     --stack-name "${IAM_STACK_NAME}" \
-    --parameter-overrides ProjectName="${PROJECT_NAME}" \
+    --parameter-overrides \
+        ProjectName="${PROJECT_NAME}" \
+        SSMKMSKeyArn="${SSM_KMS_ARN}" \
     --capabilities CAPABILITY_NAMED_IAM \
     --region "${REGION}" \
     --no-fail-on-empty-changeset \
     --tags Project="${PROJECT_NAME}" Environment=global ManagedBy=CloudFormation
 
-log_info "✓ IAM Stack deployed"
+log_info "✓ IAM Stack deployed (BOTH staging + prod scoped identities now coexist)"
 
 ROLE_ARN=$("${AWS[@]}" cloudformation describe-stacks \
     --stack-name "${IAM_STACK_NAME}" --region "${REGION}" \
     --query "Stacks[0].Outputs[?OutputKey=='CodeDeployInstanceRoleArn'].OutputValue" --output text)
-log_info "  Role ARN: ${ROLE_ARN}"
+SCOPED_ROLE_ARN=$("${AWS[@]}" cloudformation describe-stacks \
+    --stack-name "${IAM_STACK_NAME}" --region "${REGION}" \
+    --query "Stacks[0].Outputs[?OutputKey=='ScopedInstanceRoleArn${STAGE^}'].OutputValue" --output text)
+SCOPED_BOOTSTRAP_ARN=$("${AWS[@]}" cloudformation describe-stacks \
+    --stack-name "${IAM_STACK_NAME}" --region "${REGION}" \
+    --query "Stacks[0].Outputs[?OutputKey=='ScopedBootstrapUserArn${STAGE^}'].OutputValue" --output text)
+log_info "  Legacy Role ARN:                            ${ROLE_ARN}"
+log_info "  Scoped Role ARN (${STAGE}):                 ${SCOPED_ROLE_ARN}"
+log_info "  Scoped Bootstrap User ARN (${STAGE}):       ${SCOPED_BOOTSTRAP_ARN}"
 echo ""
 
 # ============================================================================
@@ -152,10 +203,12 @@ echo ""
 # ============================================================================
 log_info "Deploying S3 Stack for ${STAGE}..."
 
-# Compose S3 parameter overrides. STAGE=dev gets DEV_LOCAL_ORIGINS (so
-# every dev machine origin can PUT/GET against the dev bucket); staging
-# and prod keep the template default so out-of-scope hosts can't be
-# accidentally whitelisted.
+# Compose S3 parameter overrides. STAGE=dev gets DEV_LOCAL_ORIGINS (so every
+# dev machine origin can PUT/GET against the dev bucket); staging keeps the
+# template default (already the staging domain + localhost). prod gets an
+# EXPLICIT override — the template default is staging's origin list, which
+# would let the staging frontend's presigned uploads hit the prod bucket
+# (wrong) and would NOT include the real prod frontend origin (broken CORS).
 S3_PARAM_OVERRIDES=(
     ProjectName="${PROJECT_NAME}"
     Environment="${STAGE}"
@@ -166,6 +219,9 @@ if [ "${STAGE}" = "dev" ]; then
     # splits the value at deploy time, not the shell.
     S3_PARAM_OVERRIDES+=("UploadsCorsAllowedOrigins=${DEV_LOCAL_ORIGINS}")
     log_info "  S3 uploads CORS (dev override): ${DEV_LOCAL_ORIGINS}"
+elif [ "${STAGE}" = "prod" ]; then
+    S3_PARAM_OVERRIDES+=("UploadsCorsAllowedOrigins=${PROD_FRONTEND_URL}")
+    log_info "  S3 uploads CORS (prod override): ${PROD_FRONTEND_URL}"
 fi
 
 "${AWS[@]}" cloudformation deploy \
@@ -181,28 +237,28 @@ echo ""
 
 # ============================================================================
 # 4. SSM Parameters Stack (per stage)
-#    Secrets: reuse existing values if present, otherwise generate strong ones.
-#    Passing them explicitly on every deploy keeps CloudFormation and SSM in sync.
+#    Secrets: de-managed per fix-contract §B. JWT_SECRET, SESSION_SECRET,
+#    ORIGIN_VERIFY_SECRET are NO LONGER created by this template. They are
+#    owned via utilities/set-env.sh --secure as Type: SecureString, which
+#    this CFN template cannot create. The 3 first-deploy dance (Retain +
+#    remove) is documented in ssm-parameters-stack.yml header.
 # ============================================================================
 log_info "Deploying SSM Parameters Stack for ${STAGE}..."
 
 SSM_STACK_NAME="${PROJECT_NAME}-ssm-${STAGE}"
 
-JWT_SECRET=$(get_param "/${PROJECT_NAME}/${STAGE}/api/JWT_SECRET")
-[ -z "$JWT_SECRET" ] || [[ "$JWT_SECRET" == *"-jwt-secret-"* ]] && JWT_SECRET=$(openssl rand -hex 32)
-
-SESSION_SECRET=$(get_param "/${PROJECT_NAME}/${STAGE}/api/SESSION_SECRET")
-[ -z "$SESSION_SECRET" ] || [[ "$SESSION_SECRET" == *"-session-secret-"* ]] && SESSION_SECRET=$(openssl rand -hex 32)
-
-ORIGIN_VERIFY_SECRET=$(get_param "/${PROJECT_NAME}/${STAGE}/api/ORIGIN_VERIFY_SECRET")
-[ -z "$ORIGIN_VERIFY_SECRET" ] && ORIGIN_VERIFY_SECRET=$(openssl rand -hex 16)
-
 if [ "$STAGE" == "staging" ]; then
-    CORS_ORIGIN="http://localhost:3000"   # updated once the Amplify frontend URL exists
+    CORS_ORIGIN="http://localhost:3000"   # updated once the Amplify frontend URL exists (utilities/set-env.sh)
     LOG_LEVEL="debug"
-else
-    CORS_ORIGIN="https://app.disruptiveexp.com"
+elif [ "$STAGE" == "prod" ]; then
+    # Known in advance (unlike staging) — matches amplify-stack.yml's IsProd
+    # AppUrlParameter exactly, so CORS is correct from the first P1 run with
+    # no post-hoc set-env.sh fixup needed.
+    CORS_ORIGIN="${PROD_FRONTEND_URL}"
     LOG_LEVEL="info"
+else
+    log_error "Unhandled STAGE '${STAGE}' in CORS_ORIGIN/LOG_LEVEL branch"
+    exit 1
 fi
 
 "${AWS[@]}" cloudformation deploy \
@@ -213,14 +269,11 @@ fi
         ProjectName="${PROJECT_NAME}" \
         CorsOrigin="${CORS_ORIGIN}" \
         LogLevel="${LOG_LEVEL}" \
-        JWTSecret="${JWT_SECRET}" \
-        SessionSecret="${SESSION_SECRET}" \
-        OriginVerifySecret="${ORIGIN_VERIFY_SECRET}" \
     --region "${REGION}" \
     --no-fail-on-empty-changeset \
     --tags Project="${PROJECT_NAME}" Environment="${STAGE}" ManagedBy=CloudFormation
 
-log_info "✓ SSM Parameters Stack deployed"
+log_info "✓ SSM Parameters Stack deployed (3 secrets de-managed)"
 echo ""
 
 # ============================================================================

@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Mi Empresa Backend Infrastructure - IAM Roles and Policies'
+Description: 'Mi Empresa Backend Infrastructure - IAM Roles, Policies, and Bootstrap Users (static per-env, single global stack, decision 01 + 02)'
 
 Parameters:
   ProjectName:
@@ -7,40 +7,87 @@ Parameters:
     Default: miempresa
     Description: Project name for resource naming
 
+  # KMS key ARN for SSM SecureString decryption. CFN cannot resolve a KMS alias
+  # to its key ARN at template render time, so we accept the resolved ARN as
+  # a parameter. Lookup with:
+  #   aws kms describe-key --key-id alias/aws/ssm --region <r> \
+  #     --query 'KeyMetadata.Arn' --output text
+  # Per-env scoped roles can ONLY decrypt using this single key (no key/*).
+  # The aws/ssm key is account/region-scoped, not env-scoped, so a single
+  # SSMKMSKeyArn serves both staging and prod in this one global stack.
+  SSMKMSKeyArn:
+    Type: String
+    Default: ''
+    Description: KMS key ARN used to decrypt /miempresa/<env>/* SecureString params. Resolve with `aws kms describe-key --key-id alias/aws/ssm --region <region>`.
+
+# ============================================================================
+# DECISION 02: NO `Environment` parameter. The template statically declares
+# BOTH staging and prod scoped identities (and the legacy wildcard kept
+# during the additive migration). The single global stack is deployed ONCE
+# (env-independent); a per-stage deploy-infrastructure.sh run is a no-op for
+# IAM. Both per-env identities coexist from day one; each INSTANCE migrates
+# to its own identity at its own time (staging via #8, prod via #10).
+#
+# Resource logical IDs use the env suffix (`...Staging`, `...Prod`) so CFN
+# can disambiguate. Hard-coded `staging` / `prod` strings below — these are
+# NOT parameters on purpose (see decision 02 for why a parameter would brick
+# the additive rollout).
+# ============================================================================
+
 Resources:
-  # ============================================================================
-  # IAM Role for Lightsail Instances
-  # ============================================================================
-  CodeDeployInstanceRole:
+  # ==========================================================================
+  # Legacy wildcard role + legacy bootstrap user — RETIRED 2026-09-17.
+  # Pre-condition for retirement verified: both staging + prod instances run on
+  # per-env scoped identities (sts get-caller-identity confirmed), both agents
+  # use per-env scoped iam_session_arn, neither instance has the legacy
+  # bootstrap access key ID in /root/.aws/credentials. Retired by sfx-W1
+  # during prod release (#10) per decisions 00 + 01 + 02. The legacy SSM
+  # params /miempresa/bootstrap/{access-key-id,secret-access-key} remain in
+  # SSM but are now orphaned — they can be removed via
+  # `aws ssm delete-parameter` in a follow-up PR if desired.
+  # ==========================================================================
+
+  # ==========================================================================
+  # PER-ENV SCOPED RESOURCES — STAGING (decision 01 + 02)
+  # --------------------------------------------------------------------------
+  # Resource set, hard-coded to env=staging (NOT a parameter — see decision 02).
+  # Trusts the per-env bootstrap user miempresa-bootstrap-staging (NOT :root).
+  # ==========================================================================
+  ScopedInstanceRoleStaging:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: CodeDeployInstanceRole
+      RoleName: CodeDeployInstanceRole-staging
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
+            # !GetAtt (NOT !Sub string literal) so CFN auto-detects the
+            # dependency on the ScopedBootstrapUserStaging resource and
+            # creates the user BEFORE the role. (Lesson from #8 first
+            # deploy: IAM CreateRole validates the trust policy principal
+            # exists, so the order matters.)
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+              AWS: !GetAtt ScopedBootstrapUserStaging.Arn
             Action: sts:AssumeRole
-      Description: Role for Lightsail instances to access AWS services
+      Description: 'Per-env scoped role for staging. Trust = staging bootstrap user (decision 01).'
       MaxSessionDuration: 3600
       Tags:
         - Key: Project
           Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: Environment
+          Value: staging
+        - Key: Lifecycle
+          Value: scoped-active
 
-  # ============================================================================
-  # IAM Policy for Instance Permissions
-  # ============================================================================
-  CodeDeployInstancePolicy:
+  ScopedInstancePolicyStaging:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: CodeDeployInstancePolicy
+      PolicyName: CodeDeployInstancePolicy-staging
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          # S3 Access for CodeDeploy artifacts and backups
           - Sid: S3Access
             Effect: Allow
             Action:
@@ -48,16 +95,14 @@ Resources:
               - s3:PutObject
               - s3:ListBucket
             Resource:
-              - !Sub 'arn:aws:s3:::${ProjectName}-artifacts-${AWS::AccountId}-*'
-              - !Sub 'arn:aws:s3:::${ProjectName}-artifacts-${AWS::AccountId}-*/*'
-              - !Sub 'arn:aws:s3:::${ProjectName}-backups-${AWS::AccountId}-*'
-              - !Sub 'arn:aws:s3:::${ProjectName}-backups-${AWS::AccountId}-*/*'
-              - !Sub 'arn:aws:s3:::${ProjectName}-uploads-${AWS::AccountId}-*'
-              - !Sub 'arn:aws:s3:::${ProjectName}-uploads-${AWS::AccountId}-*/*'
+              - !Sub 'arn:aws:s3:::${ProjectName}-artifacts-${AWS::AccountId}-staging'
+              - !Sub 'arn:aws:s3:::${ProjectName}-artifacts-${AWS::AccountId}-staging/*'
+              - !Sub 'arn:aws:s3:::${ProjectName}-backups-${AWS::AccountId}-staging'
+              - !Sub 'arn:aws:s3:::${ProjectName}-backups-${AWS::AccountId}-staging/*'
+              - !Sub 'arn:aws:s3:::${ProjectName}-uploads-${AWS::AccountId}-staging'
+              - !Sub 'arn:aws:s3:::${ProjectName}-uploads-${AWS::AccountId}-staging/*'
               - !Sub 'arn:aws:s3:::aws-codedeploy-${AWS::Region}'
               - !Sub 'arn:aws:s3:::aws-codedeploy-${AWS::Region}/*'
-
-          # SSM Parameter Store Access
           - Sid: SSMParameterAccess
             Effect: Allow
             Action:
@@ -65,9 +110,7 @@ Resources:
               - ssm:GetParameters
               - ssm:GetParametersByPath
             Resource:
-              - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/*'
-
-          # CloudWatch Logs Access
+              - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/staging/*'
           - Sid: CloudWatchLogsAccess
             Effect: Allow
             Action:
@@ -76,18 +119,13 @@ Resources:
               - logs:PutLogEvents
               - logs:DescribeLogStreams
             Resource:
-              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/${ProjectName}/*'
-
-          # KMS Decryption for Encrypted Parameters
+              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/${ProjectName}/staging/*'
           - Sid: KMSDecryptAccess
             Effect: Allow
             Action:
               - kms:Decrypt
               - kms:DescribeKey
-            Resource:
-              - !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
-
-          # CodeDeploy Access
+            Resource: !Ref SSMKMSKeyArn
           - Sid: CodeDeployAccess
             Effect: Allow
             Action:
@@ -95,80 +133,238 @@ Resources:
               - codedeploy:GetDeploymentConfig
               - codedeploy:GetApplicationRevision
             Resource: '*'
-
       Roles:
-        - !Ref CodeDeployInstanceRole
+        - !Ref ScopedInstanceRoleStaging
 
-  # ============================================================================
-  # Bootstrap IAM User for STS AssumeRole
-  # ============================================================================
-  BootstrapUser:
+  ScopedBootstrapUserStaging:
     Type: AWS::IAM::User
     Properties:
-      UserName: !Sub '${ProjectName}-bootstrap'
+      UserName: !Sub '${ProjectName}-bootstrap-staging'
       Tags:
         - Key: Purpose
-          Value: STS-AssumeRole
+          Value: STS-AssumeRole-Scoped
         - Key: Project
           Value: !Ref ProjectName
+        - Key: Environment
+          Value: staging
+        - Key: Lifecycle
+          Value: scoped-bootstrap
 
-  # Bootstrap User Policy - Only AssumeRole Permission
-  BootstrapUserPolicy:
+  ScopedBootstrapUserPolicyStaging:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: AssumeCodeDeployInstanceRole
+      PolicyName: AssumeScopedInstanceRole-staging
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Action: sts:AssumeRole
-            Resource: !GetAtt CodeDeployInstanceRole.Arn
+            Resource:
+              - !GetAtt ScopedInstanceRoleStaging.Arn
       Users:
-        - !Ref BootstrapUser
+        - !Ref ScopedBootstrapUserStaging
 
-  # ============================================================================
-  # Access Key for Bootstrap User (Manual rotation recommended)
-  # ============================================================================
-  BootstrapUserAccessKey:
+  ScopedBootstrapUserAccessKeyStaging:
     Type: AWS::IAM::AccessKey
     Properties:
-      UserName: !Ref BootstrapUser
+      UserName: !Ref ScopedBootstrapUserStaging
 
-  # ============================================================================
-  # Store Bootstrap Credentials in SSM
-  # ============================================================================
-  BootstrapAccessKeyIdParam:
+  ScopedBootstrapAccessKeyIdParamStaging:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '/${ProjectName}/bootstrap/access-key-id'
-      Description: Bootstrap IAM user access key ID
+      Name: !Sub '/${ProjectName}/bootstrap/staging/access-key-id'
+      Description: 'Per-env staging bootstrap IAM user access key ID (decision 01)'
       Type: String
-      Value: !Ref BootstrapUserAccessKey
+      Value: !Ref ScopedBootstrapUserAccessKeyStaging
 
-  BootstrapSecretAccessKeyParam:
+  ScopedBootstrapSecretAccessKeyParamStaging:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '/${ProjectName}/bootstrap/secret-access-key'
-      Description: Bootstrap IAM user secret access key
+      Name: !Sub '/${ProjectName}/bootstrap/staging/secret-access-key'
+      Description: 'Per-env staging bootstrap IAM user secret access key (decision 01)'
       Type: String
-      Value: !GetAtt BootstrapUserAccessKey.SecretAccessKey
+      Value: !GetAtt ScopedBootstrapUserAccessKeyStaging.SecretAccessKey
+
+  # ==========================================================================
+  # PER-ENV SCOPED RESOURCES — PROD (decision 01 + 02)
+  # --------------------------------------------------------------------------
+  # Resource set, hard-coded to env=prod (NOT a parameter — see decision 02).
+  # Trusts the per-env bootstrap user miempresa-bootstrap-prod (NOT :root).
+  # ==========================================================================
+  ScopedInstanceRoleProd:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CodeDeployInstanceRole-prod
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt ScopedBootstrapUserProd.Arn
+            Action: sts:AssumeRole
+      Description: 'Per-env scoped role for prod. Trust = prod bootstrap user (decision 01).'
+      MaxSessionDuration: 3600
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Environment
+          Value: prod
+        - Key: Lifecycle
+          Value: scoped-active
+
+  ScopedInstancePolicyProd:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: CodeDeployInstancePolicy-prod
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: S3Access
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:ListBucket
+            Resource:
+              - !Sub 'arn:aws:s3:::${ProjectName}-artifacts-${AWS::AccountId}-prod'
+              - !Sub 'arn:aws:s3:::${ProjectName}-artifacts-${AWS::AccountId}-prod/*'
+              - !Sub 'arn:aws:s3:::${ProjectName}-backups-${AWS::AccountId}-prod'
+              - !Sub 'arn:aws:s3:::${ProjectName}-backups-${AWS::AccountId}-prod/*'
+              - !Sub 'arn:aws:s3:::${ProjectName}-uploads-${AWS::AccountId}-prod'
+              - !Sub 'arn:aws:s3:::${ProjectName}-uploads-${AWS::AccountId}-prod/*'
+              - !Sub 'arn:aws:s3:::aws-codedeploy-${AWS::Region}'
+              - !Sub 'arn:aws:s3:::aws-codedeploy-${AWS::Region}/*'
+          - Sid: SSMParameterAccess
+            Effect: Allow
+            Action:
+              - ssm:GetParameter
+              - ssm:GetParameters
+              - ssm:GetParametersByPath
+            Resource:
+              - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/prod/*'
+          - Sid: CloudWatchLogsAccess
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - logs:DescribeLogStreams
+            Resource:
+              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/${ProjectName}/prod/*'
+          - Sid: KMSDecryptAccess
+            Effect: Allow
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+            Resource: !Ref SSMKMSKeyArn
+          - Sid: CodeDeployAccess
+            Effect: Allow
+            Action:
+              - codedeploy:GetDeployment
+              - codedeploy:GetDeploymentConfig
+              - codedeploy:GetApplicationRevision
+            Resource: '*'
+      Roles:
+        - !Ref ScopedInstanceRoleProd
+
+  ScopedBootstrapUserProd:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub '${ProjectName}-bootstrap-prod'
+      Tags:
+        - Key: Purpose
+          Value: STS-AssumeRole-Scoped
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: prod
+        - Key: Lifecycle
+          Value: scoped-bootstrap
+
+  ScopedBootstrapUserPolicyProd:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: AssumeScopedInstanceRole-prod
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Resource:
+              - !GetAtt ScopedInstanceRoleProd.Arn
+      Users:
+        - !Ref ScopedBootstrapUserProd
+
+  ScopedBootstrapUserAccessKeyProd:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref ScopedBootstrapUserProd
+
+  ScopedBootstrapAccessKeyIdParamProd:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${ProjectName}/bootstrap/prod/access-key-id'
+      Description: 'Per-env prod bootstrap IAM user access key ID (decision 01)'
+      Type: String
+      Value: !Ref ScopedBootstrapUserAccessKeyProd
+
+  ScopedBootstrapSecretAccessKeyParamProd:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${ProjectName}/bootstrap/prod/secret-access-key'
+      Description: 'Per-env prod bootstrap IAM user secret access key (decision 01)'
+      Type: String
+      Value: !GetAtt ScopedBootstrapUserAccessKeyProd.SecretAccessKey
 
 Outputs:
-  CodeDeployInstanceRoleArn:
-    Description: ARN of the CodeDeploy instance role
-    Value: !GetAtt CodeDeployInstanceRole.Arn
+  # Staging scoped identity
+  ScopedInstanceRoleArnStaging:
+    Description: ARN of the per-env STAGING scoped CodeDeploy instance role
+    Value: !GetAtt ScopedInstanceRoleStaging.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-CodeDeployInstanceRoleArn'
+      Name: !Sub '${AWS::StackName}-ScopedInstanceRoleArn-staging'
 
-  BootstrapUserName:
-    Description: Name of the bootstrap IAM user
-    Value: !Ref BootstrapUser
+  ScopedInstanceRoleNameStaging:
+    Description: Name of the per-env STAGING scoped CodeDeploy instance role
+    Value: !Ref ScopedInstanceRoleStaging
+
+  ScopedBootstrapUserArnStaging:
+    Description: ARN of the per-env STAGING bootstrap IAM user (decision 01)
+    Value: !GetAtt ScopedBootstrapUserStaging.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-BootstrapUserName'
+      Name: !Sub '${AWS::StackName}-ScopedBootstrapUserArn-staging'
 
-  # NOTE: The secret access key is intentionally NOT exported as a stack Output
-  # (anyone with cloudformation:DescribeStacks could read it). It is stored only
-  # in SSM at /${ProjectName}/bootstrap/secret-access-key.
-  BootstrapAccessKeyId:
-    Description: Access key ID for bootstrap user
-    Value: !Ref BootstrapUserAccessKey
+  ScopedBootstrapUserNameStaging:
+    Description: Name of the per-env STAGING bootstrap IAM user (decision 01)
+    Value: !Ref ScopedBootstrapUserStaging
+
+  ScopedBootstrapAccessKeyIdStaging:
+    Description: Access key ID for the per-env STAGING scoped bootstrap user
+    Value: !Ref ScopedBootstrapUserAccessKeyStaging
+
+  # Prod scoped identity
+  ScopedInstanceRoleArnProd:
+    Description: ARN of the per-env PROD scoped CodeDeploy instance role
+    Value: !GetAtt ScopedInstanceRoleProd.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ScopedInstanceRoleArn-prod'
+
+  ScopedInstanceRoleNameProd:
+    Description: Name of the per-env PROD scoped CodeDeploy instance role
+    Value: !Ref ScopedInstanceRoleProd
+
+  ScopedBootstrapUserArnProd:
+    Description: ARN of the per-env PROD bootstrap IAM user (decision 01)
+    Value: !GetAtt ScopedBootstrapUserProd.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ScopedBootstrapUserArn-prod'
+
+  ScopedBootstrapUserNameProd:
+    Description: Name of the per-env PROD bootstrap IAM user (decision 01)
+    Value: !Ref ScopedBootstrapUserProd
+
+  ScopedBootstrapAccessKeyIdProd:
+    Description: Access key ID for the per-env PROD scoped bootstrap user
+    Value: !Ref ScopedBootstrapUserAccessKeyProd

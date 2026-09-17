@@ -22,7 +22,17 @@ export default defineNuxtPlugin(() => {
       host.style.cssText = 'position:fixed;top:1rem;right:1rem;z-index:9999;max-width:360px;background:#fef2f2;border:1px solid #ef4444;color:#7f1d1d;padding:.75rem 1rem;border-radius:.5rem;box-shadow:0 10px 25px rgba(0,0,0,.1);font:14px/1.4 system-ui;'
       document.body.appendChild(host)
     }
-    host.innerHTML = `<strong style="display:block;margin-bottom:2px">${summary}</strong><span>${detail}</span>`
+    // S6: build the DOM with createElement + textContent instead of
+    // `innerHTML` so an attacker-controlled `detail` (e.g. an account
+    // name embedded in the 403 message) cannot inject script tags.
+    host.replaceChildren()
+    const title = document.createElement('strong')
+    title.style.display = 'block'
+    title.style.marginBottom = '2px'
+    title.textContent = summary
+    const body = document.createElement('span')
+    body.textContent = detail
+    host.append(title, body)
     setTimeout(() => { host?.remove() }, 4500)
   }
 

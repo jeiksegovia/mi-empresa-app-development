@@ -92,10 +92,11 @@ PROJECT_NAME="miempresa"
 INSTANCE_NAME="${PROJECT_NAME}-backend-${STAGE}"
 STATIC_IP_NAME="${PROJECT_NAME}-ip-${STAGE}"
 AWS_ACCOUNT_ID=$("${AWS[@]}" sts get-caller-identity --query Account --output text)
-ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/CodeDeployInstanceRole"
+# DECISION 01: per-env SCOPED role, not the legacy wildcard.
+ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/CodeDeployInstanceRole-${STAGE}"
 # STABLE session name — must match refresh-credentials.sh and the on-prem registration
 SESSION_NAME="${INSTANCE_NAME}"
-IAM_SESSION_ARN="arn:aws:sts::${AWS_ACCOUNT_ID}:assumed-role/CodeDeployInstanceRole/${SESSION_NAME}"
+IAM_SESSION_ARN="arn:aws:sts::${AWS_ACCOUNT_ID}:assumed-role/CodeDeployInstanceRole-${STAGE}/${SESSION_NAME}"
 SSH_KEY="${HOME}/.ssh/miempresa-lightsail-key.pem"
 SSH_OPTS=(-i "$SSH_KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR)
 
@@ -121,27 +122,32 @@ for tool in aws jq ssh scp; do
     fi
 done
 
-log_info "Verifying IAM role: CodeDeployInstanceRole..."
-if ! "${AWS[@]}" iam get-role --role-name CodeDeployInstanceRole &> /dev/null; then
-    log_error "CodeDeployInstanceRole does not exist. Run deploy-infrastructure.sh first."
+log_info "Verifying IAM role: CodeDeployInstanceRole-${STAGE}..."
+if ! "${AWS[@]}" iam get-role --role-name "CodeDeployInstanceRole-${STAGE}" &> /dev/null; then
+    log_error "CodeDeployInstanceRole-${STAGE} does not exist. Run deploy-infrastructure.sh --stage ${STAGE} first."
     exit 1
 fi
 log_info "✓ IAM role exists"
 
-log_info "Verifying bootstrap credentials in SSM..."
+log_info "Verifying per-env bootstrap credentials in SSM (decision 01)..."
+# DECISION 01: read the PER-ENV bootstrap user/key, not the legacy single
+# miempresa-bootstrap. The staging instance gets the staging bootstrap key;
+# the prod instance gets the prod bootstrap key. Each can only assume its
+# own env's scoped role (the role's trust policy locks it down).
 BOOTSTRAP_ACCESS_KEY=$("${AWS[@]}" ssm get-parameter \
-    --name "/${PROJECT_NAME}/bootstrap/access-key-id" \
+    --name "/${PROJECT_NAME}/bootstrap/${STAGE}/access-key-id" \
     --region "${REGION}" --query "Parameter.Value" --output text 2>/dev/null || echo "")
 BOOTSTRAP_SECRET_KEY=$("${AWS[@]}" ssm get-parameter \
-    --name "/${PROJECT_NAME}/bootstrap/secret-access-key" \
+    --name "/${PROJECT_NAME}/bootstrap/${STAGE}/secret-access-key" \
     --with-decryption \
     --region "${REGION}" --query "Parameter.Value" --output text 2>/dev/null || echo "")
 
 if [ -z "$BOOTSTRAP_ACCESS_KEY" ] || [ -z "$BOOTSTRAP_SECRET_KEY" ]; then
-    log_error "Bootstrap credentials not found in SSM. Run deploy-infrastructure.sh first."
+    log_error "Per-env bootstrap credentials not found at /${PROJECT_NAME}/bootstrap/${STAGE}/..."
+    log_error "Run deploy-infrastructure.sh --stage ${STAGE} first (decision 01)."
     exit 1
 fi
-log_info "✓ Bootstrap credentials available"
+log_info "✓ Per-env bootstrap credentials available"
 
 log_info "Checking if instance already exists..."
 if "${AWS[@]}" lightsail get-instance --instance-name "${INSTANCE_NAME}" --region "${REGION}" &> /dev/null; then

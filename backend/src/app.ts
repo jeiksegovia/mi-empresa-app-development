@@ -3,6 +3,7 @@ import cors from 'cors'
 import helmet from 'helmet'
 import morgan from 'morgan'
 import cookieParser from 'cookie-parser'
+import { timingSafeEqual } from 'crypto'
 import { config } from './config/env.js'
 import { apiRoutes } from './routes/index.js'
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
@@ -19,10 +20,27 @@ app.use(helmet({ contentSecurityPolicy: false }))
 // HTTP origin), so only requests carrying the CloudFront-injected secret pass.
 // /api/v1/health stays open — CodeDeploy's validate.sh probes it via localhost.
 if (config.originVerifySecret) {
+  const expectedSecret = config.originVerifySecret
+  const expectedBuf = Buffer.from(expectedSecret, 'utf8')
   app.use((req, res, next) => {
     if (req.path === '/api/v1/health') return next()
-    if (req.get('x-origin-verify') === config.originVerifySecret) return next()
-    res.status(403).json({ error: 'Forbidden' })
+    const provided = req.get('x-origin-verify')
+    // S5: timingSafeEqual requires equal-length buffers; short-circuit on
+    // mismatch to avoid throwing. The compare itself still takes constant
+    // time once lengths match, which is what defeats timing oracles.
+    if (typeof provided !== 'string') {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+    const providedBuf = Buffer.from(provided, 'utf8')
+    if (
+      providedBuf.length !== expectedBuf.length ||
+      !timingSafeEqual(providedBuf, expectedBuf)
+    ) {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+    next()
   })
 }
 app.use(cors({

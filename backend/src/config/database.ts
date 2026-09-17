@@ -5,6 +5,10 @@ import { PrismaClient } from '../generated/prisma/index.js'
 const { Pool } = pg
 
 let prisma: PrismaClient | null = null
+// Test seam: lets unit tests inject a stub Prisma client (see
+// `tests/uploads/_prisma-stub.ts` for the stub shape and the
+// `__setPrismaForTest` setter). Production code never sets this.
+let _testPrisma: PrismaClient | null = null
 
 function createPrismaClient(): PrismaClient {
   const connectionString = process.env.DATABASE_URL
@@ -26,6 +30,7 @@ function createPrismaClient(): PrismaClient {
 }
 
 export function getPrisma(): PrismaClient {
+  if (_testPrisma) return _testPrisma
   if (!prisma) {
     prisma = createPrismaClient()
   }
@@ -37,4 +42,9 @@ export async function disconnectPrisma(): Promise<void> {
     await prisma.$disconnect()
     prisma = null
   }
+}
+
+/** @internal — test seam. Pass `undefined` to restore default behavior. */
+export function __setPrismaForTest(stub: PrismaClient | null | undefined): void {
+  _testPrisma = stub ?? null
 }
