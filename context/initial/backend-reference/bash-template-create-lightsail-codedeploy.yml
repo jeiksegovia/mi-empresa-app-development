@@ -1,0 +1,38 @@
+instanceNames: # [REQUIRED] The names to use for your new Lightsail instances.
+  - ${INSTANCE_NAME} 
+availabilityZone: ${REGION}a # [REQUIRED] The Availability Zone in which to create your instance.
+blueprintId: ${IMAGE_BLUEPRINT}  # [REQUIRED] The ID of server image: amazon_linux_2, ubuntu_20_04, wordpress, lamp_7,nodejs
+bundleId: ${BUNDLE} # [REQUIRED] The bundle-pricing plan: nano_2_0 (3 usd), micro_2_0 (5 usd), small_2_0 (10 usd), medium_2_0 (20 usd), large_2_0 (40 usd)
+userData: |- # A launch script you can create that configures a server with additional user data.
+  # env.vars
+  echo "STAGE=${STAGE}" >> /etc/environment
+  echo "SITEURL=${SITEURL}" >> /etc/environment
+  sudo apt update
+  sudo apt -y install ruby-full
+  mkdir /etc/codedeploy-agent/ 
+  mkdir /etc/codedeploy-agent/conf 
+  cat <<EOT >> /etc/codedeploy-agent/conf/codedeploy.onpremises.yml 
+
+  aws_access_key_id: ${acceskey_id}
+  aws_secret_access_key: ${acceskey_secret}
+  iam_user_arn: ${user_arn}
+  region: ${REGION}
+  EOT
+  sudo mkdir /root/.aws
+  sudo cat <<EOT >> /root/.aws/credentials 
+  [default]
+  aws_access_key_id=${acceskey_id}
+  aws_secret_access_key=${acceskey_secret}
+  region=${REGION}
+  EOT
+  rm /opt/bitnami/wordpress/wp-content
+  sudo rm /opt/bitnami/wordpress/wp-config.php
+  sudo mv /bitnami/wordpress/wp-config.php /opt/bitnami/wordpress
+  # sudo echo '$_SERVER['"'"'HTTPS'"'"'] = '"'"'on'"'"';' >> /opt/bitnami/wordpress/wp-config.php
+  wget https://aws-codedeploy-us-west-2.s3.us-west-2.amazonaws.com/latest/install
+  chmod +x ./install
+  sudo ./install auto 
+tags: # The tag keys and optional values to add to the resource during create.
+  - key: stack
+    value: ${STACK_NAME}
+ipAddressType: ipv4 # The IP address type for the instance. Valid values are: dualstack, ipv4.

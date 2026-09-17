@@ -98,7 +98,7 @@ Saved: same `12-local-tcp-probe.txt` (external block at end).
 
 **1.4.e-g** Bootstrap user `miempresa-bootstrap`:
 - Created 2026-07-02; `AssumeCodeDeployInstanceRole` inline policy: only `sts:AssumeRole` on the role ARN. Saved: `17`, `18`, `19`, `20`, `21`.
-- `list-access-keys` shows **1 active key** (AccessKeyId `AKIAX3YNOZ3B2I3IATHY`), CreateDate `2026-07-02T05:07:17+00:00` — **~75 days old as of 2026-09-16**. No rotation evidence.
+- `list-access-keys` shows **1 active key** (AccessKeyId `AKIA_REDACTED`), CreateDate `2026-07-02T05:07:17+00:00` — **~75 days old as of 2026-09-16**. No rotation evidence.
 
 **FINDING candidate (bootstrap key)**:
 - **MEDIUM — long-lived IAM user access key (75d), no rotation evidence, attached to EC2 host**: should rotate at least every 90 days per AWS best practice. The bootstrap user holds the only "static" credential capable of assuming the EC2 instance role; if exfiltrated, attacker can mint STS tokens for the role from anywhere.

@@ -198,8 +198,8 @@ port 3001-3001/tcp: cidrs=['0.0.0.0/0']       ← preserved for CloudFront origi
 **Status: ✅ complete — last step**
 
 ### Pre-condition check (NO instance references legacy)
-- prod `[bootstrap]` access-key-id: `AKIAX3YNOZ3B2DQG5O7S` (per-env prod)
-- staging `[bootstrap]` access-key-id: `AKIAX3YNOZ3B7S4IYUNB` (per-env staging)
+- prod `[bootstrap]` access-key-id: `AKIA_REDACTED` (per-env prod)
+- staging `[bootstrap]` access-key-id: `AKIA_REDACTED` (per-env staging)
 - legacy bootstrap key id (from SSM): NOT present in either instance's `/root/.aws/credentials`
 - prod `sts get-caller-identity`: `CodeDeployInstanceRole-prod/miempresa-backend-prod` ✓
 - staging `sts get-caller-identity`: `CodeDeployInstanceRole-staging/miempresa-backend-staging` ✓

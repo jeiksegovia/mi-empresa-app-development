@@ -1,0 +1,50 @@
+{
+  "admin": {
+    "username": "admin",
+    "email": "admin@foia.gov",
+    "firstName": "Sarah",
+    "lastName": "Johnson",
+    "role": "ADMINISTRATOR",
+    "isActive": true
+  },
+  "specialist": {
+    "username": "specialist",
+    "email": "records@foia.gov",
+    "firstName": "Michael",
+    "lastName": "Chen",
+    "role": "SPECIALIST",
+    "isActive": true
+  },
+  "specialist2": {
+    "username": "specialist2",
+    "email": "specialist2@foia.gov",
+    "firstName": "Emily",
+    "lastName": "Rodriguez",
+    "role": "SPECIALIST",
+    "isActive": true
+  },
+  "specialist3": {
+    "username": "specialist3",
+    "email": "specialist3@foia.gov",
+    "firstName": "David",
+    "lastName": "Thompson",
+    "role": "SPECIALIST",
+    "isActive": true
+  },
+  "specialist4": {
+    "username": "specialist4",
+    "email": "specialist4@foia.gov",
+    "firstName": "Lisa",
+    "lastName": "Williams",
+    "role": "SPECIALIST",
+    "isActive": true
+  },
+  "specialist5": {
+    "username": "specialist5",
+    "email": "specialist5@foia.gov",
+    "firstName": "James",
+    "lastName": "Anderson",
+    "role": "SPECIALIST",
+    "isActive": true
+  }
+} 

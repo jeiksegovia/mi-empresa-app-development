@@ -61,7 +61,7 @@ Read `01-requirements-qa-session-aug-17.md` and `qa-session-aug-17-plan.md` then
    - 403 today-only for PROFESORES/AUXILIARES when fecha !== America/Bogota today (`serverTodayBogota`)
    - 409 on unique violation
 7. FE testids (so W3 does not invent): `empleados-tab-activos`, `empleados-tab-inactivos`, `nomina-bonos`, `nomina-subtotal`, `nomina-aportes`, `nomina-total`, `actividades-fecha`, `actividades-texto`, `actividades-guardar`.
-8. Seed: `profesor@miempresa.com` / `auxiliar@miempresa.com` / `password123`, rol EMPLEADO, tipoEmpleado set, **empleadoId** pointing at a real Empleado (minimal required fields).
+8. Seed: `profesor@miempresa.com` / `auxiliar@miempresa.com` / `<redacted>`, rol EMPLEADO, tipoEmpleado set, **empleadoId** pointing at a real Empleado (minimal required fields).
 9. Migration applied locally (`npx prisma migrate deploy` in `backend/`). Never `--shadow-database-url`.
 10. After T1: `TaskUpdate` completed + `COMPLETE:` for T1 then continue T2→T3 in the same session.
 

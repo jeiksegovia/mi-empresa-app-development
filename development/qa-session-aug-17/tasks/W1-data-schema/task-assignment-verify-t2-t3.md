@@ -33,7 +33,7 @@ ANALYSIS / VERIFICATION
 1. `schema.prisma`: `NominaPeriodo.bonos` Decimal(12,2) NULL; `RegistroActividad` exact + `@@unique([empleadoId, fecha])` + @@map `registro_actividades`.
 2. Migration `backend/prisma/migrations/20260818113726_add_nomina_bonos_and_registro_actividades/migration.sql` matches contract §8. No shadow URL.
 3. `cd backend && npx prisma migrate status` → up to date. Record verbatim in verify-report.
-4. `seed.ts` has `profesor@miempresa.com` / `auxiliar@miempresa.com` / `password123` with empleadoId. Confirm users in local DB via SELECT (do **not** `prisma db seed` — wipes).
+4. `seed.ts` has `profesor@miempresa.com` / `auxiliar@miempresa.com` / `<redacted>` with empleadoId. Confirm users in local DB via SELECT (do **not** `prisma db seed` — wipes).
 5. Delete leftover `backend/scripts/_tmp-seed-profesor-auxiliar.ts` if present. Do not add new tmp scripts.
 
 ## Forbidden

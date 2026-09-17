@@ -1,0 +1,70 @@
+{
+  "notes": [
+    {
+      "content": "Request has been received and acknowledgment sent to requester. Assigned to clerk for initial review.",
+      "noteType": "AGENT",
+      "isInternal": true,
+      "requestNumber": "FOIA-2024-001"
+    },
+    {
+      "content": "Initial documents have been collected from police department. Currently reviewing for sensitive information.",
+      "noteType": "AGENT",
+      "isInternal": true,
+      "requestNumber": "FOIA-2024-001"
+    },
+    {
+      "content": "Requester called asking for status update. Informed them of current processing stage.",
+      "noteType": "AGENT",
+      "isInternal": false,
+      "requestNumber": "FOIA-2024-001"
+    },
+    {
+      "content": "Media request with expedited processing. High priority due to public interest in city council activities.",
+      "noteType": "AGENT",
+      "isInternal": true,
+      "requestNumber": "FOIA-2024-002"
+    },
+    {
+      "content": "Fee waiver approved based on news media category. Documents collected and currently under final review.",
+      "noteType": "AGENT",
+      "isInternal": true,
+      "requestNumber": "FOIA-2024-002"
+    },
+    {
+      "content": "Requester requested additional clarification on search scope. Will need to follow up with expanded document search.",
+      "noteType": "REQUESTER",
+      "isInternal": false,
+      "requestNumber": "FOIA-2024-002"
+    },
+    {
+      "content": "Academic request completed successfully. All relevant documents provided with appropriate exemptions applied.",
+      "noteType": "AGENT",
+      "isInternal": true,
+      "requestNumber": "FOIA-2024-003"
+    },
+    {
+      "content": "Partial grant issued. Some documents withheld under exemptions b3, b4, and b6 as noted in response letter.",
+      "noteType": "AGENT",
+      "isInternal": true,
+      "requestNumber": "FOIA-2024-003"
+    },
+    {
+      "content": "Requester expressed satisfaction with response and indicated no appeal will be filed.",
+      "noteType": "AGENT",
+      "isInternal": false,
+      "requestNumber": "FOIA-2024-003"
+    },
+    {
+      "content": "Commercial request received. Estimated fees calculated at $150.00 based on expected document volume.",
+      "noteType": "AGENT",
+      "isInternal": true,
+      "requestNumber": "FOIA-2024-004"
+    },
+    {
+      "content": "Awaiting payment from requester before proceeding with document collection and review.",
+      "noteType": "AGENT",
+      "isInternal": true,
+      "requestNumber": "FOIA-2024-004"
+    }
+  ]
+}

@@ -14,7 +14,7 @@ Implemented locally 2026-08-28. Staging R0–R5 COMPLETE 2026-08-27. Not committ
 
 `cd backend && TEST_API_URL=http://localhost:3101 npx playwright test tests/centro-costos --reporter=list` → **49 passed**.
 
-`fecha-lock-switch.spec.ts` → **4/4** against QA seed (`admin@miempresa.com` / `qa-contratos@miempresa.com` / `password123`).
+`fecha-lock-switch.spec.ts` → **4/4** against QA seed (`admin@miempresa.com` / `qa-contratos@miempresa.com` / `<redacted>`).
 
 ## Staging actuals (profile `disruptive`, us-east-1)
 

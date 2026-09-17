@@ -1,6 +1,6 @@
 # Staging Release Runbook — sep-11 GERONTOLOGA cert attach + CONTRATOS patient email
 
-**Status**: R0 + R1 + R4 + R5 + QA COMPLETE 2026-09-11 — CodeDeploy `d-OCR24VENL` / Amplify job 25 / 32 migrations (unchanged) / QA PASS.  
+**Status**: STAGING API + UI PASS. Amplify job 31 (`68b534b`). CodeDeploy `d-OCR24VENL`. Prod COMPLETE (`d-6TMYLEHNL` / Amplify job 2).  
 **Commit**: `36f27f2`  
 **Never** target `miempresa-prod` from this file.
 

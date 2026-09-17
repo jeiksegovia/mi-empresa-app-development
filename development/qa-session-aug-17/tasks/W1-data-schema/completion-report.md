@@ -37,8 +37,8 @@
 
 | Email | Password | rol | tipoEmpleado | empleadoId |
 |---|---|---|---|---|
-| `profesor@miempresa.com` | `password123` | EMPLEADO | PROFESORES | set |
-| `auxiliar@miempresa.com` | `password123` | EMPLEADO | AUXILIARES | set |
+| `profesor@miempresa.com` | `<redacted>` | EMPLEADO | PROFESORES | set |
+| `auxiliar@miempresa.com` | `<redacted>` | EMPLEADO | AUXILIARES | set |
 
 ## Issues
 

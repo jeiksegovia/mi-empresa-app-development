@@ -16,7 +16,7 @@ Covered:
 - `RegistroActividad` exact Prisma + @@unique([empleadoId, fecha]) + @@map
 - API shapes + error codes (`DOMAIN_FORBIDDEN`, `EMPLOYEE_LOCKED`, `EMPLEADO_REQUIRED`, `DUPLICATE_DAY`)
 - FE testids locked
-- Seed users `profesor@` / `auxiliar@` / `password123`
+- Seed users `profesor@` / `auxiliar@` / `<redacted>`
 - Migration SQL gist + down
 - Deviations table D1–D10
 
@@ -117,7 +117,7 @@ Database schema is up to date!
 
 **4. seed.ts has profesor + auxiliar (lines 106-154)**
 - Empleado `900000001` (profesor) + `900000002` (auxiliar) with `estado: 'ACTIVO'`
-- Users `profesor@miempresa.com` (PROFESORES, empleadoId set) + `auxiliar@miempresa.com` (AUXILIARES, empleadoId set), password `password123`
+- Users `profesor@miempresa.com` (PROFESORES, empleadoId set) + `auxiliar@miempresa.com` (AUXILIARES, empleadoId set), password `<redacted>`
 - Console summary prints all 6 credentials
 
 **5. DB users live (SELECT)**

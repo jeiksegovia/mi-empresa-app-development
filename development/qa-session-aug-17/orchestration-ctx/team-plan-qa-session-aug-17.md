@@ -60,7 +60,7 @@ Must include:
 - API shapes GET/POST/PUT/DELETE `/actividades`
 - Error codes: `DOMAIN_FORBIDDEN`, `EMPLOYEE_LOCKED`, `EMPLEADO_REQUIRED`, `409` duplicate day
 - FE field ids / testids
-- Local users: `profesor@miempresa.com`, `auxiliar@miempresa.com` / `password123` + linked Empleado
+- Local users: `profesor@miempresa.com`, `auxiliar@miempresa.com` / `<redacted>` + linked Empleado
 - Deviations table
 
 ## Communication Plan

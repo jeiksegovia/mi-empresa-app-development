@@ -115,10 +115,10 @@ Successfully populated with:
 
 ### Login Credentials
 ```
-Admin:     admin@miempresa.com / password123
-Empleado:  empleado@miempresa.com / password123
-Auditor:   auditor@miempresa.com / password123
-Operador:  operador@miempresa.com / password123
+Admin:     admin@miempresa.com / <redacted>
+Empleado:  empleado@miempresa.com / <redacted>
+Auditor:   auditor@miempresa.com / <redacted>
+Operador:  operador@miempresa.com / <redacted>
 ```
 
 ## 🔧 Commands Added

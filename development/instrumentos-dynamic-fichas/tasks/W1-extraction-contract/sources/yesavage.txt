@@ -1,0 +1,44 @@
+ESCALA DE DEPRESIÓN GERIÁTRICA DE YESAVAGE
+FICHA N° 3d
+
+----- TABLE 0 (rows=4, cols=8) -----
+R0: Escala de Yesavage   | (Screening de Depresión) || Escala de Yesavage   | (Screening de Depresión) || Escala de Yesavage   | (Screening de Depresión) || Escala de Yesavage   | (Screening de Depresión) || Escala de Yesavage   | (Screening de Depresión) || Escala de Yesavage   | (Screening de Depresión) || Escala de Yesavage   | (Screening de Depresión) || Escala de Yesavage   | (Screening de Depresión)
+R1: Nombre: || Nombre: || Nombre: || Nombre: ||  ||  || C.C. || 
+R2: Nombre de la Unidad de Atención: || Nombre de la Unidad de Atención: || Nombre de la Unidad de Atención: || Nombre de la Unidad de Atención: || Nombre de la Unidad de Atención: || Nombre de la Unidad de Atención: || Nombre de la Unidad de Atención: || Nombre de la Unidad de Atención:
+R3: Edad: || Años || Meses || Fecha de aplicación: || Fecha de aplicación: || Aplicado por: || Aplicado por: || Aplicado por:
+----- END TABLE -----
+
+INSTRUCCIONES:
+Responda a cada una de las siguientes preguntas según como se ha sentido Ud. durante la ÚLTIMA SEMANA
+
+----- TABLE 1 (rows=16, cols=4) -----
+R0: 1. || ¿Está Ud. básicamente satisfecho con su vida? || si || NO
+R1: 2. || ¿Ha disminuido o abandonado muchos de sus intereses o actividades previas? || SI || no
+R2: 3. || ¿Siente que su vida está vacía? || SI || no
+R3: 4. || ¿Se siente aburrido frecuentemente? || SI || no
+R4: 5. || ¿Está Ud. de buen ánimo la mayoría del tiempo? || si || NO
+R5: 6. || ¿Está preocupado o teme que algo malo le va a pasar? || SI || no
+R6: 7. || ¿Se siente feliz la mayor parte del tiempo? || si || NO
+R7: 8. || ¿Se siente con frecuencia desamparado? || SI || no
+R8: 9. || ¿Prefiere Ud. quedarse en casa a salir a hacer cosas nuevas? || SI || no
+R9: 10. || ¿Siente Ud. que tiene más problemas con su memoria que otras personas de su edad? || SI || no
+R10: 11. || ¿Cree Ud. que es maravilloso estar vivo? || si || NO
+R11: 12. || ¿Se siente inútil o despreciable como está Ud. actualmente? || SI || no
+R12: 13. || ¿Se siente lleno de energía? || si || NO
+R13: 14. || ¿Se encuentra sin esperanza ante su situación actual? || SI || no
+R14: 15. || ¿Cree Ud. que las otras personas están en general mejor que Usted? || SI || no
+R15: Las respuestas que indican depresión estan en NEGRITA Y MAYÚSCULAS.  | Cada una de estas respuestas cuenta 1 PUNTO. || Las respuestas que indican depresión estan en NEGRITA Y MAYÚSCULAS.  | Cada una de estas respuestas cuenta 1 PUNTO. || Total: || Total:
+----- END TABLE -----
+
+FIRMA DEL EVALUADOR
+INSTRUCTIVO:
+Puntuación total: 15 puntos
+PUNTOS DE CORTE:
+
+----- TABLE 2 (rows=3, cols=2) -----
+R0: No depresión || 0-5 puntos
+R1: Probable depresión || 6-9 puntos
+R2: Depresión establecida || 10-15 puntos
+----- END TABLE -----
+
+Tiempo de administración: 10-15 minutos.

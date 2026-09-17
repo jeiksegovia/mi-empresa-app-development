@@ -1,0 +1,20 @@
+{
+  "documents": [
+    {
+      "filename": "sample-document.pdf",
+      "originalFilename": "sample-document.pdf",
+      "filePath": "/uploads/sample-document.pdf",
+      "fileSize": 470,
+      "mimeType": "application/pdf",
+      "status": "PENDING"
+    },
+    {
+      "filename": "sample-image.svg",
+      "originalFilename": "sample-image.svg",
+      "filePath": "/uploads/sample-image.svg",
+      "fileSize": 1200,
+      "mimeType": "image/svg+xml",
+      "status": "REVIEWED"
+    }
+  ]
+} 

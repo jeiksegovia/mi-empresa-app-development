@@ -1,0 +1,82 @@
+
+----- TABLE 0 (rows=4, cols=8) -----
+R0: MINI EXAMEN DEL ESTADO MENTAL | (Folstein et al. 1975) | FICHA N° 3c || MINI EXAMEN DEL ESTADO MENTAL | (Folstein et al. 1975) | FICHA N° 3c || MINI EXAMEN DEL ESTADO MENTAL | (Folstein et al. 1975) | FICHA N° 3c || MINI EXAMEN DEL ESTADO MENTAL | (Folstein et al. 1975) | FICHA N° 3c || MINI EXAMEN DEL ESTADO MENTAL | (Folstein et al. 1975) | FICHA N° 3c || MINI EXAMEN DEL ESTADO MENTAL | (Folstein et al. 1975) | FICHA N° 3c || MINI EXAMEN DEL ESTADO MENTAL | (Folstein et al. 1975) | FICHA N° 3c || MINI EXAMEN DEL ESTADO MENTAL | (Folstein et al. 1975) | FICHA N° 3c
+R1: Nombre | del Abuelo: ||  ||  ||  ||  || c.c. || c.c. || 
+R2: Jornada de Atención: || Jornada de Atención: || Jornada de Atención: || Jornada de Atención: || Jornada de Atención: || Jornada de Atención: || Jornada de Atención: || Jornada de Atención:
+R3: Edad || Años: || Meses: || Fecha de aplicación: || Fecha de aplicación: || Fecha de aplicación: || Aplicado por: || Aplicado por:
+----- END TABLE -----
+
+
+----- TABLE 1 (rows=60, cols=7) -----
+R0: ORIENTACIÓN EN EL TIEMPO || 0 || 0 || 0 || 0 || 1 || 1
+R1: En qué Día estamos (fecha): ||  ||  ||  ||  ||  || 
+R2: En qué mes: ||  ||  ||  ||  ||  || 
+R3: En qué año: ||  ||  ||  ||  ||  || 
+R4: En qué día de la semana: ||  ||  ||  ||  ||  || 
+R5: ¿Qué hora es aproximadamente? ||  ||  ||  ||  ||  || 
+R6: PUNTUACIÓN (máx. 5) || PUNTUACIÓN (máx. 5) || PUNTUACIÓN (máx. 5) || PUNTUACIÓN (máx. 5) || PUNTUACIÓN (máx. 5) || PUNTUACIÓN (máx. 5) || PUNTUACIÓN (máx. 5)
+R7: ORIENTACIÓN EN EL ESPACIO || ORIENTACIÓN EN EL ESPACIO || ORIENTACIÓN EN EL ESPACIO || ORIENTACIÓN EN EL ESPACIO || ORIENTACIÓN EN EL ESPACIO || ORIENTACIÓN EN EL ESPACIO || ORIENTACIÓN EN EL ESPACIO
+R8:  ||  || 0 || 0 || 0 || 1 || 1
+R9: ¿En qué lugar estamos ahora? || ¿En qué lugar estamos ahora? ||  ||  ||  ||  || 
+R10: ¿En qué piso o departamento estamos ahora? || ¿En qué piso o departamento estamos ahora? ||  ||  ||  ||  || 
+R11: ¿Qué barrio o parroquia es este? || ¿Qué barrio o parroquia es este? ||  ||  ||  ||  || 
+R12: ¿En qué ciudad estamos? || ¿En qué ciudad estamos? ||  ||  ||  ||  || 
+R13: ¿En qué país estamos? || ¿En qué país estamos? ||  ||  ||  ||  || 
+R14: PUNTUACIÓN:(máx. 5) || PUNTUACIÓN:(máx. 5) || PUNTUACIÓN:(máx. 5) || PUNTUACIÓN:(máx. 5) || PUNTUACIÓN:(máx. 5) || PUNTUACIÓN:(máx. 5) || PUNTUACIÓN:(máx. 5)
+R15: MEMORIA || MEMORIA || MEMORIA || MEMORIA || MEMORIA || MEMORIA || MEMORIA
+R16: CONSIGNA: “Le voy a decir el nombre de tres objetos, cuando yo termine quiero que por favor usted los repita”. | *Pronuncie claramente las palabras, una cada segundo, luego pídale a persona adulta mayor, que las repita. Otorgue un punto por cada respuesta correcta. Se repiten las palabras hasta que la persona se las aprenda (máx. 6 ensayos) pero únicamente se puntúa la primera repetición o ensayo. || CONSIGNA: “Le voy a decir el nombre de tres objetos, cuando yo termine quiero que por favor usted los repita”. | *Pronuncie claramente las palabras, una cada segundo, luego pídale a persona adulta mayor, que las repita. Otorgue un punto por cada respuesta correcta. Se repiten las palabras hasta que la persona se las aprenda (máx. 6 ensayos) pero únicamente se puntúa la primera repetición o ensayo. || CONSIGNA: “Le voy a decir el nombre de tres objetos, cuando yo termine quiero que por favor usted los repita”. | *Pronuncie claramente las palabras, una cada segundo, luego pídale a persona adulta mayor, que las repita. Otorgue un punto por cada respuesta correcta. Se repiten las palabras hasta que la persona se las aprenda (máx. 6 ensayos) pero únicamente se puntúa la primera repetición o ensayo. || CONSIGNA: “Le voy a decir el nombre de tres objetos, cuando yo termine quiero que por favor usted los repita”. | *Pronuncie claramente las palabras, una cada segundo, luego pídale a persona adulta mayor, que las repita. Otorgue un punto por cada respuesta correcta. Se repiten las palabras hasta que la persona se las aprenda (máx. 6 ensayos) pero únicamente se puntúa la primera repetición o ensayo. || CONSIGNA: “Le voy a decir el nombre de tres objetos, cuando yo termine quiero que por favor usted los repita”. | *Pronuncie claramente las palabras, una cada segundo, luego pídale a persona adulta mayor, que las repita. Otorgue un punto por cada respuesta correcta. Se repiten las palabras hasta que la persona se las aprenda (máx. 6 ensayos) pero únicamente se puntúa la primera repetición o ensayo. || CONSIGNA: “Le voy a decir el nombre de tres objetos, cuando yo termine quiero que por favor usted los repita”. | *Pronuncie claramente las palabras, una cada segundo, luego pídale a persona adulta mayor, que las repita. Otorgue un punto por cada respuesta correcta. Se repiten las palabras hasta que la persona se las aprenda (máx. 6 ensayos) pero únicamente se puntúa la primera repetición o ensayo. || CONSIGNA: “Le voy a decir el nombre de tres objetos, cuando yo termine quiero que por favor usted los repita”. | *Pronuncie claramente las palabras, una cada segundo, luego pídale a persona adulta mayor, que las repita. Otorgue un punto por cada respuesta correcta. Se repiten las palabras hasta que la persona se las aprenda (máx. 6 ensayos) pero únicamente se puntúa la primera repetición o ensayo.
+R17:  ||  ||  || 0 || 0 || 1 || 1
+R18: Papel || Papel || Papel ||  ||  ||  || 
+R19: Bicicleta || Bicicleta || Bicicleta ||  ||  ||  || 
+R20: Cuchara || Cuchara || Cuchara ||  ||  ||  || 
+R21: PUNTUACIÓN: (máx. 3) || PUNTUACIÓN: (máx. 3) || PUNTUACIÓN: (máx. 3) || PUNTUACIÓN: (máx. 3) || PUNTUACIÓN: (máx. 3) || PUNTUACIÓN: (máx. 3) || PUNTUACIÓN: (máx. 3)
+R22: ATENCIÓN Y CÁLCULO: || ATENCIÓN Y CÁLCULO: || ATENCIÓN Y CÁLCULO: || ATENCIÓN Y CÁLCULO: || ATENCIÓN Y CÁLCULO: || ATENCIÓN Y CÁLCULO: || ATENCIÓN Y CÁLCULO:
+R23: CONSIGNA: “Le voy a pedir que reste de 7 en 7 a partir del 100”. || CONSIGNA: “Le voy a pedir que reste de 7 en 7 a partir del 100”. || CONSIGNA: “Le voy a pedir que reste de 7 en 7 a partir del 100”. || 0 || 0 || 1 || 1
+R24: 93 || 93 || 93 ||  ||  ||  || 
+R25: 86 || 86 || 86 ||  ||  ||  || 
+R26: 79 || 79 || 79 ||  ||  ||  || 
+R27: 72 || 72 || 72 ||  ||  ||  || 
+R28: 65 || 65 || 65 ||  ||  ||  || 
+R29: PUNTUACIÓN: (máx. 5) || PUNTUACIÓN: (máx. 5) || PUNTUACIÓN: (máx. 5) || PUNTUACIÓN: (máx. 5) || PUNTUACIÓN: (máx. 5) || PUNTUACIÓN: (máx. 5) || PUNTUACIÓN: (máx. 5)
+R30: MEMORIA DIFERIDA || MEMORIA DIFERIDA || MEMORIA DIFERIDA || MEMORIA DIFERIDA || MEMORIA DIFERIDA || MEMORIA DIFERIDA || MEMORIA DIFERIDA
+R31: CONSIGNA: “Dígame los 3 objetos que le mencioné al principio”. || CONSIGNA: “Dígame los 3 objetos que le mencioné al principio”. || CONSIGNA: “Dígame los 3 objetos que le mencioné al principio”. || 0 || 0 || 0 || 1
+R32: Papel || Papel || Papel ||  ||  ||  || 
+R33: Bicicleta || Bicicleta || Bicicleta ||  ||  ||  || 
+R34: Cuchara || Cuchara || Cuchara ||  ||  ||  || 
+R35: PUNTUACIÓN:(máx. 3) || PUNTUACIÓN:(máx. 3) || PUNTUACIÓN:(máx. 3) || PUNTUACIÓN:(máx. 3) || PUNTUACIÓN:(máx. 3) || PUNTUACIÓN:(máx. 3) || PUNTUACIÓN:(máx. 3)
+R36: DENOMINACIÓN || DENOMINACIÓN || DENOMINACIÓN || 0 || 0 || 0 || 1
+R37: Mostrarle un lápiz o un bolígrafo y preguntar ¿qué es esto? || Mostrarle un lápiz o un bolígrafo y preguntar ¿qué es esto? || Mostrarle un lápiz o un bolígrafo y preguntar ¿qué es esto? ||  ||  ||  || 
+R38: Mostrarle un reloj y preguntar ¿qué es esto? || Mostrarle un reloj y preguntar ¿qué es esto? || Mostrarle un reloj y preguntar ¿qué es esto? ||  ||  ||  || 
+R39: PUNTUACIÓN:(máx. 2) || PUNTUACIÓN:(máx. 2) || PUNTUACIÓN:(máx. 2) || PUNTUACIÓN:(máx. 2) || PUNTUACIÓN:(máx. 2) || PUNTUACIÓN:(máx. 2) || PUNTUACIÓN:(máx. 2)
+R40: REPETICIÓN DE UNA FRASE || REPETICIÓN DE UNA FRASE || REPETICIÓN DE UNA FRASE || REPETICIÓN DE UNA FRASE || REPETICIÓN DE UNA FRASE || REPETICIÓN DE UNA FRASE || REPETICIÓN DE UNA FRASE
+R41: CONSIGNA: “Ahora le voy a decir una frase que tendrá que repetir después de mí. Solo se la puedo decir una vez, así que ponga mucha atención”. || CONSIGNA: “Ahora le voy a decir una frase que tendrá que repetir después de mí. Solo se la puedo decir una vez, así que ponga mucha atención”. || CONSIGNA: “Ahora le voy a decir una frase que tendrá que repetir después de mí. Solo se la puedo decir una vez, así que ponga mucha atención”. || CONSIGNA: “Ahora le voy a decir una frase que tendrá que repetir después de mí. Solo se la puedo decir una vez, así que ponga mucha atención”. || 0 || 0 || 1
+R42: "ni sí, ni no, ni pero” || "ni sí, ni no, ni pero” || "ni sí, ni no, ni pero” || "ni sí, ni no, ni pero” ||  ||  || 
+R43: PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1)
+R44: COMPRENSIÓN – EJECUCIÓN DE ORDEN || COMPRENSIÓN – EJECUCIÓN DE ORDEN || COMPRENSIÓN – EJECUCIÓN DE ORDEN || COMPRENSIÓN – EJECUCIÓN DE ORDEN || COMPRENSIÓN – EJECUCIÓN DE ORDEN || COMPRENSIÓN – EJECUCIÓN DE ORDEN || COMPRENSIÓN – EJECUCIÓN DE ORDEN
+R45: CONSIGNA: “Le voy a dar unas instrucciones. Por favor sígalas en el orden en que las voy a decir. Solo las puedo decir una vez”: | “TOME ESTE PAPEL CON LA MANO DERECHA, DÓBLELO POR LA MITAD Y DÉJELO EN EL SUELO” || CONSIGNA: “Le voy a dar unas instrucciones. Por favor sígalas en el orden en que las voy a decir. Solo las puedo decir una vez”: | “TOME ESTE PAPEL CON LA MANO DERECHA, DÓBLELO POR LA MITAD Y DÉJELO EN EL SUELO” || CONSIGNA: “Le voy a dar unas instrucciones. Por favor sígalas en el orden en que las voy a decir. Solo las puedo decir una vez”: | “TOME ESTE PAPEL CON LA MANO DERECHA, DÓBLELO POR LA MITAD Y DÉJELO EN EL SUELO” || CONSIGNA: “Le voy a dar unas instrucciones. Por favor sígalas en el orden en que las voy a decir. Solo las puedo decir una vez”: | “TOME ESTE PAPEL CON LA MANO DERECHA, DÓBLELO POR LA MITAD Y DÉJELO EN EL SUELO” || CONSIGNA: “Le voy a dar unas instrucciones. Por favor sígalas en el orden en que las voy a decir. Solo las puedo decir una vez”: | “TOME ESTE PAPEL CON LA MANO DERECHA, DÓBLELO POR LA MITAD Y DÉJELO EN EL SUELO” || CONSIGNA: “Le voy a dar unas instrucciones. Por favor sígalas en el orden en que las voy a decir. Solo las puedo decir una vez”: | “TOME ESTE PAPEL CON LA MANO DERECHA, DÓBLELO POR LA MITAD Y DÉJELO EN EL SUELO” || CONSIGNA: “Le voy a dar unas instrucciones. Por favor sígalas en el orden en que las voy a decir. Solo las puedo decir una vez”: | “TOME ESTE PAPEL CON LA MANO DERECHA, DÓBLELO POR LA MITAD Y DÉJELO EN EL SUELO”
+R46:  ||  ||  || 0 || 0 || 0 || 1
+R47: Tome este papel con la mano derecha || Tome este papel con la mano derecha || Tome este papel con la mano derecha ||  ||  ||  || 
+R48: Dóblelo por la mitad || Dóblelo por la mitad || Dóblelo por la mitad ||  ||  ||  || 
+R49: Déjelo en suelo || Déjelo en suelo || Déjelo en suelo ||  ||  ||  || 
+R50: PUNTUACIÓN:(máx. 3) || PUNTUACIÓN:(máx. 3) || PUNTUACIÓN:(máx. 3) || PUNTUACIÓN:(máx. 3) || PUNTUACIÓN:(máx. 3) || PUNTUACIÓN:(máx. 3) || PUNTUACIÓN:(máx. 3)
+R51: LECTURA. || LECTURA. || LECTURA. || 0 || 0 || 0 || 1
+R52: Escriba legiblemente en un papel "cierre los ojos".  Pídale a la persona adulta mayor que lo lea y que haga lo que dice la frase || Escriba legiblemente en un papel "cierre los ojos".  Pídale a la persona adulta mayor que lo lea y que haga lo que dice la frase || Escriba legiblemente en un papel "cierre los ojos".  Pídale a la persona adulta mayor que lo lea y que haga lo que dice la frase ||  ||  ||  || 
+R53: PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1)
+R54: ESCRITURA. || ESCRITURA. || ESCRITURA. || 0 || 0 || 0 || 1
+R55: CONSIGNA: “Quiero que por favor escriba una frase que diga un mensaje” || CONSIGNA: “Quiero que por favor escriba una frase que diga un mensaje” || CONSIGNA: “Quiero que por favor escriba una frase que diga un mensaje” ||  ||  ||  || 
+R56: PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1)
+R57: COPIA DE UN DIBUJO. || COPIA DE UN DIBUJO. || COPIA DE UN DIBUJO. || 0 || 0 || 0 || 1
+R58: CONSIGNA: “Copie por favor este dibujo tal como está” || CONSIGNA: “Copie por favor este dibujo tal como está” || CONSIGNA: “Copie por favor este dibujo tal como está” ||  ||  ||  || 
+R59: PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1) || PUNTUACIÓN:(máx. 1)
+----- END TABLE -----
+
+PUNTUACIÓN TOTAL: (máx. 30 puntos)
+RESULTADO
+PUNTUACIONES DE REFERENCIA:
+
+----- TABLE 2 (rows=4, cols=3) -----
+R0: 27- 30 || Normal || 
+R1: 24 - 26 || Sospecha Patológica || 
+R2: 12-23 || Deterioro || 
+R3: 9-11 || Demencia || 
+----- END TABLE -----

@@ -1,0 +1,499 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["relationJoins"]
+  engineType      = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String                 @id @default(uuid()) @db.Uuid
+  email             String                 @unique @db.VarChar(255)
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  idmeId            String?                @unique @map("idme_id") @db.VarChar(255)
+  isInternal        Boolean                @default(false) @map("is_internal")
+  lastLogin         DateTime?              @map("last_login") @db.Timestamptz(6)
+  name              String                 @db.VarChar(255)
+  firstName         String?                @map("first_name") @db.VarChar(100)
+  isActive          Boolean                @default(true) @map("is_active")
+  lastName          String?                @map("last_name") @db.VarChar(100)
+  passwordHash      String?                @map("password_hash") @db.VarChar(255)
+  role              UserRoleEnum?
+  username          String?                @unique @db.VarChar(50)
+  isDeleted         Boolean                @default(false) @map("is_deleted")
+  reviewedDocuments Document[]             @relation("ReviewedBy")
+  assignedRequests  FOIARequest[]          @relation("AssignedTo")
+  createdNotes      Note[]
+  createdPackages   ReleasePackage[]
+  ticketMessages    SupportTicketMessage[]
+  assignedTickets   SupportTicket[]        @relation("AssignedToTicket")
+  createdTickets    SupportTicket[]        @relation("CreatedByTicket")
+  userGroups        UserGroup[]
+  userRoles         UserRole[]
+  sessions          UserSession[]
+
+  @@map("users")
+}
+
+model FOIARequest {
+  id                           String           @id @default(uuid()) @db.Uuid
+  requestNumber                String           @unique @map("request_number") @db.VarChar(50)
+  requesterName                String           @map("requester_name") @db.VarChar(255)
+  requesterEmail               String           @map("requester_email") @db.VarChar(255)
+  requesterPhone               String?          @map("requester_phone") @db.VarChar(50)
+  requestSubject               String           @map("request_subject") @db.VarChar(500)
+  requestDescription           String?          @map("request_description")
+  requestDate                  DateTime         @map("request_date") @db.Date
+  dueDate                      DateTime         @map("due_date") @db.Date
+  status                       RequestStatus    @default(PENDING)
+  priority                     RequestPriority  @default(NORMAL)
+  assignedTo                   String?          @map("assigned_to") @db.Uuid
+  createdAt                    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  acknowledgmentSent           DateTime?        @map("acknowledgment_sent") @db.Timestamptz(6)
+  actualCompletionDate         DateTime?        @map("actual_completion_date") @db.Date
+  actualFees                   Decimal?         @map("actual_fees") @db.Decimal(10, 2)
+  agencyComponentId            String?          @map("agency_component_id") @db.Uuid
+  agencyComponentName          String?          @map("agency_component_name") @db.VarChar(255)
+  appealDeadline               DateTime?        @map("appeal_deadline") @db.Date
+  confirmationNumber           String?          @map("confirmation_number") @db.VarChar(100)
+  dateRangeEnd                 DateTime?        @map("date_range_end") @db.Date
+  dateRangeStart               DateTime?        @map("date_range_start") @db.Date
+  estimatedCompletionDate      DateTime?        @map("estimated_completion_date") @db.Date
+  estimatedFees                Decimal?         @map("estimated_fees") @db.Decimal(10, 2)
+  exemptionsCited              String[]         @map("exemptions_cited") @db.VarChar(10)
+  expeditedProcessingReason    String?          @map("expedited_processing_reason")
+  expeditedProcessingRequested Boolean          @default(false) @map("expedited_processing_requested")
+  feeCategory                  FeeCategory      @default(OTHER) @map("fee_category")
+  feeWaiverGranted             Boolean?         @map("fee_waiver_granted")
+  feeWaiverReason              String?          @map("fee_waiver_reason")
+  feeWaiverRequested           Boolean          @default(false) @map("fee_waiver_requested")
+  fileTypes                    String[]         @map("file_types") @db.VarChar(100)
+  language                     String           @default("en") @db.VarChar(10)
+  paymentReceived              DateTime?        @map("payment_received") @db.Timestamptz(6)
+  recordsFound                 Int?             @map("records_found")
+  recordsReleased              Int?             @map("records_released")
+  recordsWithheld              Int?             @map("records_withheld")
+  requestType                  RequestType      @default(INITIAL) @map("request_type")
+  requesterAddress             String?          @map("requester_address")
+  requesterCity                String?          @map("requester_city") @db.VarChar(100)
+  requesterCountry             String           @default("United States") @map("requester_country") @db.VarChar(100)
+  requesterOrganization        String?          @map("requester_organization") @db.VarChar(255)
+  requesterState               String?          @map("requester_state") @db.VarChar(2)
+  requesterType                RequesterType    @default(INDIVIDUAL) @map("requester_type")
+  requesterZipCode             String?          @map("requester_zip_code") @db.VarChar(10)
+  responseLetterSent           DateTime?        @map("response_letter_sent") @db.Timestamptz(6)
+  responseType                 ResponseType?    @map("response_type")
+  searchTerms                  String?          @map("search_terms")
+  specificRecords              String?          @map("specific_records")
+  submissionMethod             SubmissionMethod @default(ONLINE) @map("submission_method")
+  trackingNumber               String?          @map("tracking_number") @db.VarChar(100)
+  partiallyComplete            Boolean          @default(false) @map("partially_complete")
+  exemptionsApplied            String[]         @map("exemptions_applied") @db.VarChar(10)
+  exclusionsApplied            String[]         @map("exclusions_applied") @db.VarChar(20)
+  subjectAddress               String?          @map("subject_address")
+  subjectDOB                   DateTime?        @map("subject_dob") @db.Date
+  subjectDODId                 String?          @map("subject_dod_id") @db.VarChar(50)
+  subjectEmail                 String?          @map("subject_email") @db.VarChar(255)
+  subjectName                  String?          @map("subject_name") @db.VarChar(255)
+  subjectPhone                 String?          @map("subject_phone") @db.VarChar(50)
+  subjectSSN                   String?          @map("subject_ssn") @db.VarChar(11)
+  subjectCity                  String?          @map("subject_city") @db.VarChar(100)
+  subjectCountry               String?          @map("subject_country") @db.VarChar(100)
+  subjectState                 String?          @map("subject_state") @db.VarChar(2)
+  subjectZipCode               String?          @map("subject_zip_code") @db.VarChar(10)
+  documents                    Document[]
+  assignedUser                 User?            @relation("AssignedTo", fields: [assignedTo], references: [id])
+  invoices                     Invoice[]
+  notes                        Note[]
+  packages                     ReleasePackage[]
+  supportTickets               SupportTicket[]
+
+  @@map("foia_requests")
+}
+
+model Exemption {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique @db.VarChar(10)
+  title       String   @db.VarChar(255)
+  description String
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("exemptions")
+}
+
+model Exclusion {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique @db.VarChar(20)
+  title       String   @db.VarChar(255)
+  description String
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("exclusions")
+}
+
+model Document {
+  id                String         @id @default(uuid()) @db.Uuid
+  foiaRequestId     String         @map("foia_request_id") @db.Uuid
+  filename          String         @db.VarChar(255)
+  originalFilename  String         @map("original_filename") @db.VarChar(255)
+  filePath          String         @map("file_path")
+  fileSize          BigInt         @map("file_size")
+  mimeType          String         @map("mime_type") @db.VarChar(100)
+  status            DocumentStatus @default(PENDING)
+  reviewNotes       String?        @map("review_notes")
+  reviewedBy        String?        @map("reviewed_by") @db.Uuid
+  reviewedAt        DateTime?      @map("reviewed_at") @db.Timestamptz(6)
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  redactedAt        DateTime?      @map("redacted_at") @db.Timestamptz(6)
+  redactedFilePath  String?        @map("redacted_file_path") @db.VarChar(500)
+  redactionFlow     String?        @map("redaction_flow") @db.VarChar(255)
+  redactionMetadata Json?          @map("redaction_metadata")
+  foiaRequest       FOIARequest    @relation(fields: [foiaRequestId], references: [id], onDelete: Cascade)
+  reviewer          User?          @relation("ReviewedBy", fields: [reviewedBy], references: [id])
+
+  @@map("documents")
+}
+
+model ReleasePackage {
+  id              String        @id @default(uuid()) @db.Uuid
+  foiaRequestId   String        @map("foia_request_id") @db.Uuid
+  packageFilename String        @map("package_filename") @db.VarChar(255)
+  packagePath     String        @map("package_path")
+  packageSize     BigInt        @map("package_size")
+  metadata        Json
+  status          PackageStatus @default(CREATED)
+  uploadedAt      DateTime?     @map("uploaded_at") @db.Timestamptz(6)
+  createdBy       String        @map("created_by") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  creator         User          @relation(fields: [createdBy], references: [id])
+  foiaRequest     FOIARequest   @relation(fields: [foiaRequestId], references: [id], onDelete: Cascade)
+
+  @@map("release_packages")
+}
+
+model Note {
+  id            String       @id @default(uuid()) @db.Uuid
+  foiaRequestId String       @map("foia_request_id") @db.Uuid
+  content       String
+  noteType      NoteType     @map("note_type")
+  createdBy     String       @map("created_by") @db.Uuid
+  isInternal    Boolean      @default(true) @map("is_internal")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  category      NoteCategory @default(GENERAL)
+  priority      NotePriority @default(MEDIUM)
+  deletedAt     DateTime?    @map("deleted_at") @db.Timestamptz(6)
+  creator       User         @relation(fields: [createdBy], references: [id])
+  foiaRequest   FOIARequest  @relation(fields: [foiaRequestId], references: [id], onDelete: Cascade)
+
+  @@map("notes")
+}
+
+model SupportTicket {
+  id            String                 @id @default(uuid()) @db.Uuid
+  ticketNumber  String                 @unique @map("ticket_number") @db.VarChar(50)
+  title         String                 @db.VarChar(255)
+  description   String
+  status        SupportTicketStatus    @default(OPEN)
+  priority      SupportTicketPriority  @default(NORMAL)
+  category      SupportTicketCategory  @default(GENERAL)
+  foiaRequestId String                 @map("foia_request_id") @db.Uuid
+  assignedTo    String?                @map("assigned_to") @db.Uuid
+  createdBy     String                 @map("created_by") @db.Uuid
+  resolvedAt    DateTime?              @map("resolved_at") @db.Timestamptz(6)
+  createdAt     DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  messages      SupportTicketMessage[]
+  assignedUser  User?                  @relation("AssignedToTicket", fields: [assignedTo], references: [id])
+  creator       User                   @relation("CreatedByTicket", fields: [createdBy], references: [id])
+  foiaRequest   FOIARequest            @relation(fields: [foiaRequestId], references: [id], onDelete: Cascade)
+
+  @@map("support_tickets")
+}
+
+model SupportTicketMessage {
+  id              String            @id @default(uuid()) @db.Uuid
+  supportTicketId String            @map("support_ticket_id") @db.Uuid
+  message         String
+  senderType      MessageSenderType @map("sender_type")
+  senderId        String?           @map("sender_id") @db.Uuid
+  senderName      String            @map("sender_name") @db.VarChar(255)
+  senderEmail     String?           @map("sender_email") @db.VarChar(255)
+  isInternal      Boolean           @default(false) @map("is_internal")
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  sender          User?             @relation(fields: [senderId], references: [id])
+  supportTicket   SupportTicket     @relation(fields: [supportTicketId], references: [id], onDelete: Cascade)
+
+  @@map("support_ticket_messages")
+}
+
+model UserSession {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  sessionCookie String   @unique @map("session_cookie") @db.VarChar(255)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt     DateTime @map("expires_at") @db.Timestamptz(6)
+  ipAddress     String   @map("ip_address") @db.VarChar(45)
+  userAgent     String   @map("user_agent")
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
+
+model Role {
+  id              String           @id @default(uuid()) @db.Uuid
+  name            String           @unique @db.VarChar(100)
+  description     String           @db.VarChar(500)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  isDeleted       Boolean          @default(false) @map("is_deleted")
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String            @unique @db.VarChar(100)
+  description      String            @db.VarChar(500)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  isDeleted        Boolean           @default(false) @map("is_deleted")
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  groupPermissions GroupPermission[]
+  rolePermissions  RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid()) @db.Uuid
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Group {
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String            @unique @db.VarChar(100)
+  description      String            @db.VarChar(500)
+  isDeleted        Boolean           @default(false) @map("is_deleted")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  groupPermissions GroupPermission[]
+  userGroups       UserGroup[]
+
+  @@map("groups")
+}
+
+model UserGroup {
+  id      String @id @default(uuid()) @db.Uuid
+  userId  String @map("user_id") @db.Uuid
+  groupId String @map("group_id") @db.Uuid
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@map("user_groups")
+}
+
+model GroupPermission {
+  id           String     @id @default(uuid()) @db.Uuid
+  groupId      String     @map("group_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  group        Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, permissionId])
+  @@map("group_permissions")
+}
+
+model Invoice {
+  id              String        @id @default(uuid()) @db.Uuid
+  foiaRequestId   String        @map("foia_request_id") @db.Uuid
+  invoiceNumber   String        @unique @map("invoice_number") @db.VarChar(50)
+  totalAmount     Decimal       @map("total_amount") @db.Decimal(10, 2)
+  paidAmount      Decimal       @default(0) @map("paid_amount") @db.Decimal(10, 2)
+  balance         Decimal       @map("balance") @db.Decimal(10, 2)
+  description     String        @db.VarChar(500)
+  status          InvoiceStatus @default(PENDING)
+  dateCreated     DateTime      @map("date_created") @db.Timestamptz(6)
+  dateDue         DateTime      @map("date_due") @db.Timestamptz(6)
+  paymentPageUrl  String?       @map("payment_page_url") @db.VarChar(500)
+  receiptUrl      String?       @map("receipt_url") @db.VarChar(500)
+  payGovReference String?       @map("pay_gov_reference") @db.VarChar(100)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  foiaRequest     FOIARequest   @relation(fields: [foiaRequestId], references: [id], onDelete: Cascade)
+
+  @@map("invoices")
+}
+
+enum UserRoleEnum {
+  ADMINISTRATOR
+  SUPERVISOR
+  USER
+  REQUESTOR
+  SPECIALIST
+}
+
+enum RequestStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DENIED
+  REOPENED
+}
+
+enum RequestPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum DocumentStatus {
+  PENDING
+  PROCESSING
+  IN_SUPERVISION
+  NEEDS_REDACTION
+  REDACTED
+  REVIEWED
+  RELEASED
+  APPROVED
+  REJECTED
+}
+
+enum PackageStatus {
+  CREATED
+  UPLOADED
+  FAILED
+}
+
+enum RequesterType {
+  INDIVIDUAL
+  BUSINESS
+  MEDIA
+  ACADEMIC
+  NON_PROFIT
+  GOVERNMENT
+}
+
+enum RequestType {
+  INITIAL
+  APPEAL
+  AMENDMENT
+}
+
+enum FeeCategory {
+  COMMERCIAL
+  EDUCATIONAL
+  NEWS_MEDIA
+  SCIENTIFIC_INSTITUTION
+  OTHER
+}
+
+enum ResponseType {
+  FULL_GRANT
+  PARTIAL_GRANT
+  DENIAL
+  NO_RECORDS
+  REFERRED
+}
+
+enum SubmissionMethod {
+  ONLINE
+  EMAIL
+  MAIL
+  FAX
+}
+
+enum NoteType {
+  AGENT
+  REQUESTER
+  SYSTEM
+}
+
+enum NotePriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum NoteCategory {
+  GENERAL
+  LEGAL
+  PROCESSING
+  REDACTION
+  COMMUNICATION
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_RESPONSE
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum SupportTicketCategory {
+  GENERAL
+  TECHNICAL
+  LEGAL
+  PROCESSING
+  CONTENT
+  ACCESS
+  BILLING
+  APPEAL
+}
+
+enum MessageSenderType {
+  REQUESTER
+  STAFF
+  SYSTEM
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+  REFUNDED
+}

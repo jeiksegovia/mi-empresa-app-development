@@ -1,0 +1,40 @@
+{
+  "codigo": "YESAVAGE",
+  "nombre": "Escala de Depresión Geriátrica de Yesavage (GDS-15)",
+  "version": 1,
+  "tipo": "VALORACION",
+  "descripcion": "Screening de depresión en personas adultas mayores (15 ítems sí/no, dirección sensible — EMKASA Ficha N° 3d).",
+  "instructions": "Responda a cada una de las siguientes preguntas según como se ha sentido Ud. durante la ÚLTIMA SEMANA. Las respuestas en MAYÚSCULAS indican depresión (1 punto); la otra opción puntúa 0. Tiempo de administración: 10–15 minutos.",
+  "sections": [
+    {
+      "id": "depresion_geriatrica",
+      "titulo": "Depresión geriátrica",
+      "subtotal": { "max": 15 },
+      "items": [
+        { "id": "y_01", "label": "¿Está Ud. básicamente satisfecho con su vida?",                       "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "Sí", "score": 0 }, { "value": "no", "label": "NO", "score": 1 }] },
+        { "id": "y_02", "label": "¿Ha disminuido o abandonado muchos de sus intereses o actividades previas?", "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "SI", "score": 1 }, { "value": "no", "label": "No", "score": 0 }] },
+        { "id": "y_03", "label": "¿Siente que su vida está vacía?",                                       "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "SI", "score": 1 }, { "value": "no", "label": "No", "score": 0 }] },
+        { "id": "y_04", "label": "¿Se siente aburrido frecuentemente?",                                  "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "SI", "score": 1 }, { "value": "no", "label": "No", "score": 0 }] },
+        { "id": "y_05", "label": "¿Está Ud. de buen ánimo la mayoría del tiempo?",                       "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "Sí", "score": 0 }, { "value": "no", "label": "NO", "score": 1 }] },
+        { "id": "y_06", "label": "¿Está preocupado o teme que algo malo le va a pasar?",                  "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "SI", "score": 1 }, { "value": "no", "label": "No", "score": 0 }] },
+        { "id": "y_07", "label": "¿Se siente feliz la mayor parte del tiempo?",                          "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "Sí", "score": 0 }, { "value": "no", "label": "NO", "score": 1 }] },
+        { "id": "y_08", "label": "¿Se siente con frecuencia desamparado?",                                "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "SI", "score": 1 }, { "value": "no", "label": "No", "score": 0 }] },
+        { "id": "y_09", "label": "¿Prefiere Ud. quedarse en casa a salir a hacer cosas nuevas?",          "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "SI", "score": 1 }, { "value": "no", "label": "No", "score": 0 }] },
+        { "id": "y_10", "label": "¿Siente Ud. que tiene más problemas con su memoria que otras personas de su edad?", "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "SI", "score": 1 }, { "value": "no", "label": "No", "score": 0 }] },
+        { "id": "y_11", "label": "¿Cree Ud. que es maravilloso estar vivo?",                             "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "Sí", "score": 0 }, { "value": "no", "label": "NO", "score": 1 }] },
+        { "id": "y_12", "label": "¿Se siente inútil o despreciable como está Ud. actualmente?",          "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "SI", "score": 1 }, { "value": "no", "label": "No", "score": 0 }] },
+        { "id": "y_13", "label": "¿Se siente lleno de energía?",                                         "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "Sí", "score": 0 }, { "value": "no", "label": "NO", "score": 1 }] },
+        { "id": "y_14", "label": "¿Se encuentra sin esperanza ante su situación actual?",                 "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "SI", "score": 1 }, { "value": "no", "label": "No", "score": 0 }] },
+        { "id": "y_15", "label": "¿Cree Ud. que las otras personas están en general mejor que Usted?",   "type": "single-select-scored", "required": true, "options": [{ "value": "si", "label": "SI", "score": 1 }, { "value": "no", "label": "No", "score": 0 }] }
+      ]
+    }
+  ],
+  "scoring": {
+    "total": "sum",
+    "resultEvaluation": [
+      { "min": 0,  "max": 5,  "label": "No depresión" },
+      { "min": 6,  "max": 9,  "label": "Probable depresión" },
+      { "min": 10, "max": 15, "label": "Depresión establecida" }
+    ]
+  }
+}

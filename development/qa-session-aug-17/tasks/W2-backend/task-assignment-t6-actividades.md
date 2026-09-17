@@ -40,7 +40,7 @@ IMPLEMENTATION
 - git commit
 
 ## Acceptance
-Login: `profesor@miempresa.com` / `auxiliar@miempresa.com` / `password123` (seeded).
+Login: `profesor@miempresa.com` / `auxiliar@miempresa.com` / `<redacted>` (seeded).
 - ADMIN full CRUD
 - PROFESORES/AUXILIARES: own GET+POST, today-only Bogotá, no PUT/DELETE
 - GERONTOLOGA/CONTRATOS: GET all, POST 403

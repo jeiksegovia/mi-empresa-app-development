@@ -159,7 +159,7 @@ Seed file contains the durable create path (lines 106-154):
 ```
 
 `empleado_id` is non-null for both; `tipo_empleado` matches contract §7.
-Password hash uses `bcrypt.hash('password123', 10)` (line 92) — same as the four existing seeded users.
+Password hash uses `bcrypt.hash('<redacted>', 10)` (line 92) — same as the four existing seeded users.
 
 ---
 
@@ -179,7 +179,7 @@ NOT present. `ls backend/scripts/` shows only the pre-existing
 | `RegistroActividad` exact + `@@unique([empleadoId, fecha])` + `@@map` | schema.prisma lines 475-492 | ✓ |
 | Migration matches contract §8 (no shadow URL) | `migration.sql` line-by-line MATCH | ✓ |
 | `npx prisma migrate status` up to date | "Database schema is up to date!" | ✓ |
-| Seed has `profesor@` / `auxiliar@` / `password123` with `empleadoId` | seed.ts lines 106-154 + DB rows | ✓ |
+| Seed has `profesor@` / `auxiliar@` / `<redacted>` with `empleadoId` | seed.ts lines 106-154 + DB rows | ✓ |
 | Delete `_tmp-seed-profesor-auxiliar.ts` if present | Not present; nothing to delete | ✓ (N/A) |
 
 ## Conclusion

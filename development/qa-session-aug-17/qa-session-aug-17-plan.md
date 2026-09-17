@@ -21,7 +21,7 @@ Ship the 2026-08-17 QA cycle: empleados Activos/Inactivos tabs, CONTRATOS GET ca
 - **Decimal money**: `NominaPeriodo.aportesSociales` `@db.Decimal(12,2)` → clone for `bonos`.
 - **Nav**: `frontend/app/app.config.ts` sidebar items + `AppSidebar` `can(domain)` + `DOMAIN_PREFIX_MAP`.
 - **Tests**: Playwright `backend/tests/{employees,nomina,rbac}/**`, `frontend/tests/local-qa/**`.
-- **Local users**: `backend/prisma/test-db/seed-qa.ts` pattern (`password123`).
+- **Local users**: `backend/prisma/test-db/seed-qa.ts` pattern (`<redacted>`).
 
 ## Requirements
 R1–R4 + R6 as in `01-requirements-qa-session-aug-17.md`. R5 skipped.
@@ -62,7 +62,7 @@ Keep `CONTRATOS.empresa = false`. On `GET /empresa/cargos` only: if `requireDoma
   - `PUT /:id`, `DELETE /:id` — ADMIN only
 - Link `empleadoId` via `Usuario.empleadoId` (must exist for those tipos). If missing → 400 `EMPLEADO_REQUIRED`.
 - FE page `frontend/app/pages/actividades/index.vue`. Sidebar item **Registro de actividades** immediately after Asistencia (`pi-list` or `pi-book`).
-- Seed local users `profesor@miempresa.com` + `auxiliar@miempresa.com` / `password123` **and** linked Empleado rows so own-item tests work.
+- Seed local users `profesor@miempresa.com` + `auxiliar@miempresa.com` / `<redacted>` **and** linked Empleado rows so own-item tests work.
 
 ## Risk & Unknowns
 - **R4 400 root cause not reproduced in this session** — W2 must capture the actual response body first.

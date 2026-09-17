@@ -194,7 +194,7 @@ res.cookie('session', token, {
 ```bash
 curl -X POST http://localhost:3001/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@miempresa.com","password":"password123"}' \
+  -d '{"email":"admin@miempresa.com","password":"<redacted>"}' \
   -c cookies.txt
 ```
 
@@ -338,7 +338,7 @@ curl -X POST http://localhost:3001/api/v1/auth/login \
 # Invalid email format
 curl -X POST http://localhost:3001/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"notanemail","password":"password123"}'
+  -d '{"email":"notanemail","password":"<redacted>"}'
 
 # Password too short
 curl -X POST http://localhost:3001/api/v1/auth/login \

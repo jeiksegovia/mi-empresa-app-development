@@ -354,8 +354,8 @@ to link these two users.
 
 | Email | Password | `rol` | `tipoEmpleado` | Linked Empleado |
 |---|---|---|---|---|
-| `profesor@miempresa.com` | `password123` | `EMPLEADO` | `PROFESORES` | yes (`Usuario.empleadoId` set) |
-| `auxiliar@miempresa.com` | `password123` | `EMPLEADO` | `AUXILIARES` | yes |
+| `profesor@miempresa.com` | `<redacted>` | `EMPLEADO` | `PROFESORES` | yes (`Usuario.empleadoId` set) |
+| `auxiliar@miempresa.com` | `<redacted>` | `EMPLEADO` | `AUXILIARES` | yes |
 
 Minimal `Empleado` required fields (per current schema):
 
@@ -483,5 +483,5 @@ ALTER TABLE "nomina_periodos" DROP COLUMN IF EXISTS "bonos";
 4. DOMAIN_ACCESS FE ↔ BE parity includes `actividades` cells per §1.2; `CONTRATOS.empresa === false`.
 5. FIJO/INDEF save round-trip: `totalPagado === valorMensual + bonos` and `bonos` persisted.
 6. qa-contratos GET `/empresa/cargos` → 200; writes → 403.
-7. Seed login `profesor@miempresa.com` / `auxiliar@miempresa.com` / `password123` with non-null `empleadoId`.
+7. Seed login `profesor@miempresa.com` / `auxiliar@miempresa.com` / `<redacted>` with non-null `empleadoId`.
 8. Smoke Playwright specs assert new money math + R6 ACL (W2/W3).

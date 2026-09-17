@@ -1,0 +1,49 @@
+
+===== SHEET: INDICE DE BARTHEL (rows=53, cols=11) =====
+
+ÍNDICE DE BARTHEL – EMKASA ABUELOS FELICES |  |  |  |  |  |  |  |  |  | 
+Comida: |  |  |  |  |  |  |  |  |  | 
+ | 10.0 |  | Independiente. Capaz de comer por sí solo en un tiempo razonable. La  comida puede ser cocinada y servida por otra persona |  |  |  |  |  |  | 
+ | 5.0 |  | Necesita ayuda para cortar la carne, extender la mantequilla.. pero es capaz de comer sólo/a |  |  |  |  |  |  | 
+ | 0.0 |  | Dependiente. Necesita ser alimentado por otra persona |  |  |  |  |  |  | 
+Lavado de manos |  |  |  |  |  |  |  |  |  | 
+ | 5.0 |  | Independiente. Capaz de lavarse, entrar y salir del baño con la ayuda minima. |  |  |  |  |  |  | 
+ | 0.0 |  | Dependiente. Necesita algún tipo de ayuda o supervisión |  |  |  |  |  |  | 
+Vestido |  |  |  |  |  |  |  |  |  | 
+ | 10.0 |  | Independiente. Capaz de ponerse  y quitarse la ropa sin ayuda |  |  |  |  |  |  | 
+ | 5.0 |  | Necesita ayuda. Realiza sin ayuda más de la mitad de estas tareas en un tiempo razonable |  |  |  |  |  |  | 
+ | 0.0 |  | Dependiente. Necesita ayuda para las mismas |  |  |  |  |  |  | 
+Arreglo de si mismo para salir |  |  |  |  |  |  |  |  |  | 
+ | 5.0 |  | Independiente. Realiza todas las actividades personales sin ayuda alguna, los complementos necesarios pueden ser provistos por alguna persona |  |  |  |  |  |  | 
+ | 0.0 |  | Dependiente. Necesita alguna ayuda |  |  |  |  |  |  | 
+Deposición |  |  |  |  |  |  |  |  |  | 
+ | 10.0 |  | Continente. No presenta episodios de incontinencia |  |  |  |  |  |  | 
+ | 5.0 |  | Accidente ocasional. Menos de una vez por semana o necesita ayuda  para colocar enemas o supositorios. |  |  |  |  |  |  | 
+ | 0.0 |  | Incontinente. Más de un episodio semanal |  |  |  |  |  |  | 
+Micción |  |  |  |  |  |  |  |  |  | 
+ | 10.0 |  | Continente. No presenta episodios. |  |  |  |  |  |  | 
+ | 5.0 |  | Accidente ocasional. Presenta un máximo de un episodio en 24 horas o requiere ayuda para la manipulación de sondas o de otros dispositivos. |  |  |  |  |  |  | 
+ | 0.0 |  | Incontinente. Más de un episodio en 24 horas |  |  |  |  |  |  | 
+Ir al retrete |  |  |  |  |  |  |  |  |  | 
+ | 10.0 |  | Independiente. Entra y sale solo y no necesita ayuda alguna por parte de otra persona |  |  |  |  |  |  | 
+ | 5.0 |  | Necesita ayuda. Capaz de manejarse con una pequeña ayuda; es capaz de usar el cuarto de baño. Puede limpiarse solo/a. |  |  |  |  |  |  | 
+ | 0.0 |  | Dependiente. Incapaz de acceder a él o de utilizarlo sin ayuda mayor |  |  |  |  |  |  | 
+Transferencia (traslado mesa/sillón) |  |  |  |  |  |  |  |  |  | 
+ | 15.0 |  | Independiente.  No requiere ayuda para sentarse o levantarse de una silla ni para entrar o salir de la mesa. |  |  |  |  |  |  | 
+ | 10.0 |  | Mínima ayuda. Incluye una supervisión o una pequeña ayuda física. |  |  |  |  |  |  | 
+ | 5.0 |  | Gran ayuda. Precisa ayuda de una persona fuerte o entrenada. |  |  |  |  |  |  | 
+ | 0.0 |  | Dependiente. Necesita una grúa o el alzamiento por dos personas. Es incapaz de permanecer sentado |  |  |  |  |  |  | 
+Deambulación |  |  |  |  |  |  |  |  |  | 
+ | 15.0 |  | Independiente. Puede andar 50 metros o su equivalente en casa y jardin sin ayuda supervisión. Puede utilizar cualquier ayuda mecánica excepto un andador.  Si puede utilizar la ayuda de un bastón. |  |  |  |  |  |  | 
+ | 10.0 |  | Necesita ayuda. Necesita supervisión o una pequeña ayuda física por parte de otra persona o utiliza andador. |  |  |  |  |  |  | 
+ | 5.0 |  | Independiente en silla de ruedas. No requiere ayuda ni supervisión permanenete y personalizada. |  |  |  |  |  |  | 
+ | 0.0 |  | Dependiente |  |  |  |  |  |  | 
+Subir y bajar Desniveles |  |  |  |  |  |  |  |  |  | 
+ | 10.0 |  | Independiente. Capaz de subir y bajar un desnivel sin ayuda ni supervisión de otra persona. |  |  |  |  |  |  | 
+ | 5.0 |  | Necesita ayuda. Necesita ayuda o supervisión. |  |  |  |  |  |  | 
+ | 0.0 |  | Dependiente. Es incapaz de salvar escalones o deniveles. |  |  |  |  |  |  | 
+La incapacidad funcional se valora como: |  |  |  | * Severa: < 45 puntos. | * Moderada: 60 - 80 puntos. |  |  |  |  | 
+ |  |  |  | * Grave: 45 - 59 puntos. | * Ligera: 80 - 100 puntos. | Puntuación Total: |  |  |  | 
+ |  |  |  | ASISTIDO/A | VÁLIDO/A |  |  |  |  | 
+NOMBRE: |  |  |  |  |  | C.C. |  |  |  | 
+FIRMA DEL EVALUADOR: |  |  |  |  |  |  |  |  |  | 

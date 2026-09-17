@@ -64,6 +64,14 @@ backend/prisma/prod-db/
 # Never commit. The shareable output is the redacted security-audit-report.md.
 development/security-audit-backend/evidence/
 
+# Ephemeral test / build / temp artifacts — not referenced by context or real scripts
+.playwright-mcp/
+test-results/
+backend/playwright-report/
+backend/scripts/_tmp-*
+backend/pnpm-lock.yaml
+tmp/iam-validate/
+
 # Test coverage
 coverage/
 .nyc_output/

@@ -961,7 +961,7 @@ cd backend/infrastructure/db/tests
    ```bash
    curl -X POST http://${INSTANCE_IP}:3001/api/v1/auth/login \
      -H "Content-Type: application/json" \
-     -d '{"email":"admin@example.com","password":"password123"}'
+     -d '{"email":"admin@example.com","password":"<redacted>"}'
    # Should return JWT token
    ```
 

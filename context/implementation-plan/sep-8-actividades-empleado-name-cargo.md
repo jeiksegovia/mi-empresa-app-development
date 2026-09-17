@@ -2,7 +2,7 @@
 
 **Path**: `context/implementation-plan/sep-8-actividades-empleado-name-cargo.md`  
 **Date**: 2026-09-08  
-**Status**: implemented locally, not committed / not staged.
+**Status**: committed `935fe1d` + staged. CodeDeploy `d-FC043YNLL` / Amplify job 24. Runbook: `staging-release-sep8-actividades-name-cargo-runbook.md`.
 
 ## Ask
 Registro de actividades list: show empleado name and cargo. Remove empleado id from the view.

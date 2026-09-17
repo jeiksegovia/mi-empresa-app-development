@@ -271,8 +271,9 @@ PHASE 3 — Frontend Features (depends on Phase 2)
 ├── Agent: B7a/b/c (certificates pages) — needs A3
 ├── Agent: B2 (dashboard activity) — needs A6
 │
-PHASE 4 — QA + Documentation
-├── Full regression test suite
+PHASE 4 — QA Test Implementation (approved 2026-03-10)
+├── Backend: 5 new test files (uploads, certificates, dashboard-activity, employees-sub-resources, patient-fichas)
+├── Frontend: 5 new + 3 updated test files (certificados, certificado-crear, certificado-detalle, dashboard-activity, paciente-fichas; extend empleado-editar, empresa, layout)
 ├── context/tasks/{slug}/task-done.md for each task
 ├── context/plan-implemented/march-9-qa-improvements-implemented.md
 ```
@@ -320,3 +321,36 @@ cd frontend && npx playwright test tests/e2e/
 6. Certificates → list, create, view with file download
 7. Empresa page → non-admin redirected
 8. Toggle dark mode → violet-tinted surfaces and text
+
+---
+
+## Phase 4 — QA Test Inventory (approved 2026-03-10)
+
+### Backend Tests (5 new files)
+
+| File | Covers |
+|------|--------|
+| `backend/tests/uploads/uploads.spec.ts` | POST presigned-url, GET download-url, auth guard, missing param 400 |
+| `backend/tests/certificates/certificates.spec.ts` | CRUD (list/stats/detail/create/update/delete), tipo+estado filters, admin-only write guard (403) |
+| `backend/tests/dashboard/dashboard-activity.spec.ts` | Admin sees all types, employee sees own only, response shape `{ type, date, description, actorName }`, 401 |
+| `backend/tests/employees/employees-sub-resources.spec.ts` | All 8 PUT sub-resource endpoints (replace strategy), 404 on invalid id, 401 without auth |
+| `backend/tests/patients/patient-fichas.spec.ts` | POST assign, DELETE PENDIENTE-only guard, PATCH state machine (archivoCompletado required for COMPLETADO, VENCIDO terminal) |
+
+### Frontend Tests (5 new + 3 updates)
+
+| File | Covers | Type |
+|------|--------|------|
+| `frontend/tests/e2e/certificados.spec.ts` | List loads, stats cards, filters, admin-only "Nuevo" button | New |
+| `frontend/tests/e2e/certificado-crear.spec.ts` | Form validation, submit → redirect to list | New |
+| `frontend/tests/e2e/certificado-detalle.spec.ts` | Detail view, admin edit mode, download button, back nav | New |
+| `frontend/tests/e2e/dashboard-activity.spec.ts` | Activity feed section, loading → items, empty state | New |
+| `frontend/tests/e2e/paciente-fichas.spec.ts` | Assign instrument, delete PENDIENTE, status dialog transitions, file required for COMPLETADO | New |
+| `frontend/tests/e2e/empleado-editar.spec.ts` | 5 tabs visible, tab switching preserves state (v-show), per-tab save | Update |
+| `frontend/tests/e2e/empresa.spec.ts` | Non-admin redirected to `/`, admin loads normally | Update |
+| `frontend/tests/e2e/layout.spec.ts` | Sidebar hidden on desktop 1280px, hamburger always visible, overlay on open | Update |
+
+### Test Patterns
+
+**Backend**: `test.describe.configure({ mode: 'serial' })` + `beforeAll` login → extract `session=` cookie → pass as `Cookie` header → assert HTTP status + `{ success: true, data }` shape + `afterAll` cleanup.
+
+**Frontend**: `beforeEach(async ({ page }) => login(page))` → `page.goto(url)` + `waitForLoadState('networkidle')` → `page.locator()` / `getByRole()` / `getByText()` → `expect(...).toBeVisible()` / `toHaveURL()`.

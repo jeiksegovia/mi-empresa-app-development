@@ -1,0 +1,138 @@
+{
+  "codigo": "MINI_MENTAL",
+  "nombre": "Mini Examen del Estado Mental (MMSE Folstein)",
+  "version": 1,
+  "tipo": "VALORACION",
+  "descripcion": "Evalúa orientación, memoria, atención, lenguaje y capacidades visuoconstructivas como cribado de deterioro cognitivo (Folstein et al. 1975, EMKASA Ficha N° 3c).",
+  "instructions": "Para cada pregunta, seleccione 'Correcto' si la respuesta del paciente coincide con la respuesta esperada; 'Incorrecto' en caso contrario. Otorgue 1 punto por cada respuesta correcta.",
+  "sections": [
+    {
+      "id": "orientacion_tiempo",
+      "titulo": "Orientación en el tiempo",
+      "instructions": "Pregunte cada uno de los 5 ítems de orientación temporal.",
+      "subtotal": { "max": 5 },
+      "items": [
+        { "id": "ot_dia",     "label": "¿En qué día estamos (fecha)?",      "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "ot_mes",     "label": "¿En qué mes?",                       "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "ot_anio",    "label": "¿En qué año?",                       "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "ot_diase",   "label": "¿En qué día de la semana?",          "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "ot_hora",    "label": "¿Qué hora es aproximadamente?",      "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] }
+      ]
+    },
+    {
+      "id": "orientacion_espacio",
+      "titulo": "Orientación en el espacio",
+      "instructions": "Pregunte cada uno de los 5 ítems de orientación espacial.",
+      "subtotal": { "max": 5 },
+      "items": [
+        { "id": "oe_lugar",     "label": "¿En qué lugar estamos ahora?",                  "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "oe_piso",      "label": "¿En qué piso o departamento estamos ahora?",    "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "oe_barrio",    "label": "¿Qué barrio o parroquia es este?",             "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "oe_ciudad",    "label": "¿En qué ciudad estamos?",                       "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "oe_pais",      "label": "¿En qué país estamos?",                         "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] }
+      ]
+    },
+    {
+      "id": "memoria",
+      "titulo": "Memoria (fijación)",
+      "instructions": "Consigna: \"Le voy a decir el nombre de tres objetos, cuando yo termine quiero que por favor usted los repita\". Pronuncie claramente las palabras, una cada segundo. Otorgue 1 punto por cada respuesta correcta en el PRIMER ensayo (máx 6 ensayos para aprendizaje, pero solo se puntúa el primero).",
+      "subtotal": { "max": 3 },
+      "items": [
+        { "id": "m_papel",     "label": "Papel",     "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "m_bicicleta", "label": "Bicicleta", "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "m_cuchara",   "label": "Cuchara",   "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] }
+      ]
+    },
+    {
+      "id": "atencion_calculo",
+      "titulo": "Atención y cálculo",
+      "instructions": "Consigna: \"Le voy a pedir que reste de 7 en 7 a partir del 100\". Otorgue 1 punto por cada respuesta correcta (93, 86, 79, 72, 65).",
+      "subtotal": { "max": 5 },
+      "items": [
+        { "id": "ac_93", "label": "93", "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "ac_86", "label": "86", "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "ac_79", "label": "79", "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "ac_72", "label": "72", "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "ac_65", "label": "65", "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] }
+      ]
+    },
+    {
+      "id": "memoria_diferida",
+      "titulo": "Memoria diferida (recuerdo)",
+      "instructions": "Consigna: \"Dígame los 3 objetos que le mencioné al principio\". Otorgue 1 punto por cada respuesta correcta.",
+      "subtotal": { "max": 3 },
+      "items": [
+        { "id": "md_papel",     "label": "Papel",     "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "md_bicicleta", "label": "Bicicleta", "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "md_cuchara",   "label": "Cuchara",   "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] }
+      ]
+    },
+    {
+      "id": "denominacion",
+      "titulo": "Denominación",
+      "instructions": "Muestre los objetos y pregunte qué son.",
+      "subtotal": { "max": 2 },
+      "items": [
+        { "id": "d_lapiz", "label": "Mostrarle un lápiz o un bolígrafo y preguntar ¿qué es esto?", "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "d_reloj", "label": "Mostrarle un reloj y preguntar ¿qué es esto?",                "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] }
+      ]
+    },
+    {
+      "id": "repeticion",
+      "titulo": "Repetición de una frase",
+      "instructions": "Consigna: \"Ahora le voy a decir una frase que tendrá que repetir después de mí. Solo se la puedo decir una vez, así que ponga mucha atención\". Frase: \"ni sí, ni no, ni pero\".",
+      "subtotal": { "max": 1 },
+      "items": [
+        { "id": "r_frase", "label": "Repetición de la frase \"ni sí, ni no, ni pero\"", "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] }
+      ]
+    },
+    {
+      "id": "comprension_orden",
+      "titulo": "Comprensión – ejecución de orden",
+      "instructions": "Consigna: \"Le voy a dar unas instrucciones. Por favor sígalas en el orden en que las voy a decir. Solo las puedo decir una vez\": \"TOME ESTE PAPEL CON LA MANO DERECHA, DÓBLELO POR LA MITAD Y DÉJELO EN EL SUELO\".",
+      "subtotal": { "max": 3 },
+      "items": [
+        { "id": "co_mano",    "label": "Tome este papel con la mano derecha", "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "co_doblez",  "label": "Dóblelo por la mitad",                "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] },
+        { "id": "co_suelo",   "label": "Déjelo en el suelo",                  "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] }
+      ]
+    },
+    {
+      "id": "lectura",
+      "titulo": "Lectura",
+      "instructions": "Escriba legiblemente en un papel \"cierre los ojos\". Pídale a la persona adulta mayor que lo lea y que haga lo que dice la frase.",
+      "subtotal": { "max": 1 },
+      "items": [
+        { "id": "l_ojos", "label": "\"Cierre los ojos\" (lectura y ejecución)", "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] }
+      ]
+    },
+    {
+      "id": "escritura",
+      "titulo": "Escritura",
+      "instructions": "Consigna: \"Quiero que por favor escriba una frase que diga un mensaje\".",
+      "subtotal": { "max": 1 },
+      "items": [
+        { "id": "e_frase", "label": "Escriba una frase con un mensaje", "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] }
+      ]
+    },
+    {
+      "id": "copia_dibujo",
+      "titulo": "Copia de un dibujo",
+      "instructions": "Consigna: \"Copie por favor este dibujo tal como está\".",
+      "subtotal": { "max": 1 },
+      "items": [
+        { "id": "cd_dibujo", "label": "Copia del dibujo", "type": "single-select-scored", "required": true, "options": [{ "value": "correcto", "label": "Correcto", "score": 1 }, { "value": "incorrecto", "label": "Incorrecto", "score": 0 }] }
+      ]
+    }
+  ],
+  "scoring": {
+    "total": "sum",
+    "resultEvaluation": [
+      { "min": 27, "max": 30, "label": "Normal" },
+      { "min": 24, "max": 26, "label": "Sospecha patológica" },
+      { "min": 12, "max": 23, "label": "Deterioro" },
+      { "min": 9,  "max": 11, "label": "Demencia" },
+      { "min": 0,  "max": 8,  "label": "Deterioro severo" }
+    ]
+  }
+}

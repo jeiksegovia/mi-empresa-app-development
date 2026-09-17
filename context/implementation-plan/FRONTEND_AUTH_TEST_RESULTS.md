@@ -24,7 +24,7 @@
 **Test**: `should login successfully with valid credentials`
 - ✅ Navigate to login page
 - ✅ Fill email: admin@miempresa.com
-- ✅ Fill password: password123
+- ✅ Fill password: <redacted>
 - ✅ Click submit button
 - ✅ Redirect to dashboard (/)
 - ✅ User name "Admin Sistema" displayed

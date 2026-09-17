@@ -37,7 +37,7 @@ seed-backed Playwright spec asserting the contract end-to-end.
 
 | # | Criterion | Result |
 |---|---|---|
-| 1 | Login `profesor@miempresa.com` / `auxiliar@miempresa.com` / `password123` resolves | ✓ seed.ts (lines 130-153) + beforeAll login in spec |
+| 1 | Login `profesor@miempresa.com` / `auxiliar@miempresa.com` / `<redacted>` resolves | ✓ seed.ts (lines 130-153) + beforeAll login in spec |
 | 2 | ADMIN full CRUD | ✓ spec test "ADMIN: full CRUD on /actividades" — POST 201, GET 200, PUT 200, DELETE 204 |
 | 3 | PROFESORES/AUXILIARES own GET + POST, today-only Bogotá, no PUT/DELETE | ✓ spec tests "PROFESORES: own GET + POST today…" and "AUXILIARES: own GET + POST today…" — own-item filter, today-only 403, PUT/DELETE 403 |
 | 4 | GERONTOLOGA / CONTRATOS: GET all, POST 403 | ✓ spec tests "GERONTOLOGA: GET 200 (all); POST 403" and "CONTRATOS: GET 200 (all); POST 403" + "GERONTOLOGA GET sees both seeded empleado rows" |

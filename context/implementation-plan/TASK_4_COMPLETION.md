@@ -310,10 +310,10 @@ NUXT_PUBLIC_API_BASE_URL=http://localhost:3001/api/v1
 Después de ejecutar `npm run db:seed`:
 
 ```
-Admin:    admin@miempresa.com / password123
-Empleado: empleado@miempresa.com / password123
-Auditor:  auditor@miempresa.com / password123
-Operador: operador@miempresa.com / password123
+Admin:    admin@miempresa.com / <redacted>
+Empleado: empleado@miempresa.com / <redacted>
+Auditor:  auditor@miempresa.com / <redacted>
+Operador: operador@miempresa.com / <redacted>
 ```
 
 ## Módulos Implementados

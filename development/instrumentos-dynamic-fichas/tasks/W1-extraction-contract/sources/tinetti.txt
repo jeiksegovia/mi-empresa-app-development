@@ -1,0 +1,114 @@
+Escala de Tinetti (Marcha y equilibrio)
+APLICACIÓN
+Instrucciones
+El cuestionario evalúa el equilibrio y la marcha de manera demostrativa y debe ser aplicado por dos personas; una dará las instrucciones y la otra cuidará de que la persona no sufra algún accidente.
+
+----- TABLE 0 (rows=3, cols=10) -----
+R0: Nombre: || Nombre: ||  ||  ||  ||  ||  ||  ||  || 
+R1:  ||  ||  ||  ||  ||  ||  ||  ||  || 
+R2: Edad: ||  || Sexo: ||  || Fecha de evaluación: || Fecha de evaluación: ||  ||  || Evaluador: || 
+----- END TABLE -----
+
+Equilibrio
+Puntuación máxima 16
+Instrucciones: El paciente está sentado en una silla dura sin apoyar brazos, Se realizan las siguientes maniobras.
+
+----- TABLE 1 (rows=19, cols=2) -----
+R0: 1.- Equilibrio sentado || 1.- Equilibrio sentado
+R1: Se inclina o se desliza en la silla || 0
+R2: Se mantiene seguro || 1
+R3: 2.- Levantarse || 2.- Levantarse
+R4: Imposible sin ayuda || 0
+R5: Capaz, pero usa los brazos para ayudarse || 1
+R6: Capaz sin usar los brazos || 2
+R7: 3.- Intentos para levantarse || 3.- Intentos para levantarse
+R8: Incapaz sin ayuda || 0
+R9: Capaz, pero necesita más de un intento || 1
+R10: Capaz de levantarse con sólo un intento || 2
+R11: 4.- Equilibrio en bipedestación inmediata (los primeros 5 segundos) || 4.- Equilibrio en bipedestación inmediata (los primeros 5 segundos)
+R12: Inestable (se tambalea, mueve los pies), marcado balanceo del tronco || 0
+R13: Estable, pero usa el andador, bastón o se agarra a otro objeto para mantenerse || 1
+R14: Estable sin andador, bastón u otros soportes || 2
+R15: 5.- Equilibrio en bipedestación || 5.- Equilibrio en bipedestación
+R16: Inestables || 0
+R17: Estable, pero con apoyo amplio (talones separados más de 10 cm) o un bastón u otro soporte || 1
+R18: Estable, sin usar bastón u otros soportes por 10 segundos, no requiere ayuda. || 2
+----- END TABLE -----
+
+
+----- TABLE 2 (rows=16, cols=2) -----
+R0: 6.- Empujar (el paciente en bipedestación con el tronco erecto y los pies tan juntos como sea posible). El examinador empuja suavemente en el esternón del paciente con la palma de la mano, tres veces. || 6.- Empujar (el paciente en bipedestación con el tronco erecto y los pies tan juntos como sea posible). El examinador empuja suavemente en el esternón del paciente con la palma de la mano, tres veces.
+R1: Empieza a caerse || 0
+R2: Se tambalea, se agarra, pero se mantiene || 1
+R3: Estable || 2
+R4: 7.- Ojos cerrados (en la posición del punto 6) || 7.- Ojos cerrados (en la posición del punto 6)
+R5: Inestable || 0
+R6: Estable || 1
+R7: 8.- Vuelta de 360 grados || 8.- Vuelta de 360 grados
+R8: Pasos discontinuos || 0
+R9: Continuos || 1
+R10: Inestable (se tambales, se agarra) || 0
+R11: Estable || 1
+R12: 9.- Sentarse || 9.- Sentarse
+R13: Inseguro, calcula mal la distancia, cae en la silla || 0
+R14: Usa los brazos o el movimiento es brusco || 1
+R15: Seguro, movimiento suave || 2
+----- END TABLE -----
+
+2.- Marcha
+Puntuación Máxima 12
+Instrucciones: El paciente permanece de pie con el examinador, camina por el pasillo (unos 8 metros) a paso normal luego regresa a paso rápido pero seguro.
+
+----- TABLE 3 (rows=16, cols=2) -----
+R0: 10.- Iniciación de la marcha (Inmediatamente después de decir que ande) || 10.- Iniciación de la marcha (Inmediatamente después de decir que ande)
+R1: Algunas vacilaciones o múltiples intentos para empezar || 0
+R2: No vacila || 1
+R3: 11.- Longitud y altura de paso | a) Movimiento del pie derecho || 11.- Longitud y altura de paso | a) Movimiento del pie derecho
+R4: No sobrepasa al pie izquierdo con el paso || 0
+R5: Sobrepasa al pie izquierdo || 1
+R6: El pie derecho, no se separa completamente del suelo con el paso || 0
+R7: El pie derecho, se separa completamente del suelo || 1
+R8: b) Movimiento del pie izquierdo || b) Movimiento del pie izquierdo
+R9: No sobrepasa al pie derecho, con el paso || 0
+R10: Sobrepasa al pie derecho || 1
+R11: El pie izquierdo, no se separa completamente del suelo con el paso || 0
+R12: El pie izquierdo, se separa completamente del suelo || 1
+R13: 12.- Simetría del paso || 12.- Simetría del paso
+R14: La longitud de los pasos con los pies izquierdo y derecho, no es igual || 0
+R15: La longitud parece igual || 1
+----- END TABLE -----
+
+
+----- TABLE 4 (rows=14, cols=2) -----
+R0: 13.- Fluidez del paso || 13.- Fluidez del paso
+R1: Paradas entre los pasos || 0
+R2: Los pasos parecen continuos || 1
+R3: 14.- Trayectoria (Observar el trazado que realiza uno de los pies durante unos tres metros) || 14.- Trayectoria (Observar el trazado que realiza uno de los pies durante unos tres metros)
+R4: Desviación grave de la trayectoria || 0
+R5: Leve/moderada desviación o usa ayuda para mantener la trayectoria || 1
+R6: Sin desviación o ayudas || 2
+R7: 15.- Tronco || 15.- Tronco
+R8: Balanceo marcado o usa ayuda || 0
+R9: No se balancea, pero flexiona las rodillas o la espalda o separa los brazos al caminar || 1
+R10: No se balancea, no se flexiona, ni utiliza otras ayudas || 2
+R11: 16.- Postura al caminar || 16.- Postura al caminar
+R12: Talones separados || 0
+R13: Talones casi juntos al caminar || 1
+----- END TABLE -----
+
+
+----- TABLE 5 (rows=3, cols=3) -----
+R0: Puntaje obtenido en equilibrio: || Puntaje obtenido en equilibrio: || ___________________________________________
+R1: Puntaje obtenido en marcha: || Puntaje obtenido en marcha: || ___________________________________________
+R2: Puntaje total: || ________________________________________________________ || ________________________________________________________
+----- END TABLE -----
+
+Marque con una X el diagnóstico probable:
+
+----- TABLE 6 (rows=3, cols=4) -----
+R0: 25-28 puntos = Riesgo bajo || 
+R1: 19-24 puntos = Riesgo moderado || 
+R2: 18 puntos o menos = Alto riesgo de celdas || 18 puntos o menos = Alto riesgo de celdas || 18 puntos o menos = Alto riesgo de celdas || 
+----- END TABLE -----
+
+FIRMA DEL EVALUADOR:

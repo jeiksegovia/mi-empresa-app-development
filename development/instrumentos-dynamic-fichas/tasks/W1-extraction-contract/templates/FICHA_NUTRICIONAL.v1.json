@@ -1,0 +1,51 @@
+{
+  "codigo": "FICHA_NUTRICIONAL",
+  "nombre": "Ficha Nutricional (1.8.4)",
+  "version": 1,
+  "tipo": "NUTRICION",
+  "descripcion": "Recopila información nutricional del abuelo/a: patologías, antecedentes familiares, restricciones, antropometría y recomendaciones generales. Instrumento puramente informacional, sin scoring (decisión D4).",
+  "instructions": "Complete todos los campos con letra clara y legible. La nutricionista realiza promoción de bienestar y prestación de terapias grupales; esta ficha documenta el estado nutricional actual y las recomendaciones generales que se comparten con los acudientes en la entrega semestral de informes.",
+  "sections": [
+    {
+      "id": "patologias",
+      "titulo": "Patologías y antecedentes",
+      "items": [
+        { "id": "p1_enfermedades",   "label": "Enfermedades",                  "type": "text-info", "required": true, "placeholder": "Describir enfermedades actuales" },
+        { "id": "p2_alergia_alim",   "label": "Alergias alimentarias",         "type": "text-info", "required": true, "placeholder": "Especificar alergias alimentarias o 'Ninguna conocida'" },
+        { "id": "p3_alergia_med",    "label": "Alergias medicamentosas",       "type": "text-info", "required": true, "placeholder": "Especificar alergias a medicamentos o 'Ninguna conocida'" },
+        { "id": "p4_ant_diabetes",   "label": "Antecedentes familiares — Diabetes", "type": "single-select-info", "required": true, "options": [{ "value": "si", "label": "Sí", "score": null }, { "value": "no", "label": "No", "score": null }] },
+        { "id": "p5_ant_hta",        "label": "Antecedentes familiares — HTA",      "type": "single-select-info", "required": true, "options": [{ "value": "si", "label": "Sí", "score": null }, { "value": "no", "label": "No", "score": null }] },
+        { "id": "p6_ant_cancer",     "label": "Antecedentes familiares — Cáncer",   "type": "single-select-info", "required": true, "options": [{ "value": "si", "label": "Sí", "score": null }, { "value": "no", "label": "No", "score": null }] },
+        { "id": "p7_ant_otro",       "label": "Antecedentes familiares — Otro (especificar)", "type": "text-info", "required": false, "placeholder": "Otro antecedente familiar relevante" }
+      ]
+    },
+    {
+      "id": "restricciones",
+      "titulo": "Restricciones alimentarias — dieta actual",
+      "items": [
+        { "id": "r1_dieta_actual", "label": "Restricciones alimentarias — Dieta actual", "type": "text-info", "required": true, "placeholder": "Describir restricciones o dieta actual (hiposódica, diabética, blanda, etc.)" }
+      ]
+    },
+    {
+      "id": "datos_actuales",
+      "titulo": "Datos importantes actuales",
+      "items": [
+        { "id": "d2_peso",   "label": "Peso (kg)",         "type": "number-info", "required": true, "constraints": { "min": 20, "max": 300 } },
+        { "id": "d3_talla",  "label": "Talla (cm)",        "type": "number-info", "required": true, "constraints": { "min": 80, "max": 230 } },
+        { "id": "d4_imc",    "label": "IMC",               "type": "number-info", "required": true, "constraints": { "min": 10, "max": 70 } },
+        { "id": "d5_concepto", "label": "Concepto",         "type": "text-info",  "required": true, "placeholder": "Interpretación del IMC / estado nutricional" }
+      ]
+    },
+    {
+      "id": "recomendaciones",
+      "titulo": "Recomendaciones generales nutricionales",
+      "items": [
+        { "id": "rec1_recomendaciones", "label": "Recomendaciones generales nutricionales", "type": "text-info", "required": true, "placeholder": "Recomendaciones del nutricionista" }
+      ]
+    }
+  ],
+  "scoring": {
+    "total": "none",
+    "resultEvaluation": []
+  }
+}
